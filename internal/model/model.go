@@ -102,8 +102,9 @@ type Model struct {
 	Config    map[string]any
 	Quant     *Quantization
 	Index     *Index
-	// IndexErr is set when an index file is present but unreadable.
-	// Index stays nil so shard discovery can still see the .safetensors files.
+	// IndexErr is set when an index file is present but cannot be used
+	// (unreadable JSON, or a weight_map with no entries). Index stays nil
+	// so shard discovery can still see the .safetensors files.
 	IndexErr error `json:"-"`
 
 	Shards  []*Shard
@@ -259,8 +260,12 @@ func (m *Model) loadIndex() {
 		m.warnf("%v", err)
 		return
 	}
-	if raw.WeightMap == nil {
-		m.IndexErr = fmt.Errorf("%s: missing weight_map", filepath.Base(p))
+	// A JSON null and {"weight_map":{}} both have no entries. Leaving the
+	// empty map in place makes shard discovery trust the index and skip
+	// every file on disk, so a corrupt shard is never opened and the scan
+	// skips with an overall pass.
+	if len(raw.WeightMap) == 0 {
+		m.IndexErr = fmt.Errorf("%s: empty weight_map", filepath.Base(p))
 		m.warnf("%v", m.IndexErr)
 		return
 	}

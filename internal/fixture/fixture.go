@@ -119,6 +119,7 @@ func IndexJSON(totalSize int64, weightMap map[string]string) ([]byte, error) {
 }
 
 // TinyQwenConfig is a small config.json with the architecture keys the loader reads.
+// Quantization sits on text_config.quantization_config, the HF-style location.
 func TinyQwenConfig() []byte {
 	return []byte(`{
   "model_type": "qwen3_5",
@@ -145,6 +146,28 @@ func TinyQwenConfig() []byte {
   "vision_config": {"depth": 1, "hidden_size": 8, "num_heads": 2, "patch_size": 14}
 }
 `)
+}
+
+// TinyQwenMLXQuantConfig is TinyQwenConfig with 4-bit quantization recorded
+// the way mlx-lm writes it: a top-level "quantization" object
+// ({"bits","group_size","mode"}), and no text_config.quantization_config.
+// group_size 32 matches the tiny U32 embed pack in TinyQwen.
+func TinyQwenMLXQuantConfig() ([]byte, error) {
+	var cfg map[string]any
+	if err := json.Unmarshal(TinyQwenConfig(), &cfg); err != nil {
+		return nil, err
+	}
+	text, _ := cfg["text_config"].(map[string]any)
+	if text == nil {
+		return nil, fmt.Errorf("tiny config has no text_config")
+	}
+	delete(text, "quantization_config")
+	cfg["quantization"] = map[string]any{
+		"bits":       4,
+		"group_size": 32,
+		"mode":       "affine",
+	}
+	return json.MarshalIndent(cfg, "", "  ")
 }
 
 const (

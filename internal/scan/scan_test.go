@@ -285,6 +285,32 @@ func TestCorruptIndexFailsScan(t *testing.T) {
 	}
 }
 
+func TestEmptyWeightMapWithCorruptShard(t *testing.T) {
+	// {"weight_map":{}} is an empty map, not a missing one. It must not count
+	// as a usable index: a corrupt shard beside it has to fail the scan.
+	m := loadDir(t, map[string][]byte{
+		"model.safetensors":            fixture.EncodeHeader([]byte("not-json"), nil),
+		"model.safetensors.index.json": []byte(`{"weight_map":{}}`),
+	})
+	if m.Index != nil {
+		t.Fatalf("empty weight_map was accepted: %+v", m.Index)
+	}
+	if m.IndexErr == nil || !strings.Contains(m.IndexErr.Error(), "weight_map") {
+		t.Fatalf("IndexErr = %v", m.IndexErr)
+	}
+	if len(m.Shards) != 1 || m.Shards[0].Header != nil {
+		t.Fatalf("corrupt shard was not read: %+v", m.Shards)
+	}
+	res := Run(m)
+	if res.Overall != StatusFail {
+		t.Fatalf("overall %s; check %+v", res.Overall, res.Checks[0])
+	}
+	if res.Checks[0].Status != StatusFail {
+		t.Fatalf("check %+v", res.Checks[0])
+	}
+	detailsContain(t, res.Checks[0], "weight_map", "model.safetensors: unreadable:", "parsing header JSON")
+}
+
 func TestIndexMissingWeightMap(t *testing.T) {
 	shard, _ := mustShard(t, []fixture.Tensor{
 		ten("model.layers.0.self_attn.q_proj.weight", "BF16", 2),
@@ -293,14 +319,14 @@ func TestIndexMissingWeightMap(t *testing.T) {
 		"model.safetensors":            shard,
 		"model.safetensors.index.json": []byte(`{"metadata":{"total_size":4}}`),
 	})
-	if m.IndexErr == nil || !strings.Contains(m.IndexErr.Error(), "missing weight_map") {
+	if m.IndexErr == nil || !strings.Contains(m.IndexErr.Error(), "empty weight_map") {
 		t.Fatalf("IndexErr = %v", m.IndexErr)
 	}
 	c := check(t, m)
 	if c.Status != StatusFail {
 		t.Fatalf("status %s details %v", c.Status, c.Details)
 	}
-	detailsContain(t, c, "missing weight_map")
+	detailsContain(t, c, "empty weight_map")
 	if len(m.Shards) != 1 || m.Shards[0].Header == nil {
 		t.Fatal("expected the on-disk shard to still be read")
 	}

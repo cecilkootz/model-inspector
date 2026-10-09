@@ -31,8 +31,18 @@ func TestLayersViewKeepsHyperConnectionTogether(t *testing.T) {
 	if !strings.Contains(view, "hyper_connection") || !strings.Contains(view, "ngram") {
 		t.Fatalf("group table missing hyper_connection or ngram:\n%s", view)
 	}
-	if strings.Contains(view, "other") {
-		t.Fatalf("grouping view still has an other row:\n%s", view)
+	rows := groupRows(m)
+	var sawHyper bool
+	for _, row := range rows {
+		if row[0] == "other" || row[1] == model.KindOther {
+			t.Fatalf("layers table has an other group row: %v", row)
+		}
+		if row[0] == "hyper_connection" && row[1] == model.KindHyper {
+			sawHyper = true
+		}
+	}
+	if !sawHyper {
+		t.Fatalf("layers table rows = %v", rows)
 	}
 
 	hyper := drill(t, layers.(Model), m, "hyper_connection")

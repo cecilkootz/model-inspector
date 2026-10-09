@@ -108,6 +108,71 @@ func TestLoadTinyQwenHFCache(t *testing.T) {
 	}
 }
 
+func TestTopLevelMLXQuantization(t *testing.T) {
+	files, _, err := fixture.TinyQwen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := fixture.TinyQwenMLXQuantConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var swapped bool
+	for i := range files {
+		if files[i].Name == "config.json" {
+			files[i].Data = cfg
+			swapped = true
+		}
+	}
+	if !swapped {
+		t.Fatal("tiny fixture has no config.json")
+	}
+	dir := t.TempDir()
+	if err := fixture.Materialize(dir, files); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Quant == nil || m.Quant.Source != "quantization" || m.Quant.Bits != 4 || m.Quant.GroupSize != 32 || m.Quant.Mode != "affine" {
+		t.Fatalf("quant = %+v", m.Quant)
+	}
+	if _, ok := subMap(m.Config, "text_config")["quantization_config"]; ok {
+		t.Fatal("text_config.quantization_config still present")
+	}
+	var weight *Tensor
+	for _, tensor := range m.Tensors {
+		if tensor.Name != "language_model.model.embed_tokens.weight" {
+			continue
+		}
+		weight = tensor
+		if tensor.Role != RoleQuantWeight || tensor.Bits != 4 || tensor.LogicalParams != 32 {
+			t.Errorf("embed weight role=%s bits=%d logical=%d", tensor.Role, tensor.Bits, tensor.LogicalParams)
+		}
+	}
+	if weight == nil {
+		t.Fatal("missing embed weight")
+	}
+	for _, name := range []string{
+		"language_model.model.embed_tokens.scales",
+		"language_model.model.embed_tokens.biases",
+	} {
+		var found *Tensor
+		for _, tensor := range m.Tensors {
+			if tensor.Name == name {
+				found = tensor
+			}
+		}
+		if found == nil || found.LogicalParams != 0 || (found.Role != RoleQuantScales && found.Role != RoleQuantBiases) {
+			t.Errorf("%s = %+v", name, found)
+		}
+	}
+	if m.BitsHistogram[4] != 1 {
+		t.Errorf("bits histogram = %v", m.BitsHistogram)
+	}
+}
+
 func TestLoadRejectsFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
