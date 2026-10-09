@@ -17,7 +17,23 @@ func TestClassify(t *testing.T) {
 		{"language_model.lm_head.weight", "lm_head", KindLMHead, -1},
 		{"language_model.model.embed_tokens.biases", "embeddings", KindEmbeddings, -1},
 		{"model.norm.weight", "norms", KindNorms, -1},
-		{"language_model.model.hyper_connection_mixer.input_mix_weight_up.weight", "other", KindOther, -1},
+		// Model-level mixer, including hc_norm, stays in one group. The norm
+		// substring must not peel hc_norm off into norms.
+		{"language_model.model.hyper_connection_mixer.input_mix_weight_up.weight", "hyper_connection", KindHyper, -1},
+		{"language_model.model.hyper_connection_mixer.input_mix_weight_down.weight", "hyper_connection", KindHyper, -1},
+		{"language_model.model.hyper_connection_mixer.hc_norm.weight", "hyper_connection", KindHyper, -1},
+		// Same mixer nested under mtp or a decoder layer keeps that group.
+		{"language_model.mtp.hyper_connection_mixer.hc_norm.weight", "mtp", KindMTP, -1},
+		{"language_model.model.layers.3.mlp_hyper_connection.hc_norm.weight", "layer 3", KindLayer, 3},
+		{"language_model.model.layers.3.attn_hyper_connection.input_mix_weight_up.weight", "layer 3", KindLayer, 3},
+		// N-gram table lives under layers.1 but is an embedding table, not layer 1.
+		{"language_model.model.layers.1.ple.ple_embedding.ngram_embedding.shard_0.weight", "ngram", KindEmbeddings, -1},
+		{"language_model.model.layers.1.ple.ple_embedding.ngram_heads_offsets", "ngram", KindEmbeddings, -1},
+		{"language_model.model.layers.1.ple.ple_embedding.ngram_heads_vocab_sizes", "ngram", KindEmbeddings, -1},
+		{"model.language_model.layers.1.ple.ple_embedding.ngram_embedding.shard_3.weight", "ngram", KindEmbeddings, -1},
+		// PLE projections that are not the table stay with the decoder layer.
+		{"language_model.model.layers.1.ple.key_proj.weight", "layer 1", KindLayer, 1},
+		{"some.other.tensor.weight", "other", KindOther, -1},
 	}
 	for _, c := range cases {
 		key, kind, layer := Classify(c.name)
@@ -32,6 +48,7 @@ func TestIsExpertTensor(t *testing.T) {
 		"model.layers.3.mlp.experts.17.down_proj.weight",
 		"language_model.model.layers.3.mlp.switch_mlp.gate_proj.weight",
 		"blk.3.ffn_up_exps.weight",
+		"model.layers.1.block_sparse_moe.experts.0.w1.weight",
 	}
 	no := []string{
 		"language_model.model.layers.3.mlp.shared_expert.up_proj.weight",
