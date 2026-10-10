@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // frame makes s exactly width by height. Over-long lines are cut.
@@ -133,37 +134,7 @@ func clipLines(s string, n, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-func stripANSI(s string) string {
-	var b strings.Builder
-	for i := 0; i < len(s); {
-		if s[i] != 0x1b {
-			b.WriteByte(s[i])
-			i++
-			continue
-		}
-		i++
-		if i < len(s) && s[i] == ']' {
-			for i < len(s) && s[i] != 0x07 {
-				if s[i] == 0x1b {
-					break
-				}
-				i++
-			}
-			if i < len(s) {
-				i++
-			}
-			continue
-		}
-		for i < len(s) {
-			c := s[i]
-			i++
-			if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') {
-				break
-			}
-		}
-	}
-	return b.String()
-}
+func stripANSI(s string) string { return ansi.Strip(s) }
 
 func padLabel(label string, n int) string {
 	if lipgloss.Width(label) >= n {

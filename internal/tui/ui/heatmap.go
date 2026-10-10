@@ -1,0 +1,423 @@
+package ui
+
+import (
+	"math"
+	"strings"
+)
+
+// HeatRow is one component across decoder layers, plus an optional MTP column.
+type HeatRow struct {
+	Label  string
+	Cells  []int64 // 0 means absent
+	MTP    int64
+	HasMTP bool
+}
+
+// HeatGrid is the bytes-per-layer grid. Values are on-disk bytes.
+type HeatGrid struct {
+	Rows    []HeatRow
+	Full    []bool // full attention per decoder column
+	Caption string
+	Note    string // shown beside the legend, for example an estimate marker
+}
+
+// Heatmap renders the grid at width. One log2 scale is shared by every row.
+func Heatmap(h HeatGrid, width int, large bool) []string {
+	if width < 1 {
+		return nil
+	}
+	gl := G()
+	n := 0
+	if len(h.Rows) > 0 {
+		n = len(h.Rows[0].Cells)
+	}
+	if n < 1 {
+		return []string{Fit("BYTES"+SepWord()+"no decoder layers", width)}
+	}
+	labelW := 12
+	spreadW := 18
+	if width < 80 {
+		labelW = 8
+		spreadW = 14
+	}
+	cw, pool, cols := fitCells(width-labelW-1-spreadW, n, large)
+	if cols < 1 {
+		cols = 1
+	}
+	lo, hi := heatDomain(h)
+	title := "BYTES" + SepWord() + "LAYER " + Times() + " COMPONENT  log2 scale shared by all rows" + SepWord() + "each colour step = 2" + Times()
+	if h.Note != "" {
+		title += SepWord() + h.Note
+	}
+	var lines []string
+	lines = append(lines, Fit(title, width))
+	if pool > 1 {
+		lines = append(lines, Fit("2 layers/cell", width))
+	}
+	// Column ticks and attention-type header.
+	ticks := heatHeader(n, cols, pool, cw, labelW, h.Full, gl)
+	lines = append(lines, Fit(ticks, width))
+	show := h.Rows
+	if !large {
+		show = foldFlat(h.Rows)
+	}
+	var folded []string
+	if !large {
+		for _, r := range h.Rows {
+			if !keepRow(r) {
+				folded = append(folded, r.Label+" "+spreadText(r.Cells))
+			}
+		}
+	}
+	for _, r := range show {
+		lines = append(lines, Fit(heatRow(r, cols, pool, cw, labelW, spreadW, lo, hi, gl), width))
+	}
+	lines = append(lines, Fit(heatLegend(lo, hi, gl, h.Note), width))
+	if len(folded) > 0 {
+		lines = append(lines, Fit("flat  "+strings.Join(folded, SepWord()), width))
+	}
+	if h.Caption != "" {
+		lines = append(lines, Fit(h.Caption, width))
+	}
+	return lines
+}
+
+func keepRow(r HeatRow) bool {
+	if strings.Contains(r.Label, "routed") {
+		return true
+	}
+	_, flat := spreadParts(r.Cells)
+	return !flat
+}
+
+func foldFlat(rows []HeatRow) []HeatRow {
+	var out []HeatRow
+	for _, r := range rows {
+		if keepRow(r) {
+			out = append(out, r)
+		}
+	}
+	if len(out) == 0 {
+		return rows
+	}
+	return out
+}
+
+func fitCells(room, n int, large bool) (cw, pool, cols int) {
+	if n < 1 {
+		return 1, 1, 1
+	}
+	cw = 1
+	if large {
+		cw = 2
+	}
+	pool = 1
+	cols = n
+	for {
+		need := cols*cw + 1 + cw // gap + mtp
+		if need <= room || (cw == 1 && pool >= n) {
+			break
+		}
+		if cw > 1 {
+			cw = 1
+			continue
+		}
+		pool *= 2
+		cols = (n + pool - 1) / pool
+		if cols < 1 {
+			cols = 1
+			break
+		}
+	}
+	return cw, pool, cols
+}
+
+func heatDomain(h HeatGrid) (lo, hi int) {
+	min, max := int64(0), int64(0)
+	consider := func(v int64) {
+		if v <= 0 {
+			return
+		}
+		if min == 0 || v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+	}
+	for _, r := range h.Rows {
+		for _, c := range r.Cells {
+			consider(c)
+		}
+		if r.HasMTP {
+			consider(r.MTP)
+		}
+	}
+	if min <= 0 {
+		return 0, 1
+	}
+	lo = int(math.Floor(math.Log2(float64(min))))
+	hi = int(math.Ceil(math.Log2(float64(max))))
+	if hi <= lo {
+		hi = lo + 1
+	}
+	return lo, hi
+}
+
+func heatHeader(n, cols, pool, cw, labelW int, full []bool, gl Glyphs) string {
+	var b strings.Builder
+	b.WriteString(strings.Repeat(" ", labelW))
+	if n < 1 {
+		return strings.Repeat(" ", labelW)
+	}
+	for c := 0; c < cols; c++ {
+		idx := c * pool
+		if idx >= n {
+			idx = n - 1
+		}
+		if idx < 0 {
+			idx = 0
+		}
+		mark := gl.Linear
+		if idx < len(full) && full[idx] {
+			mark = gl.Full
+		}
+		cell := mark
+		if cw == 2 {
+			cell = mark + " "
+		}
+		b.WriteString(cell)
+	}
+	b.WriteString(" ")
+	mtp := gl.Full
+	if cw == 2 {
+		mtp += " "
+	}
+	b.WriteString(mtp)
+	return b.String()
+}
+
+func heatRow(r HeatRow, cols, pool, cw, labelW, spreadW, lo, hi int, gl Glyphs) string {
+	var b strings.Builder
+	lab := r.Label
+	if Width(lab) > labelW-1 {
+		lab = Trunc(lab, labelW-1, "")
+	}
+	b.WriteString(PadLabel(lab, labelW))
+	vals := poolCells(r.Cells, cols, pool)
+	for _, v := range vals {
+		b.WriteString(heatCell(v, cw, lo, hi, gl))
+	}
+	b.WriteString(" ")
+	mtp := int64(0)
+	if r.HasMTP {
+		mtp = r.MTP
+	}
+	b.WriteString(heatCell(mtp, cw, lo, hi, gl))
+	b.WriteString("  ")
+	sp := spreadText(r.Cells)
+	b.WriteString(Trunc(sp, spreadW, ""))
+	return b.String()
+}
+
+func poolCells(cells []int64, cols, pool int) []int64 {
+	out := make([]int64, cols)
+	for c := 0; c < cols; c++ {
+		var m int64
+		for k := 0; k < pool; k++ {
+			i := c*pool + k
+			if i >= len(cells) {
+				break
+			}
+			if cells[i] > m {
+				m = cells[i]
+			}
+		}
+		out[c] = m
+	}
+	return out
+}
+
+func heatCell(v int64, cw, lo, hi int, gl Glyphs) string {
+	if v <= 0 {
+		dot := gl.Dot
+		if dot == "" {
+			dot = "."
+		}
+		if cw == 2 {
+			return dot + dot
+		}
+		return dot
+	}
+	if ColorOff() || Profile() == "ansi16" {
+		ch := gl.Heat[bucket(v)]
+		if Profile() == "ansi16" {
+			cols := []string{"4", "5", "13", "11"}
+			ch = paintANSI(ch, cols[bucket(v)])
+		}
+		if cw == 2 {
+			return ch + ch
+		}
+		return ch
+	}
+	t := 0.0
+	span := float64(hi - lo)
+	if span > 0 {
+		t = (math.Log2(float64(v)) - float64(lo)) / span
+	}
+	if t < 0 {
+		t = 0
+	}
+	if t > 1 {
+		t = 1
+	}
+	hex := string(Heat().At(t))
+	block := " "
+	if cw == 2 {
+		block = "  "
+	}
+	return paintHex(block, "", hex, false)
+}
+
+func paintANSI(ch, ansi string) string {
+	return lipglossPaint(ch, ansi)
+}
+
+func bucket(b int64) int {
+	const (
+		k64  = 64 * 1024
+		m4   = 4 * 1024 * 1024
+		m256 = 256 * 1024 * 1024
+	)
+	switch {
+	case b < k64:
+		return 0
+	case b < m4:
+		return 1
+	case b < m256:
+		return 2
+	default:
+		return 3
+	}
+}
+
+func heatLegend(lo, hi int, gl Glyphs, note string) string {
+	loB := int64(1) << lo
+	hiB := int64(1) << hi
+	if ColorOff() || Profile() == "ansi16" {
+		edges := "<64K " + gl.Heat[1] + " <4M " + gl.Heat[2] + " <256M " + gl.Heat[3]
+		s := humanPow(loB) + "  " + edges + "  " + humanPow(hiB)
+		s += "  " + gl.Linear + " linear  " + gl.Full + " full"
+		if note != "" {
+			s += "  " + note
+		}
+		return s
+	}
+	var ramp strings.Builder
+	for i := 0; i < 16; i++ {
+		hex := string(Heat().At(float64(i) / 15))
+		ramp.WriteString(paintHex(" ", "", hex, false))
+	}
+	return humanPow(loB) + " " + ramp.String() + " " + humanPow(hiB) + "  " + gl.Linear + " linear  " + gl.Full + " full"
+}
+
+func humanPow(n int64) string {
+	if n < 1024 {
+		return itoa(int(n)) + " B"
+	}
+	units := []string{"KiB", "MiB", "GiB", "TiB"}
+	v := float64(n)
+	u := -1
+	for v >= 1024 && u < len(units)-1 {
+		v /= 1024
+		u++
+	}
+	if v >= 10 {
+		return itoa(int(math.Round(v))) + " " + units[u]
+	}
+	return sprintf1(v) + " " + units[u]
+}
+
+func spreadText(cells []int64) string {
+	text, _ := spreadParts(cells)
+	return text
+}
+
+func spreadParts(cells []int64) (string, bool) {
+	var pos []int64
+	for _, v := range cells {
+		if v > 0 {
+			pos = append(pos, v)
+		}
+	}
+	if len(pos) == 0 {
+		if UTF8() {
+			return "·", true
+		}
+		return "-", true
+	}
+	min, max := pos[0], pos[0]
+	var sum int64
+	for _, v := range pos {
+		if v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+		sum += v
+	}
+	med := median(pos)
+	gl := G()
+	if med > 0 && float64(max-min)/float64(med) < 0.01 {
+		return humanPow(med) + "  flat", true
+	}
+	pct := 0
+	if med > 0 {
+		pct = int(math.Round(float64(max-min) / float64(med) * 100))
+	}
+	mark := ""
+	if max > min {
+		mark = " " + gl.Full
+	}
+	// Percent first so a narrow spread column keeps the figure.
+	return "+" + itoa(pct) + "%" + mark + " " + humanPow(min) + "-" + humanPow(max), false
+}
+
+func median(v []int64) int64 {
+	if len(v) == 0 {
+		return 0
+	}
+	s := append([]int64(nil), v...)
+	for i := 1; i < len(s); i++ {
+		j := i
+		for j > 0 && s[j] < s[j-1] {
+			s[j], s[j-1] = s[j-1], s[j]
+			j--
+		}
+	}
+	mid := len(s) / 2
+	if len(s)%2 == 1 {
+		return s[mid]
+	}
+	return (s[mid-1] + s[mid]) / 2
+}
+
+// LogDomain returns the shared log2 floor and ceil for tests.
+func LogDomain(min, max int64) (int, int) {
+	if min <= 0 {
+		min = 1
+	}
+	if max < min {
+		max = min
+	}
+	lo := int(math.Floor(math.Log2(float64(min))))
+	hi := int(math.Ceil(math.Log2(float64(max))))
+	if hi <= lo {
+		hi = lo + 1
+	}
+	return lo, hi
+}
+
+// BucketOf exposes the 64× heat buckets.
+func BucketOf(b int64) int { return bucket(b) }

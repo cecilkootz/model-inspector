@@ -1,0 +1,40 @@
+[1 Identity] 2 Config 3 Layers 4 Scan ✓                                                                     ? keys   : commands   m mouse on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+model-inspector  /model                                                                                                                     
+  model-inspector  revision: — · qwen3_next · safetensors · bf16                                                                            
+    model-inspector  /model                                                                                                                 
+      model-inspector                                                                                                                       
+        model-inspector  [– headers-only]  [▲ 2 callouts]  [⌂ 32.00 KiB host-capable]                                                       
+                                                                                                                                            
+                                                                                                                                            
+SIZE ON DISK           PARAMETERS             QUANT                  LAYERS                 EXPERTS                WEIGHTS                  
+33.30 KiB              ~16.5K                 bf16                   3                      —                      ≥ 32.17 KiB              
+3 files|1 shards       6 tensors                                     ○2 lin · ●1 full                              weights only             
+                                                                                                                                            
+                                                                                                                                            
+[STORAGE] 33.30 KiB                                         CALLOUTS  2 notable                                                             
+██████████████████████████████████████████████████████      [▲] layer 1 is 32.02 KiB, 99.5% of weights: ~16.4K-param n-gram embedding tab…  
+██████████████████████████████████████████████████████      [⌂ HOST] n-gram embedding table 32.00 KiB can stay in CPU RAM (heuristic)       
+█ plain bf16 100%                                                                                                                           
+Memory  weights ≥ 32.17 KiB (0.0 GB)                                                                                                        
+  weights only: no KV cache, activations or runtime overhe                                                                                  
+  weights only; excludes KV cache, activations, runtime ov                                                                                  
+  heuristic lookup_table_v1; runtime support varies; no sa                                                                                  
+                                                                                                                                            
+BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2× · per-layer totals differ by <1%                           
+            ○ ○ ●  ●                                                                                                                        
+attention   ··░░·· ··  16 B  flat                                                                                                           
+router      ······ ··  ·                                                                                                                    
+shared exp  ······ ··  ·                                                                                                                    
+routed exp  ······ ··  ·                                                                                                                    
+norms       ······ ··  ·                                                                                                                    
+16 B  <64K ▒ <4M ▓ <256M █  32 B  ○ linear  ● full  per-layer totals differ by <1%                                                          
+excludes ple 32.00 KiB · other 32 B not in the grid                                                                                         
+Memory  weights ≥ 32.17 KiB (0.0 GB)                                                                                                        
+  weights only: no KV cache, activations or runtime overhead                                                                                
+  weights only; excludes KV cache, activations, runtime overhead                                                                            
+  heuristic lookup_table_v1; runtime support varies; no saving on unified memory                                                            
+layer 1 is 32.02 KiB, 99.5% of weights: ~16.4K-param n-gram embedding table                                                                 
+n-gram embedding table 32.00 KiB can stay in CPU RAM (heuristic)                                                                            
+                                                                                                                                            
+IDENTITY │ /model │ ↑↓ scroll · ←→ tabs · ? keys                           safetensors │ 33.30 KiB │ bf16 │ ✓ structure 5/8 │ – headers-only

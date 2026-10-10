@@ -6,6 +6,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+
+	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 // glyphs is the character set for the current locale.
@@ -40,12 +42,13 @@ var (
 )
 
 // SetNoColor records --no-color. Call it before New.
-func SetNoColor(v bool) { noColor = v }
+func SetNoColor(v bool) {
+	noColor = v
+	ui.SetNoColor(v)
+}
 
 func configure() {
-	if noColor || os.Getenv("NO_COLOR") != "" {
-		lipgloss.SetColorProfile(termenv.Ascii)
-	}
+	ui.Configure()
 	if utf8Locale() {
 		g = glyphs{
 			pass: "✓", fail: "✗", nr: "–",

@@ -10,6 +10,7 @@ import (
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 func (t Model) headerLine(width int) string {
@@ -83,14 +84,18 @@ func compactFormat(format string) string {
 	if variant == "" {
 		return sanitize.From(name).String()
 	}
-	return sanitize.From(name + "·" + variant).String()
+	sep := "·"
+	if !ui.UTF8() {
+		sep = "|"
+	}
+	return sanitize.From(name + sep + variant).String()
 }
 
 func quantHeader(m *model.Model) string {
 	if m.Quant == nil || m.Quant.Bits <= 0 {
 		d := model.DisplayDType(dominantDType(m))
 		if d == "" {
-			return "—"
+			return ui.Dash()
 		}
 		return sanitize.From(d).String()
 	}
@@ -303,12 +308,6 @@ func (t Model) helpText(width, height int) string {
 	bot := g.bl + strings.Repeat(g.hbar, max(0, inner)) + g.br
 	b.WriteString(truncWidth(bot, width))
 	return b.String()
-}
-
-func (t Model) tooSmall() string {
-	msg := fmt.Sprintf("model-inspector needs at least 60×16 (now %d×%d).", t.width, t.height)
-	msg2 := "Enlarge the window or run: model-inspector inspect <path>"
-	return msg + "\n" + msg2 + "\n\nq quit"
 }
 
 func min(a, b int) int {

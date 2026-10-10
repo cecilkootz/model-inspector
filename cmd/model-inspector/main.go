@@ -51,6 +51,7 @@ Flags:
   --json            print schema_version 1 JSON
   --strict          treat scan warnings as failures (exit 1)
   --no-color        disable color (same as NO_COLOR)
+  --no-mouse        start the TUI with the mouse off (ignored by --json and non-TTY)
   --hub-dir <dir>   HF hub cache (default: $HF_HUB_CACHE, $HF_HOME/hub, ~/.cache/huggingface/hub)
   --version         print the version and commit
   -h, --help        print this help
@@ -72,6 +73,7 @@ type options struct {
 	json    bool
 	strict  bool
 	noColor bool
+	noMouse bool
 	version bool
 	hubDir  string
 	target  string
@@ -125,7 +127,12 @@ func run(args []string) int {
 	}
 	interactive := cmd == "tui" && !opts.json && isatty.IsTerminal(os.Stdout.Fd())
 	if interactive {
-		if err := tui.Run(m, res); err != nil {
+		var runOpt []tui.Options
+		if opts.noMouse {
+			off := false
+			runOpt = append(runOpt, tui.Options{Mouse: &off})
+		}
+		if err := tui.Run(m, res, runOpt...); err != nil {
 			fail(err)
 			return 1
 		}
@@ -173,6 +180,8 @@ func parseArgs(args []string) (options, error) {
 			o.strict = true
 		case a == "--no-color":
 			o.noColor = true
+		case a == "--no-mouse":
+			o.noMouse = true
 		case a == "--version" || a == "-version":
 			o.version = true
 		case a == "-h" || a == "--help" || a == "help":

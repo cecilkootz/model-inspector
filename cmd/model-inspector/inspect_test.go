@@ -342,8 +342,14 @@ func TestVersionAndUsage(t *testing.T) {
 		t.Fatalf("both flags exit %d\n%s", code, stderr)
 	}
 	stdout, _, code = capture(t, func() int { return run([]string{"--help"}) })
-	if code != 0 || !strings.Contains(stdout, "--path") || !strings.Contains(stdout, "--repo") {
+	if code != 0 || !strings.Contains(stdout, "--path") || !strings.Contains(stdout, "--repo") || !strings.Contains(stdout, "--no-mouse") {
 		t.Fatalf("help exit %d\n%s", code, stdout)
+	}
+	_, stderr, code = capture(t, func() int {
+		return run([]string{"inspect", "--json", "--no-mouse", "--path", t.TempDir()})
+	})
+	if strings.Contains(stderr, "unknown flag") {
+		t.Fatalf("--no-mouse was rejected outside the TUI:\n%s", stderr)
 	}
 }
 
