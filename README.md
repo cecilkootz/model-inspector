@@ -30,10 +30,13 @@ export PATH="$HOME/go-sdk/go/bin:$HOME/src/model-inspector/bin:$PATH"
 
 ```sh
 cd ~/src/model-inspector
-go vet ./...
-go test ./...
+make test   # go vet ./... && go test -race -count=1 ./...
 go build -o bin/model-inspector ./cmd/model-inspector
 ```
+
+`make test` builds tiny safetensors fixtures in a temp directory (real
+headers, an index, a config, and a fake HF hub cache). It does not need a
+downloaded checkpoint.
 
 ## Run
 
@@ -62,14 +65,17 @@ Keys: `tab`/`shift+tab`, `←`/`→` or `1`-`4` switch screens; `↑`/`↓` scro
 2. **Config**: key architecture/MoE/MTP fields (root or `text_config`) plus
    the raw `config.json` in a scrollable viewport.
 3. **Layers**: tensors grouped by decoder layer (`...layers.N.`) plus
-   embeddings, norms, lm_head, mtp, vision, other. Per group: tensor count,
-   params, bytes, whether routed experts are present. Enter shows each
-   tensor's name, dtype, shape, bytes, and role (`q4`, `qscales`, `qbiases`).
+   embeddings, ngram (the PLE n-gram table, even when stored under
+   `layers.N.ple.ple_embedding`), norms, hyper_connection (the model-level
+   mixer, including `hc_norm`), lm_head, mtp, vision, and other. Per group:
+   tensor count, params, bytes, whether routed experts are present. Enter
+   shows each tensor's name, dtype, shape, bytes, and role (`q4`, `qscales`,
+   `qbiases`).
 4. **Scan**: structural checks. **This is not a malware scan.** Implemented:
-   every tensor in the index exists in the referenced shard header; every
-   header byte range is valid, matches dtype×shape, doesn't overlap, and fits
-   within the file. Planned: hash vs pinned revision, metadata sanity,
-   behavior probes.
+   an unreadable index fails the check; every tensor in the index exists in
+   the referenced shard header; every header byte range is valid, matches
+   dtype×shape, doesn't overlap, and fits within the file. Planned: hash vs
+   pinned revision, metadata sanity, behavior probes.
 
 "Params" counts MLX packed quantized weights at their dequantized size and
 excludes quantization scales/biases; "stored elements" is the raw count.

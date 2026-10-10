@@ -12,6 +12,7 @@ const (
 	KindEmbeddings = "embeddings"
 	KindLayer      = "layer"
 	KindNorms      = "norms"
+	KindHyper      = "hyper"
 	KindLMHead     = "lm_head"
 	KindMTP        = "mtp"
 	KindVision     = "vision"
@@ -19,8 +20,8 @@ const (
 )
 
 var kindOrder = map[string]int{
-	KindEmbeddings: 0, KindLayer: 1, KindNorms: 2, KindLMHead: 3,
-	KindMTP: 4, KindVision: 5, KindOther: 6,
+	KindEmbeddings: 0, KindLayer: 1, KindNorms: 2, KindHyper: 3,
+	KindLMHead: 4, KindMTP: 5, KindVision: 6, KindOther: 7,
 }
 
 // layerRe matches decoder-layer style names: model.layers.N., transformer.h.N., blocks.N.
@@ -28,8 +29,9 @@ var layerRe = regexp.MustCompile(`(?:^|\.)(?:layers|h|blocks|block)\.(\d+)\.`)
 
 // Classify maps a tensor name to a group key, kind, and decoder layer index
 // (-1 when the tensor is not part of a numbered decoder layer).
-// MTP and vision towers are grouped as a whole even though they contain
-// their own numbered layers/blocks, so they never merge into decoder layer N.
+// MTP, vision, and the n-gram embedding table are grouped as a whole even
+// though their names contain numbered layers/blocks, so they never merge
+// into decoder layer N.
 func Classify(name string) (key, kind string, layer int) {
 	lower := strings.ToLower(name)
 	segs := strings.Split(lower, ".")
@@ -43,9 +45,23 @@ func Classify(name string) (key, kind string, layer int) {
 	}) {
 		return "vision", KindVision, -1
 	}
+	// The PLE n-gram table is stored under decoder layer 1
+	// (...layers.N.ple.ple_embedding.ngram_embedding.shard_N.weight, plus
+	// ngram_heads_offsets / ngram_heads_vocab_sizes). The layer regex would
+	// swallow that whole table into layer N before the "embed" rule runs.
+	if hasSeg(segs, func(s string) bool { return s == "ple_embedding" || s == "ngram_embedding" }) {
+		return "ngram", KindEmbeddings, -1
+	}
 	if m := layerRe.FindStringSubmatch(name); m != nil {
 		n, _ := strconv.Atoi(m[1])
 		return fmt.Sprintf("layer %d", n), KindLayer, n
+	}
+	// The model-level mixer sits next to the stack, not inside layers.N or
+	// mtp. One parameter is hc_norm; the "norm" substring rule below would
+	// file that tensor under norms and leave input_mix_weight_* in other.
+	// Per-layer attn_/mlp_hyper_connection tensors already returned above.
+	if hasSeg(segs, func(s string) bool { return s == "hyper_connection_mixer" }) {
+		return "hyper_connection", KindHyper, -1
 	}
 	switch {
 	case strings.Contains(lower, "lm_head") || strings.HasPrefix(lower, "output."):

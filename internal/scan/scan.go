@@ -71,11 +71,14 @@ const maxDetails = 25
 // referenced shard's header and that every header byte range fits in its file.
 func IndexConsistency(m *model.Model) Check {
 	c := Check{ID: "index-shard-consistency", Name: "Index vs shard headers / offsets within file sizes"}
-	if len(m.Shards) == 0 {
+	if len(m.Shards) == 0 && m.IndexErr == nil {
 		c.Status, c.Summary = StatusSkip, "no safetensors shards found"
 		return c
 	}
 	var problems, warnings []string
+	if m.IndexErr != nil {
+		problems = append(problems, fmt.Sprintf("index file unreadable: %v", m.IndexErr))
+	}
 	headerNames := map[string]map[string]bool{}
 	for _, s := range m.Shards {
 		if s.Header == nil {
@@ -119,6 +122,9 @@ func IndexConsistency(m *model.Model) Check {
 		}
 		c.Summary = fmt.Sprintf("%d/%d index entries found in %d shard headers; %d tensor byte ranges checked against file sizes",
 			found, len(m.Index.WeightMap), len(headerNames), len(m.Tensors))
+	} else if m.IndexErr != nil {
+		c.Summary = fmt.Sprintf("index file present but unreadable; %d tensor byte ranges in %d shard headers checked against file sizes",
+			len(m.Tensors), len(headerNames))
 	} else {
 		c.Summary = fmt.Sprintf("no index file; %d tensor byte ranges in %d shard headers checked against file sizes",
 			len(m.Tensors), len(headerNames))
