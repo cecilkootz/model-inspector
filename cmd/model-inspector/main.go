@@ -52,7 +52,7 @@ Flags:
   --strict          treat scan warnings as failures (exit 1)
   --no-color        disable color (same as NO_COLOR)
   --hub-dir <dir>   HF hub cache (default: $HF_HUB_CACHE, $HF_HOME/hub, ~/.cache/huggingface/hub)
-  --version         print the version
+  --version         print the version and commit
   -h, --help        print this help
 
 --path, --repo, and a positional target are mutually exclusive.
@@ -84,7 +84,7 @@ func run(args []string) int {
 		return 2
 	}
 	if args[0] == "version" || args[0] == "--version" || args[0] == "-version" {
-		fmt.Printf("%s %s\n", version.Name, version.Version)
+		fmt.Println(version.String())
 		return 0
 	}
 	cmd := "tui"
@@ -105,7 +105,7 @@ func run(args []string) int {
 		return 2
 	}
 	if opts.version {
-		fmt.Printf("%s %s\n", version.Name, version.Version)
+		fmt.Println(version.String())
 		return 0
 	}
 	if opts.noColor {

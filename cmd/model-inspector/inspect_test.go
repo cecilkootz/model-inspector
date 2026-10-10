@@ -320,9 +320,12 @@ func TestGGUFExits3AfterSummary(t *testing.T) {
 }
 
 func TestVersionAndUsage(t *testing.T) {
-	stdout, _, code := capture(t, func() int { return run([]string{"version"}) })
-	if code != 0 || !strings.Contains(stdout, version.Version) {
-		t.Fatalf("version exit %d out %q", code, stdout)
+	want := version.String() + "\n"
+	for _, arg := range []string{"version", "--version", "-version"} {
+		stdout, _, code := capture(t, func() int { return run([]string{arg}) })
+		if code != 0 || stdout != want {
+			t.Fatalf("%s exit %d out %q", arg, code, stdout)
+		}
 	}
 	stdout, stderr, code := capture(t, func() int { return run(nil) })
 	if code != 2 || !strings.Contains(stderr, "Usage:") {
