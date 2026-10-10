@@ -670,10 +670,12 @@ func (t Model) statusRow() string {
 	content := ui.G().NR + " headers-only"
 	cKind := ui.FillKindNR
 	seg := func(s string) ui.Safe { return ui.S(sanitize.From(s)) }
+	// The hint is a fixed phrase ("<-> tabs" in ASCII). Sanitizing it
+	// prints <U+003C> in the status bar.
 	left := []ui.StatusSeg{
 		{Text: seg(mode), Pri: 1, FG: ui.TextInk, BG: ui.FillPink, Bold: true, Keep: true},
 		{Text: seg(name), Pri: 3, FG: ui.TextPrimary, BG: ui.SurfaceSeg2, Min: 16, Shrink: true},
-		{Text: seg(hint), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep},
+		{Text: ui.Chrome(hint), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep},
 	}
 	right := []ui.StatusSeg{
 		{Text: seg(format), Pri: 4, FG: ui.TextSecondary, BG: ui.SurfaceSeg},

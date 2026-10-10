@@ -462,9 +462,40 @@ func (t Model) layersBody() string {
 	}
 	if t.detail != nil {
 		head := sanitize.From(fmt.Sprintf("%s · %d tensors · %s", t.detail.Key, len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))).String()
-		return head + "\n" + t.tensorTable.View()
+		return head + "\n" + markTableCursor(t.tensorTable.View(), t.tensorTable.Rows(), t.tensorTable.Cursor())
 	}
-	return t.groupTable.View()
+	return markTableCursor(t.groupTable.View(), t.groupTable.Rows(), t.groupTable.Cursor())
+}
+
+// markTableCursor puts a ">" on the selected row when colour is off.
+// The table's selection is a background fill, which the ASCII profile drops,
+// so a NO_COLOR frame would otherwise hide the cursor.
+func markTableCursor(view string, rows []table.Row, cursor int) string {
+	if !ui.ColorOff() || cursor < 0 || cursor >= len(rows) || len(rows[cursor]) == 0 {
+		return view
+	}
+	key := rows[cursor][0]
+	lines := strings.Split(view, "\n")
+	for i := 1; i < len(lines); i++ {
+		if rowStartsWith(lines[i], key) {
+			lines[i] = markGreater(lines[i])
+			break
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func rowStartsWith(line, key string) bool {
+	s := strings.TrimLeft(line, " ")
+	return s == key || strings.HasPrefix(s, key+" ")
+}
+
+func markGreater(line string) string {
+	// The first cell's left pad becomes the marker so the columns stay put.
+	if strings.HasPrefix(line, " ") {
+		return ">" + line[1:]
+	}
+	return line
 }
 
 func text(s string) sanitize.Text { return sanitize.From(s) }

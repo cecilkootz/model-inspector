@@ -142,7 +142,9 @@ func buildHeat(m *model.Model) ui.HeatGrid {
 			out.Full[i] = true
 		}
 	}
-	out.Note = ui.S(sanitize.From(totalsNote(cells)))
+	// The note and caption are program text (a fixed phrase plus counts).
+	// sanitize.From would turn the "<" in "<1%" into a <U+003C> token.
+	out.Note = ui.Chrome(totalsNote(cells))
 	var caps []string
 	if ple > 0 {
 		caps = append(caps, "excludes ple "+model.HumanBytes(ple))
@@ -156,10 +158,14 @@ func buildHeat(m *model.Model) ui.HeatGrid {
 	if skipped > 0 {
 		caps = append(caps, fmt.Sprintf("%d layer indices above %d left out", skipped, model.MaxLayerIndex))
 	}
-	out.Caption = ui.S(sanitize.From(strings.Join(caps, ui.SepWord())))
+	out.Caption = ui.Chrome(strings.Join(caps, ui.SepWord()))
 	out.Prepare()
 	return out
 }
+
+// noteTotalsFlat is program text. It stays a real "<" so the heatmap
+// reads "differ by <1%" instead of a sanitizer token.
+const noteTotalsFlat = "per-layer totals differ by <1%"
 
 func totalsNote(cells [][]int64) string {
 	if len(cells) == 0 || len(cells[0]) == 0 {
@@ -193,11 +199,11 @@ func totalsNote(cells [][]int64) string {
 	}
 	med := min
 	if max == min {
-		return "per-layer totals differ by <1%"
+		return noteTotalsFlat
 	}
 	pct := float64(max-min) / float64(med) * 100
 	if pct < 1 {
-		return "per-layer totals differ by <1%"
+		return noteTotalsFlat
 	}
 	return fmt.Sprintf("per-layer totals differ by %.1f%%", pct)
 }

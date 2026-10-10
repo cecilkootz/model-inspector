@@ -51,8 +51,45 @@ func TestClassify(t *testing.T) {
 func TestClassifyOverflowIndex(t *testing.T) {
 	name := "model.layers." + strings.Repeat("9", 40) + ".self_attn.q_proj.weight"
 	key, kind, layer := Classify(name)
-	if key != "layer overflow" || kind != KindLayer || layer != MaxLayerIndex+1 {
+	if key != "layer overflow" || kind != KindLayer || layer != -1 {
 		t.Fatalf("Classify overflow = (%q,%q,%d)", key, kind, layer)
+	}
+	// layers.4097 is a real index. It must not share the overflow sentinel.
+	key, kind, layer = Classify("model.layers.4097.self_attn.q_proj.weight")
+	if key != "layer 4097" || kind != KindLayer || layer != 4097 {
+		t.Fatalf("Classify 4097 = (%q,%q,%d)", key, kind, layer)
+	}
+}
+
+func TestNoteAbsurdLayersWarns(t *testing.T) {
+	m := &Model{
+		Tensors: []*Tensor{
+			{Group: "layer 99999999", Kind: KindLayer, Layer: 99999999},
+			{Group: "layer overflow", Kind: KindLayer, Layer: -1},
+			{Group: "layer 4097", Kind: KindLayer, Layer: 4097},
+		},
+	}
+	m.NoteAbsurdLayers()
+	if !m.Partial {
+		t.Fatal("absurd indices did not mark partial")
+	}
+	got := strings.Join(m.Warnings, "\n")
+	for _, want := range []string{
+		"layer index 99999999 exceeds 4096; dropped",
+		"layer index exceeds 4096; dropped",
+		"layer index 4097 exceeds 4096; dropped",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in %q", want, got)
+		}
+	}
+	if strings.Contains(got, "4097; dropped") && strings.Count(got, "layer index exceeds 4096; dropped") != 1 {
+		t.Fatalf("overflow warning collided with a numbered layer: %q", got)
+	}
+	n := len(m.Warnings)
+	m.NoteAbsurdLayers()
+	if len(m.Warnings) != n {
+		t.Fatalf("second pass appended warnings: %v", m.Warnings)
 	}
 }
 
