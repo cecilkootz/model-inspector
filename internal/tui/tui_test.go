@@ -170,12 +170,12 @@ func TestScanCodeNoticeAndInputFocus(t *testing.T) {
 	scanTab, _ := sized.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'4'}})
 	noticed, _ := scanTab.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
 	view := noticed.View()
-	if !strings.Contains(view, "Code & pickles arrives in a later version") {
-		t.Fatalf("c key did not set the footer notice:\n%s", view)
+	if !strings.Contains(view, "Code & pickles") || !strings.Contains(view, "Nothing flagged") {
+		t.Fatalf("c key did not open the code list:\n%s", view)
 	}
 	cleared, _ := noticed.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
-	if strings.Contains(cleared.View(), "Code & pickles arrives") {
-		t.Fatalf("notice survived the next key:\n%s", cleared.View())
+	if !strings.Contains(cleared.View(), "Code & pickles") {
+		t.Fatalf("code list closed on j:\n%s", cleared.View())
 	}
 
 	focused := sized.(Model)

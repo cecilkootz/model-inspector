@@ -82,6 +82,7 @@ type Model struct {
 	lastClickAt    time.Time
 	cfg            *configState
 	lay            *layersState
+	scn            *scanView
 }
 
 type frameCache struct {
@@ -142,6 +143,7 @@ func New(m *model.Model, res scan.Result) Model {
 		mouse: mouseDefault(), noClipboard: osc52EnvOff(), motion: motion, motionFrame: frame,
 		ratio: 55, derived: &d, cache: &frameCache{}, zones: &ui.Zones{},
 		now: time.Now, cfg: newConfigState(), lay: newLayersState(),
+		scn: &scanView{},
 	}
 	t.identityVP = viewport.New(t.width, t.bodyHeight())
 	t.configVP = viewport.New(t.width, t.bodyHeight())
@@ -150,10 +152,14 @@ func New(m *model.Model, res scan.Result) Model {
 }
 
 func (t Model) Init() tea.Cmd {
+	var cmds []tea.Cmd
 	if t.motion && t.motionFrame < 6 {
-		return tick()
+		cmds = append(cmds, tick())
 	}
-	return nil
+	if c := t.loadCmds(); c != nil {
+		cmds = append(cmds, c)
+	}
+	return tea.Batch(cmds...)
 }
 
 func (t Model) bodyHeight() int {
@@ -190,6 +196,24 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.cfg.spin = true
 			t.touchConfig()
 		}
+		return t, nil
+	case scanArmMsg:
+		if t.scn != nil && t.scn.loading && t.m == nil {
+			t.scn.armed = true
+			t.touchScan()
+		}
+		return t, nil
+	case scanProgMsg:
+		if t.scn != nil && t.scn.loading {
+			t.scn.prog = msg.p
+			t.scn.spin++
+			t.touchScan()
+			return t, waitScanProg(t.scn.progCh)
+		}
+		return t, nil
+	case scanLoadedMsg:
+		return t.onScanLoaded(msg)
+	case nil:
 		return t, nil
 	case tea.MouseMsg:
 		return t.updateMouse(msg)
@@ -289,6 +313,9 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if t.drill {
 				t.drill = false
 				return t, nil
+			}
+			if t.active == tabScan && t.scn != nil && (t.scn.drill || t.scn.code) {
+				return t.updateScan(msg)
 			}
 			return t, nil
 		case "backspace":
@@ -435,49 +462,6 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, nil
 	}
 	return t, cmd
-}
-
-func (t Model) updateScan(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	n := len(t.scan.Checks)
-	switch msg.String() {
-	case "up", "k":
-		if t.scanCursor > 0 {
-			t.scanCursor--
-		}
-	case "down", "j":
-		if n > 0 && t.scanCursor < n-1 {
-			t.scanCursor++
-		}
-	case "pgup", "b", "u":
-		t.scanCursor -= t.bodyHeight() / 2
-		if t.scanCursor < 0 {
-			t.scanCursor = 0
-		}
-	case "pgdown", "f", "d":
-		t.scanCursor += t.bodyHeight() / 2
-		if n > 0 && t.scanCursor >= n {
-			t.scanCursor = n - 1
-		}
-	case "home", "g":
-		t.scanCursor = 0
-	case "end", "G":
-		if n > 0 {
-			t.scanCursor = n - 1
-		}
-	case "enter":
-		if n > 0 && t.scanCursor >= 0 && t.scanCursor < n {
-			id := t.scan.Checks[t.scanCursor].ID
-			if t.scanOpen == nil {
-				t.scanOpen = map[string]bool{}
-			}
-			t.scanOpen[id] = !t.scanOpen[id]
-		}
-	case "c":
-		t.notice = "Code & pickles arrives in a later version"
-		t.disclosure = true
-	}
-	t.ensureScanVisible()
-	return t, nil
 }
 
 func (t Model) View() string {

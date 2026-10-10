@@ -183,6 +183,13 @@ func TestQwenShapeHeat(t *testing.T) {
 
 func renderGolden(t *testing.T, m *model.Model, w, h int, profile string, keys []string) string {
 	t.Helper()
+	return renderPrepared(t, m, scan.Run(m), w, h, profile, keys)
+}
+
+// renderPrepared draws a frame from an already-built scan result. Durations
+// are zeroed so a slow machine does not change "<1 ms".
+func renderPrepared(t *testing.T, m *model.Model, res scan.Result, w, h int, profile string, keys []string) string {
+	t.Helper()
 	prevNC, hadNC := os.LookupEnv("NO_COLOR")
 	t.Cleanup(func() {
 		if hadNC {
@@ -219,7 +226,10 @@ func renderGolden(t *testing.T, m *model.Model, w, h int, profile string, keys [
 		lipgloss.SetColorProfile(termenv.TrueColor)
 	}
 	lipgloss.SetHasDarkBackground(true)
-	ui := New(m, scan.Run(m))
+	for i := range res.Checks {
+		res.Checks[i].Duration = 0
+	}
+	ui := New(m, res)
 	var x tea.Model = ui
 	x, _ = x.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	for _, k := range keys {

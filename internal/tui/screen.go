@@ -102,12 +102,16 @@ func (t Model) frameKey() string {
 	if t.lay != nil {
 		lay = t.lay.framePart()
 	}
-	return fmt.Sprintf("%d %d %d %v %v %s %d %v %q %v %d %v %v %d %v %v %d %d %s %v %s %s",
+	scn := ""
+	if t.scn != nil {
+		scn = t.scn.framePart()
+	}
+	return fmt.Sprintf("%d %d %d %v %v %s %d %v %q %v %d %v %v %d %v %v %d %d %s %v %s %s %s",
 		t.width, t.height, t.active, t.help, t.palette.open, t.palette.query, t.palette.cursor,
 		t.disclosure, t.notice, t.mouse, t.motionFrame, t.focusSecondary, t.zoom, t.ratio, t.drill,
 		t.blurred, t.scanCursor, t.scanScroll, strings.Join(open, ","),
 		t.identityVP.YOffset+t.configVP.YOffset,
-		t.cfg.framePart(), lay)
+		t.cfg.framePart(), lay, scn)
 }
 
 func (t Model) renderFrame() string {
@@ -125,6 +129,9 @@ func (t Model) renderFrame() string {
 }
 
 func (t Model) bodyView() string {
+	if t.m == nil && t.active != tabScan {
+		return t.waitingLine()
+	}
 	switch t.active {
 	case tabIdentity:
 		t.identityVP.Width = t.width
@@ -332,6 +339,16 @@ func (t Model) commands() []ui.Match {
 			ui.Match{ID: "lay-jump", Title: ui.S(ui.L("Layers: jump to layer…")), Key: ui.S(ui.L("#")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 11, Enable: true},
 		)
 	}
+	if t.active == tabScan {
+		out = append(out,
+			ui.Match{ID: "scan-next", Title: ui.S(sanitize.Program("Scan: next problem")), Key: ui.S(sanitize.Program("]")), Where: ui.S(sanitize.Program("in Scan")), Order: len(out), Enable: true},
+			ui.Match{ID: "scan-expand", Title: ui.S(sanitize.Program("Scan: expand all")), Key: ui.S(sanitize.Program("e")), Where: ui.S(sanitize.Program("in Scan")), Order: len(out) + 1, Enable: true},
+			ui.Match{ID: "scan-collapse", Title: ui.S(sanitize.Program("Scan: collapse all")), Key: ui.S(sanitize.Program("E")), Where: ui.S(sanitize.Program("in Scan")), Order: len(out) + 2, Enable: true},
+			ui.Match{ID: "scan-nc", Title: ui.S(sanitize.Program("Scan: toggle not covered")), Key: ui.S(sanitize.Program("i")), Where: ui.S(sanitize.Program("in Scan")), Order: len(out) + 3, Enable: true},
+			ui.Match{ID: "scan-code", Title: ui.S(sanitize.Program("Scan: code & pickles")), Key: ui.S(sanitize.Program("c")), Where: ui.S(sanitize.Program("in Scan")), Order: len(out) + 4, Enable: true},
+			ui.Match{ID: "scan-copy", Title: ui.S(sanitize.Program("Scan: copy scan as text")), Key: ui.S(sanitize.Program("Y")), Where: ui.S(sanitize.Program("in Scan")), Order: len(out) + 5, Enable: true},
+		)
+	}
 	return out
 }
 
@@ -404,6 +421,24 @@ func (t *Model) runCommand(id string) tea.Cmd {
 	case "lay-jump":
 		t.active = tabLayers
 		t.openLayerJump()
+	case "scan-next":
+		t.active = tabScan
+		t.jumpProblem(1)
+	case "scan-expand":
+		t.active = tabScan
+		t.expandScan(true)
+	case "scan-collapse":
+		t.active = tabScan
+		t.expandScan(false)
+	case "scan-nc":
+		t.active = tabScan
+		t.toggleNotCovered()
+	case "scan-code":
+		t.active = tabScan
+		t.openCodeList()
+	case "scan-copy":
+		t.active = tabScan
+		t.copyScan(true)
 	case "cfg-expand":
 		t.active = tabConfig
 		t.focusSecondary = true
@@ -508,11 +543,15 @@ func (t Model) updatePalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (t Model) disclosureSpec() ui.ModalSpec {
-	primary := ui.Button(ui.S(ui.L("c / enter")), ui.S(ui.L("content reading ships in a later version")), true, false)
-	secondary := ui.Button(ui.S(ui.L("esc")), ui.S(ui.L("Cancel")), false, true)
+	label, enabled := t.disclosureConfirm()
+	primary := ui.Button(ui.S(sanitize.Program("c / ⏎")), ui.S(sanitize.Program(label)), true, enabled)
+	if !ui.UTF8() {
+		primary = ui.Button(ui.S(sanitize.Program("c / enter")), ui.S(sanitize.Program(label)), true, enabled)
+	}
+	secondary := ui.Button(ui.S(sanitize.Program("esc")), ui.S(sanitize.Program("Cancel")), false, true)
 	return ui.ModalSpec{
-		Title:   ui.S(ui.L("Read file contents?")),
-		Body:    ui.S(ui.L("So far only names and sizes were read. Nothing is executed, imported or unpickled.")),
+		Title:   ui.S(sanitize.Program("Read file contents?")),
+		Body:    ui.S(sanitize.Program(t.disclosureBody())),
 		Buttons: ui.Chrome(primary + "  " + secondary),
 		Width:   min(t.width-4, 72),
 	}
@@ -523,8 +562,11 @@ func (t Model) updateDisclosure(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "q":
 		t.disclosure = false
 	case "enter", "c":
-		t.notice = "Code & pickles arrives in a later version"
-	default:
+		if _, enabled := t.disclosureConfirm(); !enabled {
+			t.notice = "content reading ships in a later version"
+			return t, nil
+		}
+		t.notice = "content reading ships in a later version"
 		t.disclosure = false
 	}
 	return t, nil
@@ -582,6 +624,8 @@ func (t Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		t.focusSecondary = false
 	case z.ID == "pane:secondary":
 		t.focusSecondary = true
+	case strings.HasPrefix(z.ID, "scan:"):
+		return t.scanClick(z.ID, double), nil
 	case strings.HasPrefix(z.ID, "row:scan:"):
 		var i int
 		fmt.Sscanf(z.ID, "row:scan:%d", &i)
@@ -670,9 +714,9 @@ func (t Model) fillZones() {
 	} else {
 		t.zones.Add("pane:primary", rects.Body)
 	}
-	if t.active == tabScan {
-		for i := 0; i < t.bodyHeight() && i < len(t.scan.Checks); i++ {
-			t.zones.Add(fmt.Sprintf("row:scan:%d", t.scanScroll+i), ui.Rect{X: 0, Y: 2 + i, W: t.width, H: 1})
+	if t.active == tabScan && t.scn != nil {
+		for _, h := range t.scn.hits {
+			t.zones.Add(h.id, ui.Rect{X: h.x, Y: h.y, W: h.w, H: h.h})
 		}
 	}
 	if t.palette.open {
@@ -885,6 +929,10 @@ func (t Model) statusRow() string {
 		for i, h := range t.layersHintSegs() {
 			hintSegs = append(hintSegs, ui.StatusSeg{Text: ui.S(sanitize.Program(h)), Pri: 5 + i, FG: ui.TextSecondary, BG: ui.SurfaceSeg})
 		}
+	} else if t.active == tabScan {
+		for i, h := range t.scanHintSegs() {
+			hintSegs = append(hintSegs, ui.StatusSeg{Text: ui.S(sanitize.Program(h)), Pri: 3, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: i == 0})
+		}
 	} else {
 		hintSegs = []ui.StatusSeg{{Text: own(hint), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep}}
 	}
@@ -902,6 +950,10 @@ func (t Model) statusRow() string {
 	verdict, vKind := t.verdictSeg()
 	content := ui.G().NR + " headers-only"
 	cKind := ui.FillKindNR
+	if t.active == tabScan {
+		verdict, vKind = t.scanVerdictText()
+		content, cKind = t.scanContentText()
+	}
 	left := []ui.StatusSeg{
 		{Text: own(mode), Pri: 1, FG: ui.TextInk, BG: ui.FillPink, Bold: true, Keep: true},
 		{Text: file(name), Pri: 3, FG: ui.TextPrimary, BG: ui.SurfaceSeg2, Min: 16, Shrink: true},
@@ -940,7 +992,7 @@ func (t Model) modeName() string {
 	case tabLayers:
 		return t.layersMode()
 	case tabScan:
-		return "SCAN"
+		return t.scanModeName()
 	default:
 		return "IDENTITY"
 	}

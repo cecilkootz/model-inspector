@@ -176,8 +176,13 @@ null when they do not apply. `kind` is `size_outlier`, `host_capable`,
 
 Each check is `{id, name, status, effective_status, summary, details}`.
 `status` is the raw result. `effective_status` equals `status`, except
-under `--strict`, where `warn` becomes `fail`. `details` is `[]` when
-there is nothing to list.
+under `--strict`, where a raw `warn` becomes `fail`, and except the v1.2
+rule: a structural check (`header-parse`, `file-presence`, `offsets-bounds`,
+`index-shard-consistency`) that skipped while shards exist is an effective
+`warn` and its summary gains " (skipped although shards exist)". A single
+shard with no index file stays `skip`. `planned` is never promoted. A
+promoted skip stays an effective `warn` under `--strict`, because strict
+only promotes a raw `warn`. `details` is `[]` when there is nothing to list.
 
 Check ids, in order:
 
