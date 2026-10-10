@@ -5,12 +5,13 @@ import (
 	"strings"
 )
 
-// ConfigQwenLike is a synthetic config.json shaped like the v2 tree fixture.
-// Values that the spec lists for Vontra/Qwen3.8-Flash-Next are real stand-ins
-// for the screen. rope_theta, partial_rotary_factor, the linear head counts,
-// sliding_window, the long string, and synthetic_items are not from that
-// checkpoint; they exist so paging, yarn, and the value modal have something
-// to draw. Quantization overrides are named synthetic.override.N.
+// ConfigQwenLike is a synthetic config.json. The real Vontra checkpoint is
+// not in this tree; use this fixture until that file is supplied. The
+// architecture numbers follow the v2 screen spec so the derived rows have a
+// known shape. rope_theta, partial_rotary_factor, the linear head counts,
+// sliding_window, the long string, and synthetic_items exist so paging,
+// yarn, and the value modal have something to draw. Quantization overrides
+// are named synthetic.override.N.
 func ConfigQwenLike() []byte {
 	var b strings.Builder
 	b.WriteString(`{"model_type":"qwen4_exp","architectures":["Qwen4ExpForConditionalGeneration"],"text_config":{`)
