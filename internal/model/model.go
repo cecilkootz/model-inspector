@@ -202,6 +202,7 @@ func Load(dir string) (*Model, error) {
 	// sum) settle here, before the caller scans. Rendering must not be the
 	// first pass: that used to flip Partial after the verdict was fixed.
 	m.HostCapable()
+	m.NoteAbsurdLayers()
 	return m, nil
 }
 

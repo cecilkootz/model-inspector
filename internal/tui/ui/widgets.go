@@ -79,14 +79,14 @@ func Est() string {
 }
 
 // GradText colours each grapheme from g. Literals only.
-func GradText(s string, g Gradient, bold bool) string {
+func GradText(s Safe, g Gradient, bold bool) string {
 	if ColorOff() {
-		return s
+		return s.String()
 	}
 	if Profile() == "ansi16" {
-		return Pill(FillKindViolet, sanitize.From(strings.TrimSpace(s)))
+		return Pill(FillKindViolet, sanitize.From(strings.TrimSpace(s.String())))
 	}
-	gr := uniseg.NewGraphemes(s)
+	gr := uniseg.NewGraphemes(s.String())
 	var n int
 	var gs []string
 	for gr.Next() {
@@ -191,7 +191,7 @@ func meterCell(ch, col string, track bool) string {
 
 // Seg is one stacked-bar segment.
 type Seg struct {
-	Label string
+	Label Safe
 	Frac  float64
 	Grad  Gradient
 	Flat  string // hex, used when Grad is empty
@@ -278,7 +278,7 @@ func Stacked(segs []Seg, width, height int) (rows []string, legend string) {
 			sw = "#"
 		}
 		pct := s.Frac * 100
-		legendParts = append(legendParts, sw+" "+s.Label+" "+formatPct(pct))
+		legendParts = append(legendParts, sw+" "+s.Label.String()+" "+formatPct(pct))
 	}
 	return lines, strings.Join(legendParts, "   ")
 }
@@ -298,29 +298,44 @@ func sprintf1(p float64) string {
 			}(), "", ""), "", ""))
 }
 
+// itoa formats n without recursing. Negating MinInt does not terminate,
+// so the absolute value is taken in unsigned two's complement.
 func itoa(n int) string {
-	if n < 0 {
-		return "-" + itoa(-n)
+	if n == 0 {
+		return "0"
 	}
-	if n < 10 {
-		return string(rune('0' + n))
+	neg := n < 0
+	u := uint(n)
+	if neg {
+		u = ^u + 1
 	}
-	return itoa(n/10) + string(rune('0'+n%10))
+	var buf [32]byte
+	i := len(buf)
+	for u > 0 {
+		i--
+		buf[i] = byte('0' + u%10)
+		u /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
 }
 
 // Title is a bold uppercase label plus a muted subtitle.
-func Title(label, sub string, width int) string {
-	lab := strings.ToUpper(label)
+func Title(label, sub Safe, width int) string {
+	lab := strings.ToUpper(label.String())
 	line := lab
-	if sub != "" {
-		line += "  " + sub
+	if !sub.Empty() {
+		line += "  " + sub.String()
 	}
 	if ColorOff() {
 		return Fit(line, width)
 	}
 	left := paint(lab, TextPrimary.Color(), nil, true)
-	if sub != "" {
-		left += "  " + paint(sub, TextMuted.Color(), nil, false)
+	if !sub.Empty() {
+		left += "  " + paint(sub.String(), TextMuted.Color(), nil, false)
 	}
 	return Fit(left, width)
 }
@@ -360,8 +375,8 @@ func KV(rows []KVRow, width int) string {
 }
 
 // Button is a modal button. The label includes its key.
-func Button(keyName, label string, primary, enabled bool) string {
-	text := strings.TrimSpace(keyName + "  " + label)
+func Button(keyName, label Safe, primary, enabled bool) string {
+	text := strings.TrimSpace(keyName.String() + "  " + label.String())
 	if ColorOff() {
 		return "[ " + text + " ]"
 	}
@@ -376,7 +391,7 @@ func Button(keyName, label string, primary, enabled bool) string {
 
 // StatusSeg is one status-bar segment. Higher Pri drops first.
 type StatusSeg struct {
-	Text   string
+	Text   Safe
 	Pri    int
 	FG, BG Token
 	Bold   bool
@@ -422,10 +437,10 @@ func Segments(left, right []StatusSeg, width int) string {
 		total := 0
 		nLeft, nRight := 0, 0
 		for i, it := range items {
-			if it.dead || it.s.Text == "" {
+			if it.dead || it.s.Text.Empty() {
 				continue
 			}
-			out[i] = render(it.s, it.s.Text)
+			out[i] = render(it.s, it.s.Text.String())
 			w := Width(out[i])
 			total += w
 			if it.right {
@@ -460,8 +475,8 @@ func Segments(left, right []StatusSeg, width int) string {
 			if min < 4 {
 				min = 4
 			}
-			if Width(it.s.Text) > min {
-				it.s.Text = MiddleTrunc(it.s.Text, Width(it.s.Text)-1, G().Ellipsis)
+			if Width(it.s.Text.String()) > min {
+				it.s.Text = Chrome(MiddleTrunc(it.s.Text.String(), Width(it.s.Text.String())-1, G().Ellipsis))
 				shrunk = true
 				break
 			}
@@ -787,14 +802,32 @@ func contentLine(i int, content []string, inner, pad int) string {
 
 // ModalSpec is an overlay card.
 type ModalSpec struct {
-	Title   string
-	Body    string
-	Buttons string
+	Title   Safe
+	Body    Safe
+	Buttons Safe
 	Width   int
+}
+
+// ModalLayout is where Modal placed the card inside the bgW by bgH scrim.
+// ContentTop is the box-relative row of the first content line.
+type ModalLayout struct {
+	X, Y, W, H int
+	ContentTop int
 }
 
 // Modal places a rounded card on a dot scrim of bgW by bgH.
 func Modal(spec ModalSpec, bgW, bgH int) string {
+	s, _ := modalRender(spec, bgW, bgH)
+	return s
+}
+
+// ModalLayoutOf reports the card rectangle for the same inputs as Modal.
+func ModalLayoutOf(spec ModalSpec, bgW, bgH int) ModalLayout {
+	_, lay := modalRender(spec, bgW, bgH)
+	return lay
+}
+
+func modalRender(spec ModalSpec, bgW, bgH int) (string, ModalLayout) {
 	if bgW < 1 {
 		bgW = 1
 	}
@@ -822,9 +855,9 @@ func Modal(spec ModalSpec, bgW, bgH int) string {
 		textW = inner
 	}
 	var lines []string
-	lines = append(lines, spec.Title)
+	lines = append(lines, spec.Title.String())
 	lines = append(lines, "")
-	for _, ln := range strings.Split(spec.Body, "\n") {
+	for _, ln := range strings.Split(spec.Body.String(), "\n") {
 		for Width(ln) > textW {
 			lines = append(lines, Trunc(ln, textW, ""))
 			ln = ""
@@ -832,14 +865,15 @@ func Modal(spec ModalSpec, bgW, bgH int) string {
 		}
 		lines = append(lines, ln)
 	}
-	if spec.Buttons != "" {
+	if !spec.Buttons.Empty() {
 		lines = append(lines, "")
-		btn := spec.Buttons
+		btn := spec.Buttons.String()
 		if Width(btn) < textW {
 			btn = strings.Repeat(" ", textW-Width(btn)) + btn
 		}
 		lines = append(lines, btn)
 	}
+	contentTop := 1
 	var boxed string
 	if ColorOff() || !UTF8() {
 		var b strings.Builder
@@ -865,13 +899,28 @@ func Modal(spec ModalSpec, bgW, bgH int) string {
 			Padding(1, 3).
 			Width(textW)
 		boxed = st.Render(body)
+		contentTop = 2
 	}
+	linesN := strings.Count(boxed, "\n") + 1
+	boxH := linesN
+	if boxW < 1 {
+		boxW = 1
+	}
+	x := (bgW - boxW) / 2
+	y := (bgH - boxH) / 2
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+	lay := ModalLayout{X: x, Y: y, W: boxW, H: boxH, ContentTop: contentTop}
 	if ColorOff() || !UTF8() {
-		return lipgloss.Place(bgW, bgH, lipgloss.Center, lipgloss.Center, boxed)
+		return lipgloss.Place(bgW, bgH, lipgloss.Center, lipgloss.Center, boxed), lay
 	}
 	return lipgloss.Place(bgW, bgH, lipgloss.Center, lipgloss.Center, boxed,
 		lipgloss.WithWhitespaceChars(gl.Dot+" "),
-		lipgloss.WithWhitespaceForeground(SurfaceSeg.Color()))
+		lipgloss.WithWhitespaceForeground(SurfaceSeg.Color())), lay
 }
 
 func padModal(lines []string, w int) []string {

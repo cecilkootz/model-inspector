@@ -2,25 +2,22 @@
 ============================================================================================================================================
 model-inspector  /model                                                                                                                     
   model-inspector  revision: - | qwen3_5 | safetensors|mlx | q4 g32                                                                         
-    model-inspector  /model                                                                                                                 
+    model-inspector                                                                                                                         
       model-inspector                                                                                                                       
         model-inspector  [- headers-only]  [^ 5 callouts]                                                                                   
                                                                                                                                             
                                                                                                                                             
 SIZE ON DISK           PARAMETERS             QUANT                  LAYERS                 EXPERTS                WEIGHTS                  
 6.07 KiB               ~86                    q4 g32                 2                      4 | 2/tok              >= 152 B                 
-4 files|2 shards       25 tensors             affine                 o1 lin | O1 full       routed                 weights only             
+4 files | 2 shards     25 tensors             affine                 o1 lin | O1 full       routed                 weights only             
                                                                                                                                             
                                                                                                                                             
 [STORAGE] 6.07 KiB                                          CALLOUTS  5 notable                                                             
 ####################################===========++++++.      [^] language_model.model.embed_tokens.weight is 16 B, 10.5% of weights          
 ####################################===========++++++.      [^] ple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% of weights             
 # plain bf16 65.8%   = plain i64 21.1%   + q4 packed 10.5%  [^] ple.ple_embedding.ngram_heads_vocab_sizes is 16 B, 10.5% of weights         
-Memory  weights >= 152 B (0.0 GB)                           [MTP] MTP layer present (16 B): used only for speculative decoding              
-  text-only >= 128 B                                        [MTP] vision tower present (8 B)                                                
-  unified memory (MLX): CPU and GPU share RAM, total is un                                                                                  
-  weights only: no KV cache, activations or runtime overhe                                                                                  
-  weights only; excludes KV cache, activations, runtime ov                                                                                  
+                                                            [MTP] MTP layer present (16 B): used only for speculative decoding              
+                                                            [MTP] vision tower present (8 B)                                                
                                                                                                                                             
 BYTES | LAYER x COMPONENT  log2 scale shared by all rows | each colour step = 2x | per-layer totals differ by 400.0%                        
             o O  O                                                                                                                          
@@ -36,5 +33,8 @@ Memory  weights >= 152 B (0.0 GB)
   unified memory (MLX): CPU and GPU share RAM, total is unchanged                                                                           
   weights only: no KV cache, activations or runtime overhead                                                                                
   weights only; excludes KV cache, activations, runtime overhead                                                                            
-language_model.model.embed_tokens.weight is 16 B, 10.5% of weights                                                                          
-IDENTITY | /model | up/down scroll | <-> tabs | ? keys                safetensors|mlx | 6.07 KiB | q4 g32 | + structure 5/8 | - headers-only
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+IDENTITY | /model | up/down scroll | <U+003C>-> tabs | ? keys         safetensors|mlx | 6.07 KiB | q4 g32 | + structure 5/8 | - headers-only

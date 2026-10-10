@@ -130,10 +130,13 @@ func FillColors(k FillKind) (bg, fg Token) {
 	}
 }
 
+const litCap = 256
+
 var (
 	noColor  bool
 	litMu    sync.Mutex
 	litCache = map[string]sanitize.Text{}
+	litOrder []string
 )
 
 // SetNoColor records --no-color. Call it before the program starts.
@@ -204,6 +207,7 @@ func Profile() string {
 }
 
 // L wraps a program literal. Callers must pass a string constant.
+// The cache is capped; the oldest entry is dropped when it is full.
 func L(s string) sanitize.Text {
 	litMu.Lock()
 	defer litMu.Unlock()
@@ -211,7 +215,13 @@ func L(s string) sanitize.Text {
 		return t
 	}
 	t := sanitize.From(s)
+	if len(litCache) >= litCap {
+		drop := litOrder[0]
+		litOrder = litOrder[1:]
+		delete(litCache, drop)
+	}
 	litCache[s] = t
+	litOrder = append(litOrder, s)
 	return t
 }
 

@@ -4,14 +4,11 @@ model-inspector  [1 Identity] 2 Config 3 Layers 4 Scan !1             m mouse on
                                                                                 
 SIZE ON DISK    PARAMETERS      QUANT           LAYERS          EXPERTS         
 400 B           ~2              bf16            1               —               
-5 files|1 shard 1 tensors                       ○0 lin · ●1 ful                 
+5 files · 1 sha 1 tensors                       ○0 lin · ●1 ful                 
                                                                                 
 STORAGE  400 B on disk                                                          
 ████████████████████████████████████████████████████████████████████████████    
 █ plain bf16 100%                                                               
-Memory  weights ≥ 4 B (0.0 GB)                                                  
-  weights only: no KV cache, activations or runtime overhead                    
-  weights only; excludes KV cache, activations, runtime overhead                
                                                                                 
 CALLOUTS  1 notable                                                             
 [▲] self_attn.q_proj.weight is 4 B, 100.0% of weights                           
@@ -19,6 +16,9 @@ CALLOUTS  1 notable
 BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2×
             ● ●                                                                 
 routed exp  · ·  ·                                                              
-4 B  <64K ▒ <4M ▓ <256M █  8 B  ○ linear  ● full  per-layer totals differ by <1%
+4 B  <64K ▒ <4M ▓ <256M █  8 B  ○ linear  ● full  per-layer totals differ by <U+
 flat  attention 4 B  flat · router · · shared exp · · norms ·                   
+Memory  weights ≥ 4 B (0.0 GB)                                                  
+  weights only: no KV cache, activations or runtime overhead                    
+  weights only; excludes KV cache, activations, runtime overhead                
 IDENTITY │ /model         safetensors │ 400 B │ bf16 │ ! 1 warn │ – headers-only
