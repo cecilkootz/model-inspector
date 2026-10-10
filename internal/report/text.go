@@ -11,34 +11,39 @@ import (
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 )
 
-// Text is the 80-column inspect summary. Every file-derived string is sanitized.
+// Text is the 80-column inspect summary. File-derived strings are sanitized.
+// Sentences this program composed are not.
 func Text(d Document) string {
 	var b strings.Builder
 	writeIdentity(&b, d)
-	writeWrapped(&b, "format", formatLine(d))
+	writeOwn(&b, "format", formatLine(d))
 	disk := fmt.Sprintf("%s in %s files (%d shards) · %s tensors",
 		model.HumanBytes(d.Files.TotalBytes), model.Comma(int64(d.Files.Count)), d.Files.ShardCount, model.Comma(int64(d.Tensors.Count)))
 	if d.Partial {
 		disk += " (incomplete)"
 	}
-	writeWrapped(&b, "on disk", disk)
-	writeWrapped(&b, "params", fmt.Sprintf("~%s (dequantized est.; quant scales/biases excluded)", model.HumanCount(d.Tensors.ParamsEst)))
+	writeOwn(&b, "on disk", disk)
+	writeOwn(&b, "params", fmt.Sprintf("~%s (dequantized est.; quant scales/biases excluded)", model.HumanCount(d.Tensors.ParamsEst)))
 	if line := layerLine(d); line != "" {
-		writeWrapped(&b, "layers", line)
+		writeOwn(&b, "layers", line)
 	}
 	if line := otherLine(d); line != "" {
-		writeWrapped(&b, "other", line)
+		writeOwn(&b, "other", line)
 	}
-	writeWrapped(&b, "memory", memoryLine(d))
+	writeOwn(&b, "memory", memoryLine(d))
 	if line := calloutLine(d); line != "" {
-		writeWrapped(&b, "callouts", line)
+		writeOwn(&b, "callouts", line)
 	}
-	writeWrapped(&b, "checks", checksLine(d))
+	writeOwn(&b, "checks", checksLine(d))
 	if problems := problemLines(d); len(problems) > 0 {
-		writeWrapped(&b, "problems", strings.Join(problems, "; "))
+		writeOwn(&b, "problems", strings.Join(problems, "; "))
 	}
 	if len(d.LoadWarnings) > 0 {
-		writeWrapped(&b, "warnings", strings.Join(d.LoadWarnings, "; "))
+		warned := make([]string, len(d.LoadWarnings))
+		for i, w := range d.LoadWarnings {
+			warned[i] = san(w)
+		}
+		writeOwn(&b, "warnings", strings.Join(warned, "; "))
 	}
 	return b.String()
 }
@@ -50,14 +55,14 @@ func writeIdentity(b *strings.Builder, d Document) {
 	}
 	switch {
 	case d.Source.RepoID != nil && rev != "":
-		fmt.Fprintf(b, "%s\n", trunc(san(fmt.Sprintf("%s @ %s (cache ref, not hash-verified)", *d.Source.RepoID, rev)), 80))
+		fmt.Fprintf(b, "%s\n", trunc(san(*d.Source.RepoID)+" @ "+san(rev)+" (cache ref, not hash-verified)", 80))
 	case d.Source.RepoID != nil:
 		fmt.Fprintf(b, "%s\n", trunc(san(*d.Source.RepoID), 80))
 		fmt.Fprintf(b, "  %-10s%s\n", "revision", "—")
 	default:
 		fmt.Fprintf(b, "%s\n", trunc(san(d.Source.Path), 80))
 		if rev != "" {
-			fmt.Fprintf(b, "  %-10s%s\n", "revision", san(rev+" (cache ref, not hash-verified)"))
+			fmt.Fprintf(b, "  %-10s%s\n", "revision", san(rev)+" (cache ref, not hash-verified)")
 		} else {
 			fmt.Fprintf(b, "  %-10s%s\n", "revision", "—")
 		}
@@ -67,7 +72,8 @@ func writeIdentity(b *strings.Builder, d Document) {
 func formatLine(d Document) string {
 	s := d.Format.Name
 	if d.Format.Variant != "" {
-		s += " (" + d.Format.Variant + ")"
+		// Name is safetensors/gguf/unknown. The variant is file metadata.
+		s += " (" + san(d.Format.Variant) + ")"
 	}
 	if q := d.Quantization; q != nil && q.Bits > 0 {
 		mode := q.Mode
@@ -76,7 +82,7 @@ func formatLine(d Document) string {
 			head = "MLX "
 		}
 		if mode != "" && !strings.EqualFold(mode, "mlx") {
-			head += mode + " "
+			head += san(mode) + " "
 		}
 		s += fmt.Sprintf(" · %s%d-bit", head, q.Bits)
 		if q.GroupSize > 0 {
@@ -103,7 +109,7 @@ func layerLine(d Document) string {
 		} else {
 			bits := make([]string, len(d.Architecture.LayerTypeCounts))
 			for i, lt := range d.Architecture.LayerTypeCounts {
-				bits[i] = fmt.Sprintf("%d %s", lt.Count, lt.Type)
+				bits[i] = fmt.Sprintf("%d %s", lt.Count, san(lt.Type))
 			}
 			parts = append(parts, fmt.Sprintf("%d decoder: %s", d.Architecture.LayerCount, strings.Join(bits, ", ")))
 		}
@@ -124,9 +130,9 @@ func otherLine(d Document) string {
 		if g.Kind == "layer" {
 			continue
 		}
-		label := g.Key
+		label := san(g.Key)
 		if g.Storage != "" && g.Storage != "—" && (g.Kind == "vision" || strings.HasPrefix(g.Storage, "bf") || strings.HasPrefix(g.Storage, "fp")) {
-			parts = append(parts, fmt.Sprintf("%s %s (%s)", label, model.HumanBytes(g.Bytes), g.Storage))
+			parts = append(parts, fmt.Sprintf("%s %s (%s)", label, model.HumanBytes(g.Bytes), san(g.Storage)))
 			continue
 		}
 		parts = append(parts, fmt.Sprintf("%s %s", label, model.HumanBytes(g.Bytes)))
@@ -161,7 +167,7 @@ func calloutLine(d Document) string {
 	}
 	lines := make([]string, 0, len(d.Callouts))
 	for _, c := range d.Callouts {
-		lines = append(lines, glyph(c.Kind)+" "+c.Message)
+		lines = append(lines, glyph(c.Kind)+" "+san(c.Message))
 	}
 	return strings.Join(lines, "; ")
 }
@@ -187,7 +193,7 @@ func problemLines(d Document) []string {
 			continue
 		}
 		for _, detail := range c.Details {
-			lines = append(lines, c.ID+": "+detail)
+			lines = append(lines, c.ID+": "+san(detail))
 		}
 	}
 	const max = 5
@@ -216,9 +222,18 @@ func glyph(kind string) string {
 }
 
 func writeWrapped(b *strings.Builder, label, value string) {
-	// Sanitize first, then wrap. A cut is only on a grapheme boundary or
-	// between atoms, and never inside a <U+XXXX> token.
-	value = san(value)
+	writeRow(b, label, san(value))
+}
+
+// writeOwn wraps a sentence this program composed. File bytes in it must
+// already have been passed through san.
+func writeOwn(b *strings.Builder, label, value string) {
+	writeRow(b, label, value)
+}
+
+func writeRow(b *strings.Builder, label, value string) {
+	// A cut is only on a grapheme boundary or between atoms, and never
+	// inside a <U+XXXX> token.
 	const width = 80
 	prefix := fmt.Sprintf("  %-10s", label)
 	rest := value

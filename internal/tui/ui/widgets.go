@@ -103,7 +103,7 @@ func GradText(s Safe, g Gradient, bold bool) string {
 		return s.String()
 	}
 	if Profile() == "ansi16" {
-		return Pill(FillKindViolet, sanitize.From(strings.TrimSpace(s.String())))
+		return Pill(FillKindViolet, sanitize.Program(strings.TrimSpace(s.String())))
 	}
 	gr := uniseg.NewGraphemes(s.String())
 	var n int

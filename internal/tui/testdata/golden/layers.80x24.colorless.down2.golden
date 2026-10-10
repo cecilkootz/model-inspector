@@ -1,0 +1,24 @@
+model-inspector  1 Identity 2 Config [3 Layers] 4 Scan ✓              m mouse on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Group          Kind        Tensors   Params*    Bytes        Experts  QWeights 
+ embeddings     embeddings  3         32         20 B                  1        
+ ngram          embeddings  3         6          36 B                  0        
+>layer 0        layer       6         12         24 B         yes      0        
+ layer 1        layer       2         4          8 B                   0        
+ norms          norms       1         4          8 B                   0        
+ hyper_connec…  hyper       3         12         24 B                  0        
+ lm_head        lm_head     1         4          8 B                   0        
+ mtp            mtp         4         8          16 B                  0        
+ vision         vision      2         4          8 B                   0        
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+LAYERS │ /model             6.07 KiB │ q4 g32 │ ✓ structure 5/8 │ – headers-only

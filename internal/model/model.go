@@ -160,6 +160,12 @@ type Model struct {
 
 	Warnings []string
 
+	// DroppedLayers lists decoder indexes left out of the heatmap.
+	// A negative index means the digits did not fit in int.
+	// The scan reads this field. It does not match warning text.
+	DroppedLayers []int
+	dropped       map[int]struct{}
+
 	warningsTrunc bool
 	overflowed    bool
 	// hostReady caches gatherHostCapable. The scan runs after that pass, so

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -505,10 +506,48 @@ func (t Model) layersBody() string {
 		return "No tensors: this directory has no safetensors shards."
 	}
 	if t.detail != nil {
-		head := sanitize.From(fmt.Sprintf("%s · %d tensors · %s", t.detail.Key, len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))).String()
-		return head + "\n" + t.tensorTable.View()
+		head := sanitize.From(t.detail.Key).String() + fmt.Sprintf(" · %d tensors · %s", len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))
+		return head + "\n" + markTableCursor(t.tensorTable.View(), t.tensorTable)
 	}
-	return t.groupTable.View()
+	return markTableCursor(t.groupTable.View(), t.groupTable)
+}
+
+// markTableCursor puts a ">" on the selected row when colour is off.
+// The table's selection is a background fill, which the ASCII profile drops,
+// so a NO_COLOR frame would otherwise hide the cursor. The marker follows
+// the row index: the first cell is truncated with an ellipsis, so the
+// rendered text is not the full name.
+func markTableCursor(view string, tbl table.Model) string {
+	cursor := tbl.Cursor()
+	rows := tbl.Rows()
+	if !ui.ColorOff() || cursor < 0 || cursor >= len(rows) || len(rows[cursor]) == 0 {
+		return view
+	}
+	lines := strings.Split(view, "\n")
+	idx := tableCursorLine(tbl)
+	if idx < 1 || idx >= len(lines) {
+		return view
+	}
+	lines[idx] = markGreater(lines[idx])
+	return strings.Join(lines, "\n")
+}
+
+// tableCursorLine is the view line of the selected row. Line 0 is the
+// header. bubbles keeps the rendered window start and the viewport scroll
+// unexported; the visible row is cursor-start-YOffset.
+func tableCursorLine(tbl table.Model) int {
+	v := reflect.ValueOf(tbl)
+	start := int(v.FieldByName("start").Int())
+	yoff := int(v.FieldByName("viewport").FieldByName("YOffset").Int())
+	return 1 + tbl.Cursor() - start - yoff
+}
+
+func markGreater(line string) string {
+	// The first cell's left pad becomes the marker so the columns stay put.
+	if strings.HasPrefix(line, " ") {
+		return ">" + line[1:]
+	}
+	return line
 }
 
 func configUnreadable(m *model.Model) bool {
@@ -584,7 +623,7 @@ func groupRows(m *model.Model) []table.Row {
 			exp = "yes"
 		}
 		rows = append(rows, table.Row{
-			sanitize.From(g.Key).String(), sanitize.From(g.Kind).String(), fmt.Sprint(len(g.Tensors)), model.HumanCount(g.LogicalParams),
+			sanitize.From(g.Key).String(), g.Kind, fmt.Sprint(len(g.Tensors)), model.HumanCount(g.LogicalParams),
 			model.HumanBytes(g.Bytes), exp, fmt.Sprint(g.QuantizedTensors)})
 	}
 	return rows
@@ -603,7 +642,7 @@ func tensorRows(g *model.Group) []table.Row {
 		}
 		rows = append(rows, table.Row{
 			sanitize.From(name).String(), sanitize.From(t.DType).String(), sanitize.From(fmt.Sprint(t.Shape)).String(),
-			model.HumanBytes(t.ByteLen()), sanitize.From(role).String()})
+			model.HumanBytes(t.ByteLen()), role})
 	}
 	return rows
 }

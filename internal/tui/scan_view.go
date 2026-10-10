@@ -67,7 +67,7 @@ func (t Model) scanLines(width int) []scanLine {
 			eff.pass, eff.warn, eff.fail, notRun)
 	}
 	add(head)
-	add(sanitize.From(t.scan.Disclaimer).String())
+	add(t.scan.Disclaimer)
 	add("Checks that the files are complete, well-formed and agree with each other.")
 	add("It does not look at what the weights compute. See \"Not covered\" below.")
 	add("")
@@ -76,7 +76,9 @@ func (t Model) scanLines(width int) []scanLine {
 		if i == t.scanCursor {
 			mark = g.selected + " "
 		}
-		row := mark + statusCell(c) + "  " + padLabel(c.Name, 26) + " " + sanitize.From(c.Summary).String()
+		// The summary is a sentence this program wrote. Details still carry
+		// file names, so only those go through From.
+		row := mark + statusCell(c) + "  " + padLabel(c.Name, 26) + " " + c.Summary
 		lines = append(lines, scanLine{text: truncWidth(row, width), check: i})
 		if t.scanOpen[c.ID] {
 			why := scan.Why(c.ID)

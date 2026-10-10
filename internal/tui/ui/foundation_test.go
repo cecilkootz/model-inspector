@@ -190,6 +190,9 @@ func TestKeymapNoConflicts(t *testing.T) {
 	if !strings.Contains(HintLine(true), "fold") || !strings.Contains(HintLine(false), "tabs") {
 		t.Fatalf("hints %q %q", HintLine(true), HintLine(false))
 	}
+	if got := L("<commit>").String(); got != "<commit>" {
+		t.Fatalf("L sanitized a program literal: %q", got)
+	}
 }
 
 func TestPaletteMatcher(t *testing.T) {

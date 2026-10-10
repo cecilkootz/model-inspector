@@ -281,8 +281,8 @@ func (t Model) commands() []ui.Match {
 			continue
 		}
 		out = append(out, ui.Match{
-			ID: c.id, Title: ui.S(sanitize.From(c.title)), Key: ui.S(sanitize.From(c.key)),
-			Where: ui.S(sanitize.From(c.where)), Order: i, Enable: c.enable,
+			ID: c.id, Title: ui.S(sanitize.Program(c.title)), Key: ui.S(sanitize.Program(c.key)),
+			Where: ui.S(sanitize.Program(c.where)), Order: i, Enable: c.enable,
 		})
 	}
 	if t.active == tabConfig && t.cfg != nil && t.m != nil {
@@ -297,7 +297,7 @@ func (t Model) commands() []ui.Match {
 			{"cfg-jump", "Config: jump to field…", ""},
 		} {
 			out = append(out, ui.Match{
-				ID: c.id, Title: ui.S(sanitize.From(c.title)), Key: ui.S(sanitize.From(c.key)),
+				ID: c.id, Title: ui.S(sanitize.Program(c.title)), Key: ui.S(sanitize.Program(c.key)),
 				Where: ui.S(ui.L("in Config")), Order: len(out), Enable: true,
 			})
 		}
@@ -305,8 +305,10 @@ func (t Model) commands() []ui.Match {
 			if ln.kind != fieldRow {
 				continue
 			}
+			// The "Config:" prefix is ours. The field label is file text.
+			title := "Config: " + sanitize.From(ln.label).String()
 			out = append(out, ui.Match{
-				ID: fmt.Sprintf("cfg-field:%d", i), Title: ui.S(sanitize.From("Config: " + ln.label)),
+				ID: fmt.Sprintf("cfg-field:%d", i), Title: ui.S(sanitize.Program(title)),
 				Where: ui.S(ui.L("in Config")), Order: len(out), Enable: true,
 			})
 		}
@@ -727,7 +729,7 @@ func (t Model) topRow() string {
 			if ui.ColorOff() {
 				b.WriteString("[" + label + "]")
 			} else {
-				b.WriteString(ui.Pill(ui.FillKindViolet, sanitize.From(label)))
+				b.WriteString(ui.Pill(ui.FillKindViolet, sanitize.Program(label)))
 			}
 		} else if ui.ColorOff() {
 			b.WriteString(label)
@@ -800,18 +802,23 @@ func (t Model) statusRow() string {
 	hint := ui.HintLine(t.treeFocused())
 	hintKeep := false
 	var hintSegs []ui.StatusSeg
+	// name is the repo id or directory. A notice can embed a copied path or
+	// value. Mode, static hints, and the rest of this row are ours, so a
+	// placeholder such as "<->" stays a less-than.
+	file := func(s string) ui.Safe { return ui.S(sanitize.From(s)) }
+	own := func(s string) ui.Safe { return ui.Chrome(s) }
 	if t.notice != "" {
 		hint = t.notice
 		// A transient notice replaces the hint and has to stay visible.
 		// The existing scan test reads it at 80 columns.
 		hintKeep = true
-		hintSegs = []ui.StatusSeg{{Text: ui.S(sanitize.From(hint)), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: true}}
+		hintSegs = []ui.StatusSeg{{Text: file(hint), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: true}}
 	} else if t.active == tabConfig {
 		for i, h := range t.configHintSegs() {
-			hintSegs = append(hintSegs, ui.StatusSeg{Text: ui.S(sanitize.From(h)), Pri: 5 + i, FG: ui.TextSecondary, BG: ui.SurfaceSeg})
+			hintSegs = append(hintSegs, ui.StatusSeg{Text: own(h), Pri: 5 + i, FG: ui.TextSecondary, BG: ui.SurfaceSeg})
 		}
 	} else {
-		hintSegs = []ui.StatusSeg{{Text: ui.S(sanitize.From(hint)), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep}}
+		hintSegs = []ui.StatusSeg{{Text: own(hint), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep}}
 	}
 	format := ""
 	size := ""
@@ -827,18 +834,17 @@ func (t Model) statusRow() string {
 	verdict, vKind := t.verdictSeg()
 	content := ui.G().NR + " headers-only"
 	cKind := ui.FillKindNR
-	seg := func(s string) ui.Safe { return ui.S(sanitize.From(s)) }
 	left := []ui.StatusSeg{
-		{Text: seg(mode), Pri: 1, FG: ui.TextInk, BG: ui.FillPink, Bold: true, Keep: true},
-		{Text: seg(name), Pri: 3, FG: ui.TextPrimary, BG: ui.SurfaceSeg2, Min: 16, Shrink: true},
+		{Text: own(mode), Pri: 1, FG: ui.TextInk, BG: ui.FillPink, Bold: true, Keep: true},
+		{Text: file(name), Pri: 3, FG: ui.TextPrimary, BG: ui.SurfaceSeg2, Min: 16, Shrink: true},
 	}
 	left = append(left, hintSegs...)
 	right := []ui.StatusSeg{
-		{Text: seg(format), Pri: 4, FG: ui.TextSecondary, BG: ui.SurfaceSeg},
-		{Text: seg(size), Pri: 2, FG: ui.TextPrimary, BG: ui.SurfaceSeg2},
-		{Text: seg(quant), Pri: 2, FG: ui.TextOnFill, BG: ui.FillViolet, Bold: true},
-		{Text: seg(verdict), Pri: 1, FG: fgFor(vKind), BG: bgFor(vKind), Bold: true, Keep: true},
-		{Text: seg(content), Pri: 1, FG: fgFor(cKind), BG: bgFor(cKind), Keep: true},
+		{Text: own(format), Pri: 4, FG: ui.TextSecondary, BG: ui.SurfaceSeg},
+		{Text: own(size), Pri: 2, FG: ui.TextPrimary, BG: ui.SurfaceSeg2},
+		{Text: own(quant), Pri: 2, FG: ui.TextOnFill, BG: ui.FillViolet, Bold: true},
+		{Text: own(verdict), Pri: 1, FG: fgFor(vKind), BG: bgFor(vKind), Bold: true, Keep: true},
+		{Text: own(content), Pri: 1, FG: fgFor(cKind), BG: bgFor(cKind), Keep: true},
 	}
 	return ui.Segments(left, right, t.width)
 }

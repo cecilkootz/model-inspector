@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 func TestResolveRepoID(t *testing.T) {
@@ -72,6 +74,31 @@ func TestLongPathMissingRef(t *testing.T) {
 	_, err := Resolve("Org/Name", hub)
 	if err == nil || !strings.Contains(err.Error(), "no refs/main") {
 		t.Fatalf("long missing ref: %v", err)
+	}
+	if strings.Contains(err.Error(), "U+003C") || !strings.Contains(err.Error(), "org/name@<commit>") {
+		t.Fatalf("static placeholder was sanitized: %v", err)
+	}
+}
+
+func TestResolveMissingMainRefKeepsCommitHint(t *testing.T) {
+	hub := t.TempDir()
+	repo := filepath.Join(hub, "models--Org--Name")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Resolve("Org/Name", hub)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	got := err.Error()
+	if !strings.Contains(got, "org/name@<commit>") {
+		t.Fatalf("hint: %q", got)
+	}
+	if strings.Contains(got, "U+003C") {
+		t.Fatalf("static placeholder was sanitized: %q", got)
+	}
+	if _, ok := err.(sanitize.Note); !ok {
+		t.Fatalf("type %T", err)
 	}
 }
 

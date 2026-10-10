@@ -26,6 +26,36 @@ func TestFromReplacesControlsBidiAndZeroWidth(t *testing.T) {
 	}
 }
 
+func TestProgramLeavesPlaceholders(t *testing.T) {
+	if got := Program("<commit>").String(); got != "<commit>" {
+		t.Fatalf("Program %q", got)
+	}
+	if From("<commit>").String() == "<commit>" {
+		t.Fatal("From left a less-than in place")
+	}
+}
+
+func TestNotefKeepsStaticPlaceholder(t *testing.T) {
+	err := Notef("pass org/name@<commit> (%s)", "a<b\x1b")
+	got := err.Error()
+	if !strings.Contains(got, "@<commit>") {
+		t.Fatalf("placeholder: %q", got)
+	}
+	if strings.Contains(got, "<U+003C>commit") || strings.Contains(got, "a<b") || strings.Contains(got, "\x1b") {
+		t.Fatalf("got %q", got)
+	}
+	if !strings.Contains(got, "<U+003C>b") || !strings.Contains(got, "<U+001B>") {
+		t.Fatalf("argument: %q", got)
+	}
+	if _, ok := err.(Note); !ok {
+		t.Fatalf("type %T", err)
+	}
+	again := From(got).String()
+	if strings.Contains(again, "@<commit>") || !strings.Contains(again, "<U+003C>commit") {
+		t.Fatalf("a second From must tokenize the placeholder: %q", again)
+	}
+}
+
 func TestFromLeavesPlainText(t *testing.T) {
 	const s = "model.layers.0.mlp.weight"
 	if got := From(s).String(); got != s {

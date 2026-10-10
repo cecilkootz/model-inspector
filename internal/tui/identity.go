@@ -208,14 +208,14 @@ func heroPills(m *model.Model, d derived) string {
 	if m.Partial {
 		parts = append(parts, ui.Pill(ui.FillKindWarn, ui.L("incomplete")))
 	} else {
-		parts = append(parts, ui.Pill(ui.FillKindNR, sanitize.From(ui.G().NR+" headers-only")))
+		parts = append(parts, ui.Pill(ui.FillKindNR, sanitize.Program(ui.G().NR+" headers-only")))
 	}
 	n := len(d.callouts)
 	if n > 0 {
-		parts = append(parts, ui.Pill(ui.FillKindWarn, sanitize.From(fmt.Sprintf("%s %d callouts", ui.G().Size, n))))
+		parts = append(parts, ui.Pill(ui.FillKindWarn, sanitize.Program(fmt.Sprintf("%s %d callouts", ui.G().Size, n))))
 	}
 	if d.mem.HostCapableBytes > 0 {
-		parts = append(parts, ui.Pill(ui.FillKindHost, sanitize.From(fmt.Sprintf("%s %s host-capable", ui.G().Host, model.HumanBytes(d.mem.HostCapableBytes)))))
+		parts = append(parts, ui.Pill(ui.FillKindHost, sanitize.Program(fmt.Sprintf("%s %s host-capable", ui.G().Host, model.HumanBytes(d.mem.HostCapableBytes)))))
 	}
 	return strings.Join(parts, "  ")
 }
@@ -256,24 +256,24 @@ func tileSpecs(m *model.Model, d derived) []ui.TileSpec {
 	}
 	edge := func(k int) string { return string(ui.GradBrand.At(float64(k) / 5)) }
 	return []ui.TileSpec{
-		{Label: ui.L("SIZE ON DISK"), Value: sanitize.From(model.HumanBytes(m.TotalSize)), Sub: sanitize.From(files), Edge: edge(0)},
-		{Label: ui.L("PARAMETERS"), Value: sanitize.From(params), Sub: sanitize.From(fmt.Sprintf("%s tensors", model.Comma(int64(len(m.Tensors))))), Edge: edge(1)},
-		{Label: ui.L("QUANT"), Value: sanitize.From(quant), Sub: sanitize.From(quantSub(m)), Edge: edge(2)},
-		{Label: ui.L("LAYERS"), Value: sanitize.From(fmt.Sprintf("%d", layers)), Sub: sanitize.From(layerSub), Edge: edge(3)},
-		{Label: ui.L("EXPERTS"), Value: sanitize.From(experts), Sub: sanitize.From(expertSub), Edge: edge(4)},
-		{Label: ui.L("WEIGHTS"), Value: sanitize.From(ui.Geq() + " " + model.HumanBytes(d.mem.WeightsBytes)), Sub: ui.L("weights only"), Edge: edge(5)},
+		{Label: ui.L("SIZE ON DISK"), Value: sanitize.Program(model.HumanBytes(m.TotalSize)), Sub: sanitize.Program(files), Edge: edge(0)},
+		{Label: ui.L("PARAMETERS"), Value: sanitize.Program(params), Sub: sanitize.Program(fmt.Sprintf("%s tensors", model.Comma(int64(len(m.Tensors))))), Edge: edge(1)},
+		{Label: ui.L("QUANT"), Value: sanitize.Program(quant), Sub: quantSub(m), Edge: edge(2)},
+		{Label: ui.L("LAYERS"), Value: sanitize.Program(fmt.Sprintf("%d", layers)), Sub: sanitize.Program(layerSub), Edge: edge(3)},
+		{Label: ui.L("EXPERTS"), Value: sanitize.Program(experts), Sub: sanitize.Program(expertSub), Edge: edge(4)},
+		{Label: ui.L("WEIGHTS"), Value: sanitize.Program(ui.Geq() + " " + model.HumanBytes(d.mem.WeightsBytes)), Sub: ui.L("weights only"), Edge: edge(5)},
 	}
 }
 
-func quantSub(m *model.Model) string {
+func quantSub(m *model.Model) sanitize.Text {
 	if m.Quant == nil {
-		return ""
+		return sanitize.Program("")
 	}
-	s := m.Quant.Mode
-	if s == "" {
-		s = "quant"
+	// Mode is a config string. The fallback word is ours.
+	if m.Quant.Mode == "" {
+		return sanitize.Program("quant")
 	}
-	return s
+	return sanitize.From(m.Quant.Mode)
 }
 
 func moeCounts(m *model.Model) (n, per int, ok bool) {
@@ -298,7 +298,7 @@ func intOf(v any) int {
 
 func storageBlock(m *model.Model, d derived, width int, frac float64, tall bool) []string {
 	var lines []string
-	lines = append(lines, ui.Title(ui.S(ui.L("STORAGE")), ui.S(sanitize.From(model.HumanBytes(m.TotalSize)+" on disk")), width))
+	lines = append(lines, ui.Title(ui.S(ui.L("STORAGE")), ui.S(sanitize.Program(model.HumanBytes(m.TotalSize)+" on disk")), width))
 	h := 1
 	if tall {
 		h = 2
@@ -346,23 +346,45 @@ func storageSegs(d derived, frac float64) []ui.Seg {
 }
 
 func classLabel(class string) sanitize.Text {
-	var s string
-	switch {
-	case class == "q_scales_biases":
-		s = "scales/biases"
-	case strings.HasPrefix(class, "plain_"):
-		s = "plain " + strings.TrimPrefix(class, "plain_")
-	case strings.HasSuffix(class, "_packed"):
-		s = strings.TrimSuffix(class, "_packed") + " packed"
-	default:
-		s = class
+	// The patterns below are disjoint, so the order of the checks does not
+	// decide whether a file dtype is sanitized.
+	switch class {
+	case "q_scales_biases":
+		return sanitize.Program("scales/biases")
+	case "other":
+		return sanitize.Program("other")
 	}
-	return sanitize.From(s)
+	if label, ok := packedQuantLabel(class); ok {
+		return sanitize.Program(label)
+	}
+	if dt, ok := strings.CutPrefix(class, "plain_"); ok {
+		return sanitize.Program("plain " + sanitize.From(dt).String())
+	}
+	return sanitize.From(class)
+}
+
+// packedQuantLabel matches only q<digits>_packed, the class this program
+// builds from a bit width. plain_<dtype>_packed is not this shape.
+func packedQuantLabel(class string) (string, bool) {
+	rest, ok := strings.CutPrefix(class, "q")
+	if !ok {
+		return "", false
+	}
+	digits, ok := strings.CutSuffix(rest, "_packed")
+	if !ok || digits == "" {
+		return "", false
+	}
+	for _, r := range digits {
+		if r < '0' || r > '9' {
+			return "", false
+		}
+	}
+	return "q" + digits + " packed", true
 }
 
 func calloutBlock(m *model.Model, d derived, width int) []string {
 	var lines []string
-	lines = append(lines, ui.Title(ui.S(ui.L("CALLOUTS")), ui.S(sanitize.From(fmt.Sprintf("%d notable", len(d.callouts)))), width))
+	lines = append(lines, ui.Title(ui.S(ui.L("CALLOUTS")), ui.S(sanitize.Program(fmt.Sprintf("%d notable", len(d.callouts)))), width))
 	if len(d.callouts) == 0 {
 		lines = append(lines, ui.Fit("none", width))
 		return lines
@@ -371,7 +393,7 @@ func calloutBlock(m *model.Model, d derived, width int) []string {
 		msg := sanitize.From(c.Message)
 		spec := ui.CalloutSpec{
 			Kind:  calloutKind(c.Kind),
-			Tag:   sanitize.From(calloutTag(c.Kind)),
+			Tag:   sanitize.Program(calloutTag(c.Kind)),
 			Title: msg,
 		}
 		lines = append(lines, ui.Callout(spec, width)...)

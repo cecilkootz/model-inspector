@@ -215,14 +215,14 @@ func Profile() string {
 }
 
 // L wraps a program literal. Callers must pass a string constant.
-// The cache is capped; the oldest entry is dropped when it is full.
+// The text is not sanitized. The cache is capped; the oldest entry is dropped when it is full.
 func L(s string) sanitize.Text {
 	litMu.Lock()
 	defer litMu.Unlock()
 	if t, ok := litCache[s]; ok {
 		return t
 	}
-	t := sanitize.From(s)
+	t := sanitize.Program(s)
 	if len(litCache) >= litCap {
 		drop := litOrder[0]
 		litOrder = litOrder[1:]
