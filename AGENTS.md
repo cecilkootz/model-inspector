@@ -4,66 +4,79 @@ Guidance for coding agents and reviewers working in this repo.
 
 ## What this is
 
-model-inspector is a Go 1.27 TUI and CLI (Bubble Tea, Bubbles, Lip Gloss) that inspects local LLM checkpoints. It:
-- parses safetensors headers (an 8-byte little-endian length followed by a JSON header)
-- resolves Hugging Face cache repo ids (`refs/<ref>`, then `snapshots/<commit>`)
-- groups tensors by layer
-- reports memory and storage estimates
-- runs integrity checks (index vs shards, offsets and bounds)
+model-inspector is a Go 1.27 TUI and CLI (Bubble Tea, Bubbles, Lip Gloss) that inspects local LLM checkpoints. It parses safetensors headers, resolves a Hugging Face cache repo id, groups tensors, estimates memory, and runs structural checks.
 
 **All model files, config files and cache directories are untrusted input.**
 
-## Layout
+## Architecture
 
-- `cmd/model-inspector`: CLI entry point (`tui`, `inspect [--json]`, `--path`/`--repo`, `--strict`, `--no-color`, `--no-mouse`, `--no-clipboard`, `--version`).
-- `internal/safeopen`: the only way to read files. It opens a single file descriptor, runs fstat, requires a regular file and caps reads with a LimitReader.
-- `internal/safetensors`: header read and parse, dtype sizes and layout checks.
-- `internal/hfcache`: HF cache resolver. Refs must be 40-64 hex characters, and the resolved path must stay under `snapshots/`.
-- `internal/model`: loading, classification, stats, and the host-capable lookup table heuristic.
-- `internal/scan`: checks and roll-up (pass/warn/fail/skip/partial).
-- `internal/report`, `internal/jsonx`: JSON output (schema v1) and ordered JSON parsing.
-- `internal/sanitize`: every string derived from a file goes through `sanitize.Text`/`From`. Program-authored text uses `Program`/`ui.L`, and `Notef` takes a literal format only.
-- `internal/tui`, `internal/tui/ui`: the v2 UI (theme, chrome, Identity, Config tree, Layers, modals).
+The v2 UI lives in `internal/tui` and `internal/tui/ui`.
+
+- **Theme tokens** (`ui/theme.go`): fills, ink, surfaces, and `ui.L`, which caches a program literal as `sanitize.Program`.
+- **Chrome** (`screen.go`, `chrome.go`): wordmark, tab rule, status bar. The status bar splits file-derived fields (`sanitize.From`) from static segments (`ui.Chrome` / `ui.L`).
+- **Primitives** (`ui/widgets.go`): Pill, Panel, Title, KV, Meter, Button, Spinner, Modal, Segments, Notice.
+- **Zones** (`ui/layout.go`): hit rectangles for tabs, panes, cards, and palette rows. Later zones win on overlap.
+- **Key registry** (`ui/keys.go`): one `Context` per screen or overlay. A `Tree` context may shadow only `left`, `right`, `h`, and `l`. `TestKeymapNoConflicts` walks `Contexts`.
+
+## Screens
+
+| Screen | Files | Notes |
+| --- | --- | --- |
+| Identity | `identity.go` | Tiles, storage, callouts. |
+| Config tree | `config.go`, `config_tree.go`, `config_view.go` | Ordered JSON tree, key fields, raw text. |
+| Layers tree | `layers.go`, `layers_view.go` | Groups, heatmap, detail. Distinct layer indices are capped. |
+| Scan | `scan_view.go`, `scan_input.go` | Verdict band, check cards, detail, code list. Checks live in `internal/scan`. |
+
+`1`–`4`, tab, and the command palette move between screens.
+
+## Conventions
+
+- Untrusted data goes through `sanitize.From` once. Do not sanitize it again.
+- Static program text goes through `ui.L` or `sanitize.Program` unchanged. Never sanitize our own strings.
+- `sanitize.Notef` takes a constant format (`formatLit`). Arguments are sanitized inside Notef. The result is an error; do not pass it through `From`.
+- Errors copied out of a file are clipped at 256 runes with `fileerr.Present` (sanitize, then clip). `fileerr.Error` keeps `errors.Is`.
+- Allocations are capped by distinct layers (the 4096 index cap and the sparse `LayerInfoBy` path). Do not allocate by the maximum index.
+- Goldens are 80×24 and 140×40 in truecolor, ansi256, and colorless. Regenerate with `env -u NO_COLOR go test ./internal/tui/ -run 'TestGolden|TestConfigGoldens|TestLayersGolden|TestScanGolden' -update`.
+- Perf budgets, median of a short loop: cached View ≤ 2 ms, Update ≤ 0.5 ms, Resize ≤ 5 ms.
 
 ## Build and test
 
 ```
-make build        # bin/model-inspector, version and commit from Go build info
-make test         # go vet (incl. -printf.funcs=Notef) + go test -race + Makefile self-test
-make fuzz         # all fuzz targets, FUZZTIME (default 10s), -fuzzminimizetime=2s
-make clean        # removes only this checkout's bin/ and coverage.out
+make test         # go vet (incl. -printf.funcs=Notef) + go test -race
+make build        # bin/model-inspector
+make clean        # this checkout's bin/ and coverage.out only
+make fuzz         # every Fuzz* target, FUZZTIME (default 10s)
 ```
 
-Requires GNU make (`gmake` on macOS). Run tests with `NO_COLOR` unset (`env -u NO_COLOR make test`) so colour paths are exercised.
+Requires GNU make. Run tests with `NO_COLOR` unset (`env -u NO_COLOR make test`).
 
-## Security rules (non-negotiable)
+## Security rules
 
-1. **No raw file bytes on screen.** Route every file-derived string (tensor names, metadata, config keys and values, paths, repo/revision, error text) through `sanitize` before rendering in the TUI, text output or stderr. `--json` escapes C1, bidi and invisible characters, and `<`, as `\uXXXX`.
-2. **Program text only through `Program`/`ui.L`/`Notef`,** with constant arguments. Never pass variables, `err.Error()`, or formatted strings that contain file data.
-3. **Read files only via `safeopen`.** No `os.ReadFile`, and no stat-then-open. Reject non-regular files (FIFOs, devices) and keep symlinks contained.
-4. **Bound everything:**
-   - header length must be at most the file size minus 8, with a 100 MiB cap
-   - tensor-count, rank, name-length and metadata-length caps
-   - config limits: depth 32 and the node cap
-   - walk entry and depth caps
-   - layer index cap of 4096
-   - clipboard cap of 64 KiB
-5. **Never wrap or overflow arithmetic silently.** Use checked or saturating math, and mark the result Partial on overflow. Partial must never roll up to PASS or exit 0.
-6. **Never execute or unpickle anything.** Code and pickle inspection, when it lands, is static and capped.
-7. **OSC52 copy** happens only on a user keypress, with sanitized content. It is disabled on non-TTY output, with `--no-clipboard`, or with `MODEL_INSPECTOR_NO_OSC52=1`. Never read the clipboard.
-8. **Makefile:** VERSION and COMMIT values must match `[0-9A-Za-z.+_-]`. Never interpolate repo paths or file content into shell commands. `clean` must never delete outside `bin/`.
+1. **No raw file bytes on screen.** File-derived strings go through `sanitize.From` or `fileerr.Present` before the TUI, the text summary, or stderr. `--json` escapes C1, bidi, invisible characters, and `<` as `\uXXXX`.
+2. **Program text only through `ui.L`, `sanitize.Program`, or `Notef`,** with constant arguments.
+3. **Read files only via `safeopen`.** No `os.ReadFile`, and no stat-then-open.
+4. **Bound everything:** header length, tensor count, rank, name length, config depth and node cap, walk caps, the 4096 layer index, and the 64 KiB clipboard.
+5. **Never wrap arithmetic silently.** Mark the inspection Partial on overflow. Partial must not roll up to a pass.
+6. **Never execute or unpickle anything.** Code and pickle inspection is names-only until a later reader.
+7. **OSC 52 copy** happens only on a user keypress. `--no-clipboard` or `MODEL_INSPECTOR_NO_OSC52=1` turns it off.
+8. **Makefile:** VERSION and COMMIT must match `[0-9A-Za-z.+_-]`. `clean` must never delete outside `bin/`.
 
 ## Exit codes
 
-- `0`: pass or warn.
-- `1`: fail, partial, or warn under `--strict`.
+`inspect` and `--json`:
+
+- `0`: inspected, and no check failed (warnings are fine unless `--strict`).
+- `1`: a check failed, or a warning under `--strict`. The summary is still printed.
 - `2`: usage error or ambiguous target.
-- `3`: skip (empty folder, GGUF-only, missing or not a directory).
+- `3`: the target could not be inspected (missing, not a directory, GGUF-only, or no weights).
+
+The interactive TUI exits 0 when the snapshot loads, and 3 when the load-error card is dismissed. That status is load success, not the scan verdict. CI should use `inspect` or `--json`.
 
 ## Workflow
 
-- PRs are on Cursor Origin: https://cursor.com/codebase/cecilkootz/model-inspector
-- Every PR gets a QA and security review from the "Inspector QA & Security" agent. It blocks only on sanitizer bypasses, crashes or panics, OOM or hangs, and wrong numbers; nits are tracked in follow-up PRs.
-- Add a regression test or fuzz seed for every bug fixed. Keep goldens up to date (`TestGolden`).
-- Design specs live in the shared workspace (`ux-spec-v1.md`, `v2/*.md`) and are owned by the Inspector Design agent.
+- Small PRs. One screen or one behaviour each.
+- QA reviews before merge. QA blocks only on sanitizer bypasses, crashes or panics, OOM or hangs, and wrong numbers. Nits are batched into a follow-up PR.
+- Only Matthew merges.
+- Stacked PRs stay based on the parent branch. After the parent merges, retarget the child to main.
 - Current in-flight status is in `docs/IN_FLIGHT_REVIEWS.md`.
+- PRs are on Cursor Origin: https://cursor.com/codebase/cecilkootz/model-inspector

@@ -61,7 +61,7 @@ Flags:
 --path, --repo, and a positional target are mutually exclusive.
 
 Exit codes:
-  0  inspected, and no check failed (warnings are fine unless --strict). The interactive TUI exits 0. When stdout is not a terminal, the default command is the text summary and uses the inspect codes below.
+  0  inspected, and no check failed (warnings are fine unless --strict). The interactive TUI exits 0 when the snapshot loads, even if a check failed; CI should use inspect or --json. When stdout is not a terminal, the default command is the text summary and uses the inspect codes below.
   1  inspected, and a check failed (or a warning under --strict); the summary is still printed
   2  usage: bad flags, a missing or empty target, an empty --path or --repo, an invalid repo id, or an ambiguous path/repo id
   3  the target could not be inspected (missing, not a directory, GGUF-only, or no weights)

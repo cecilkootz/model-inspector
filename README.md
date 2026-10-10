@@ -174,6 +174,8 @@ The CLI does not use it for user input; it uses `hfcache.ResolveTarget`.
 | 2 | Usage: unknown flag, missing or empty target, empty `--path` or `--repo`, invalid repo id, or an ambiguous path/repo id. |
 | 3 | Could not inspect: not found, not a directory, GGUF-only, or no weight files. GGUF and empty directories still print a summary. |
 
+The interactive TUI's exit status reflects whether the snapshot loaded, not the scan verdict. CI should use `inspect` or `--json`.
+
 ### Keys
 
 `tab` / `shift+tab` or `1`-`4` switch screens. In a tree, `←` / `→` and
