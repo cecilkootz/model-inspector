@@ -45,7 +45,7 @@ GNU make targets (on macOS, `gmake` when `/usr/bin/make` is BSD make):
 ```sh
 make build   # bin/model-inspector
 make test    # override check, go vet ./..., go test -race -count=1 ./...
-make clean   # remove BIN, bin/, and coverage.out
+make clean   # bin/ and coverage.out only; BIN is not a delete path
 make fuzz    # every fuzz target, for FUZZTIME (default 10s)
 ```
 
@@ -60,9 +60,12 @@ same stamp. A binary with no VCS stamp prints `unknown`. `--version` runs
 the version and the commit through the terminal sanitizer.
 
 `VERSION`, `COMMIT`, `FUZZTIME`, and `BIN` may be set in the environment or
-on the make command line. A command-line assignment wins. `VERSION` and
-`COMMIT` must match `^[0-9A-Za-z.+_-]+$`; any other value fails the build
-before the linker runs. `FUZZTIME` uses that same character set.
+on the make command line. A command-line assignment wins. An empty
+`VERSION` or `COMMIT`, or one that is only spaces and tabs, is treated as
+unset. A set value must match `^[0-9A-Za-z][0-9A-Za-z.+_-]*$` (a letter or
+digit, then those characters, `.`, `+`, `_`, or `-`). Any other value fails
+the build before the linker runs. `FUZZTIME` matches `^[0-9A-Za-z.+_-]+$`.
+The C `LDFLAGS` variable is left alone.
 
 Go's default `-buildvcs=auto` records the git repository that contains the
 main module, the current directory, and the main package. A checkout with
@@ -73,11 +76,23 @@ stamps that outer revision. A tree that is not inside any repository, or a
 build with `-buildvcs=false`, prints `unknown`.
 
 `BIN` defaults to `bin/model-inspector` (paths with spaces are quoted).
-`make clean` removes `coverage.out`, that binary when the path stays inside
-this repository, and a real `bin/` directory. An absolute `BIN`, a `BIN`
-containing `..`, or a path that resolves outside the repository is refused.
-`bin/` is gitignored. Recipes call `go` on `PATH` and honor
-`GOTOOLCHAIN=local` (no toolchain download).
+`build`, `test`, `cover`, `fuzz`, and `clean` run in the directory that
+contains the Makefile, not the caller's working directory, so
+`make -f /path/to/Makefile` from another directory still reads and writes
+this checkout. That directory must match `[A-Za-z0-9._/+-]`; a space or
+any other character makes `make` stop before it runs a recipe. `make clean` deletes only `coverage.out` (when it is a
+regular file or a symlink) and this checkout's `bin/` directory. It does
+not remove `BIN`. That variable is also read from the environment, and
+using it as a delete path removed `.git` and tracked files. A binary
+written under `bin/`, including a custom name, is removed with the
+directory. `rm -rf` runs only after `bin` resolves to this repository's
+`bin` directory; a symlinked `bin` is unlinked and not followed. A
+directory named `coverage.out` is left in place with a warning, `bin/` is
+still removed, and `clean` exits non-zero. The override check runs that
+`clean` only against a scratch copy of the Makefile, so `make test` leaves
+this checkout's `bin/` and `coverage.out` in place. `bin/` is gitignored.
+Recipes call `go` on `PATH` and honor `GOTOOLCHAIN=local` (no toolchain
+download).
 
 `go install origin.cursor.com/cecilkootz/model-inspector/cmd/model-inspector@latest`
 fails even with `GOPRIVATE=origin.cursor.com`. Origin does not answer Go's
@@ -98,7 +113,7 @@ cd ~/src/model-inspector
 make          # same as make test
 make build    # bin/model-inspector
 make test
-make clean    # BIN, bin/, and coverage.out
+make clean    # bin/ and coverage.out only
 make fuzz     # FUZZTIME=10s by default; make fuzz FUZZTIME=30s
 ```
 
