@@ -461,7 +461,7 @@ func (t Model) layersBody() string {
 		return "No tensors: this directory has no safetensors shards."
 	}
 	if t.detail != nil {
-		head := sanitize.From(fmt.Sprintf("%s · %d tensors · %s", t.detail.Key, len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))).String()
+		head := sanitize.From(t.detail.Key).String() + fmt.Sprintf(" · %d tensors · %s", len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))
 		return head + "\n" + markTableCursor(t.tensorTable.View(), t.tensorTable.Rows(), t.tensorTable.Cursor())
 	}
 	return markTableCursor(t.groupTable.View(), t.groupTable.Rows(), t.groupTable.Cursor())
@@ -499,10 +499,6 @@ func markGreater(line string) string {
 }
 
 func text(s string) sanitize.Text { return sanitize.From(s) }
-
-func textf(format string, args ...any) sanitize.Text {
-	return sanitize.From(fmt.Sprintf(format, args...))
-}
 
 // renderConfig is the scrollable Config screen. Grouped layout is a later
 // change; this screen keeps the key fields and the sanitized JSON.
@@ -548,13 +544,13 @@ func renderConfig(m *model.Model, width int) string {
 	}
 	if lt := m.LayerTypeCounts(); lt != nil {
 		for _, k := range model.SortedKeys(lt) {
-			rows = append(rows, ui.KVRow{Label: sanitize.From("layer_types: " + k), Value: textf("%d", lt[k])})
+			rows = append(rows, ui.KVRow{Label: sanitize.Program("layer_types: " + sanitize.From(k).String()), Value: sanitize.Program(fmt.Sprintf("%d", lt[k]))})
 		}
 	}
 	if m.Quant != nil {
 		rows = append(rows, ui.KVRow{
 			Label: sanitize.From(m.Quant.Source),
-			Value: textf("bits=%d group_size=%d mode=%s", m.Quant.Bits, m.Quant.GroupSize, m.Quant.Mode),
+			Value: sanitize.Program(fmt.Sprintf("bits=%d group_size=%d mode=%s", m.Quant.Bits, m.Quant.GroupSize, sanitize.From(m.Quant.Mode).String())),
 		})
 	}
 	if len(rows) > 0 {
@@ -644,7 +640,7 @@ func groupRows(m *model.Model) []table.Row {
 			exp = "yes"
 		}
 		rows = append(rows, table.Row{
-			sanitize.From(g.Key).String(), sanitize.From(g.Kind).String(), fmt.Sprint(len(g.Tensors)), model.HumanCount(g.LogicalParams),
+			sanitize.From(g.Key).String(), g.Kind, fmt.Sprint(len(g.Tensors)), model.HumanCount(g.LogicalParams),
 			model.HumanBytes(g.Bytes), exp, fmt.Sprint(g.QuantizedTensors)})
 	}
 	return rows
@@ -663,7 +659,7 @@ func tensorRows(g *model.Group) []table.Row {
 		}
 		rows = append(rows, table.Row{
 			sanitize.From(name).String(), sanitize.From(t.DType).String(), sanitize.From(fmt.Sprint(t.Shape)).String(),
-			model.HumanBytes(t.ByteLen()), sanitize.From(role).String()})
+			model.HumanBytes(t.ByteLen()), role})
 	}
 	return rows
 }

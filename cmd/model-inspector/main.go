@@ -16,6 +16,7 @@ import (
 	"origin.cursor.com/cecilkootz/model-inspector/internal/hfcache"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/report"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/tui"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/version"
@@ -306,6 +307,16 @@ func fail(err error) {
 }
 
 // writeError prints err to w with file-derived controls tokenized.
+// A Note already sanitized its untrusted arguments. Running Present on it
+// would turn a static "<commit>" into a token. Other errors are sanitized
+// and clipped.
 func writeError(w io.Writer, err error) {
+	if err == nil {
+		return
+	}
+	if n, ok := err.(sanitize.Note); ok {
+		fmt.Fprintln(w, "model-inspector:", n.Error())
+		return
+	}
 	fmt.Fprintln(w, "model-inspector:", fileerr.Present(err.Error()))
 }

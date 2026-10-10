@@ -264,8 +264,8 @@ func (t Model) commands() []ui.Match {
 	out := make([]ui.Match, len(list))
 	for i, c := range list {
 		out[i] = ui.Match{
-			ID: c.id, Title: ui.S(sanitize.From(c.title)), Key: ui.S(sanitize.From(c.key)),
-			Where: ui.S(sanitize.From(c.where)), Order: i, Enable: c.enable,
+			ID: c.id, Title: ui.S(sanitize.Program(c.title)), Key: ui.S(sanitize.Program(c.key)),
+			Where: ui.S(sanitize.Program(c.where)), Order: i, Enable: c.enable,
 		}
 	}
 	return out
@@ -577,7 +577,7 @@ func (t Model) topRow() string {
 			if ui.ColorOff() {
 				b.WriteString("[" + label + "]")
 			} else {
-				b.WriteString(ui.Pill(ui.FillKindViolet, sanitize.From(label)))
+				b.WriteString(ui.Pill(ui.FillKindViolet, sanitize.Program(label)))
 			}
 		} else if ui.ColorOff() {
 			b.WriteString(label)
@@ -669,20 +669,22 @@ func (t Model) statusRow() string {
 	verdict, vKind := t.verdictSeg()
 	content := ui.G().NR + " headers-only"
 	cKind := ui.FillKindNR
-	seg := func(s string) ui.Safe { return ui.S(sanitize.From(s)) }
-	// The hint is a fixed phrase ("<-> tabs" in ASCII). Sanitizing it
-	// prints <U+003C> in the status bar.
+	// name is the repo id or directory. Everything else on this row is ours
+	// (mode, hint, byte counts, glyphs). quantHeader already sanitized a
+	// file dtype when it had to.
+	file := func(s string) ui.Safe { return ui.S(sanitize.From(s)) }
+	own := func(s string) ui.Safe { return ui.Chrome(s) }
 	left := []ui.StatusSeg{
-		{Text: seg(mode), Pri: 1, FG: ui.TextInk, BG: ui.FillPink, Bold: true, Keep: true},
-		{Text: seg(name), Pri: 3, FG: ui.TextPrimary, BG: ui.SurfaceSeg2, Min: 16, Shrink: true},
-		{Text: ui.Chrome(hint), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep},
+		{Text: own(mode), Pri: 1, FG: ui.TextInk, BG: ui.FillPink, Bold: true, Keep: true},
+		{Text: file(name), Pri: 3, FG: ui.TextPrimary, BG: ui.SurfaceSeg2, Min: 16, Shrink: true},
+		{Text: own(hint), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep},
 	}
 	right := []ui.StatusSeg{
-		{Text: seg(format), Pri: 4, FG: ui.TextSecondary, BG: ui.SurfaceSeg},
-		{Text: seg(size), Pri: 2, FG: ui.TextPrimary, BG: ui.SurfaceSeg2},
-		{Text: seg(quant), Pri: 2, FG: ui.TextOnFill, BG: ui.FillViolet, Bold: true},
-		{Text: seg(verdict), Pri: 1, FG: fgFor(vKind), BG: bgFor(vKind), Bold: true, Keep: true},
-		{Text: seg(content), Pri: 1, FG: fgFor(cKind), BG: bgFor(cKind), Keep: true},
+		{Text: own(format), Pri: 4, FG: ui.TextSecondary, BG: ui.SurfaceSeg},
+		{Text: own(size), Pri: 2, FG: ui.TextPrimary, BG: ui.SurfaceSeg2},
+		{Text: own(quant), Pri: 2, FG: ui.TextOnFill, BG: ui.FillViolet, Bold: true},
+		{Text: own(verdict), Pri: 1, FG: fgFor(vKind), BG: bgFor(vKind), Bold: true, Keep: true},
+		{Text: own(content), Pri: 1, FG: fgFor(cKind), BG: bgFor(cKind), Keep: true},
 	}
 	return ui.Segments(left, right, t.width)
 }

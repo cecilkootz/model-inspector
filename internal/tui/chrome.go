@@ -82,13 +82,14 @@ func nonEmpty(ss []string) []string {
 func compactFormat(format string) string {
 	name, variant, _ := model.FormatName(format)
 	if variant == "" {
-		return sanitize.From(name).String()
+		return name
 	}
 	sep := "·"
 	if !ui.UTF8() {
 		sep = "|"
 	}
-	return sanitize.From(name + sep + variant).String()
+	// name is safetensors/gguf/unknown. The parenthetical variant is file metadata.
+	return name + sep + sanitize.From(variant).String()
 }
 
 func quantHeader(m *model.Model) string {
@@ -97,6 +98,7 @@ func quantHeader(m *model.Model) string {
 		if d == "" {
 			return ui.Dash()
 		}
+		// The dtype token comes from the file. The "qN gN" form below is ours.
 		return sanitize.From(d).String()
 	}
 	s := fmt.Sprintf("q%d", m.Quant.Bits)
@@ -106,7 +108,7 @@ func quantHeader(m *model.Model) string {
 	if m.Quant.NumOverrides > 0 {
 		s += fmt.Sprintf(" +%d", m.Quant.NumOverrides)
 	}
-	return sanitize.From(s).String()
+	return s
 }
 
 func dominantDType(m *model.Model) string {

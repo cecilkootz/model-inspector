@@ -28,6 +28,32 @@ type Text struct{ s string }
 // String returns the sanitized text.
 func (t Text) String() string { return t.s }
 
+// Program is text this program wrote: a label, a hint, a count. It is stored
+// unchanged, so a placeholder such as "<commit>" or "<1%" stays a less-than.
+// Model, file, and user bytes use From.
+func Program(s string) Text { return Text{s: s} }
+
+// Note is an error safe to print. Notef leaves the format string alone and
+// runs From on string arguments. Callers must not pass the result through From
+// again, or the "<" in the format becomes a token.
+type Note struct{ msg string }
+
+// Error returns the formatted sentence.
+func (n Note) Error() string { return n.msg }
+
+// Notef formats a program sentence. String arguments are untrusted.
+func Notef(format string, args ...any) error {
+	safe := make([]any, len(args))
+	for i, a := range args {
+		if s, ok := a.(string); ok {
+			safe[i] = From(s).String()
+			continue
+		}
+		safe[i] = a
+	}
+	return Note{msg: fmt.Sprintf(format, safe...)}
+}
+
 // From sanitizes s. Printable characters pass through. Controls, bidi
 // overrides, format characters, and other invisible characters are replaced
 // with <U+XXXX> tokens. '<' is replaced as well so a token cannot be forged.
