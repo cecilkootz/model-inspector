@@ -3,7 +3,9 @@ package safetensors
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -30,6 +32,12 @@ func FuzzParse(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		switch {
 		case bytes.Equal(data, tensorCountSeed):
+			// Seed #7 builds a ~10 MiB header. The unit test already parses
+			// it. Running it again from the seed corpus doubles the race
+			// time, so only the fuzz engine (baseline and workers) pays it.
+			if !fuzzEngineOn() {
+				return
+			}
 			_, err := Parse(tensorCountHeader(MaxTensors + 1))
 			if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("more than %d tensors", MaxTensors)) {
 				t.Fatalf("tensor count: %v", err)
@@ -149,6 +157,10 @@ func containsText(items []string, want string) bool {
 func FuzzLayoutStructured(f *testing.F) {
 	f.Add("a", "b", byte(0), int64(0), int64(4), int64(4), int64(8), int64(8))
 	f.Add("a", "b", byte(0), int64(0), int64(4), int64(8), int64(12), int64(12))
+	// One byte past the previous end is a gap. start == prevEnd is not.
+	f.Add("a", "b", byte(0), int64(0), int64(4), int64(5), int64(9), int64(9))
+	f.Add("a", "b", byte(0), int64(0), int64(4), int64(2), int64(6), int64(6))
+	f.Add("a", "b", byte(0), int64(4), int64(8), int64(8), int64(12), int64(12))
 	f.Fuzz(func(t *testing.T, nameA, nameB string, kind byte, a0, a1, b0, b1, dataLen int64) {
 		nameA = clipFuzzName(nameA)
 		nameB = clipFuzzName(nameB)
@@ -174,8 +186,72 @@ func FuzzLayoutStructured(f *testing.F) {
 		if len(h.Tensors) > MaxTensors {
 			t.Fatalf("accepted %d tensors", len(h.Tensors))
 		}
-		CheckLayout("shard", h, dataLen)
+		problems, _ := CheckLayout("shard", h, dataLen)
+		if dataLen < 0 {
+			return
+		}
+		wantGap, wantOverlap, wantStart := expectLayout(nameA, a0, a1, nameB, b0, b1)
+		gotGap := containsText(problems, "gap before")
+		gotOverlap := containsText(problems, "overlaps")
+		gotStart := containsText(problems, "want 0")
+		if gotGap != wantGap || gotOverlap != wantOverlap || gotStart != wantStart {
+			t.Fatalf("a=%s [%d,%d] b=%s [%d,%d] data=%d got gap=%v overlap=%v start=%v want gap=%v overlap=%v start=%v problems=%v",
+				nameA, a0, a1, nameB, b0, b1, dataLen, gotGap, gotOverlap, gotStart, wantGap, wantOverlap, wantStart, problems)
+		}
 	})
+}
+
+// expectLayout is the gap, overlap, and start-at-0 result for two ranges.
+// Invalid ranges (start < 0 or end < start) are skipped. The rest are
+// ordered by start, then name. Adjacent ranges (next start == previous
+// end) are neither a gap nor an overlap.
+func expectLayout(nameA string, a0, a1 int64, nameB string, b0, b1 int64) (gap, overlap, start bool) {
+	type seg struct {
+		name       string
+		start, end int64
+	}
+	var valid []seg
+	if a0 >= 0 && a1 >= a0 {
+		valid = append(valid, seg{nameA, a0, a1})
+	}
+	if b0 >= 0 && b1 >= b0 {
+		valid = append(valid, seg{nameB, b0, b1})
+	}
+	sort.Slice(valid, func(i, j int) bool {
+		if valid[i].start == valid[j].start {
+			return valid[i].name < valid[j].name
+		}
+		return valid[i].start < valid[j].start
+	})
+	if len(valid) == 0 {
+		return false, false, false
+	}
+	if valid[0].start != 0 {
+		start = true
+	}
+	prevEnd := valid[0].end
+	for _, s := range valid[1:] {
+		switch {
+		case s.start > prevEnd:
+			gap = true
+		case s.start < prevEnd:
+			overlap = true
+		}
+		if s.end > prevEnd {
+			prevEnd = s.end
+		}
+	}
+	return gap, overlap, start
+}
+
+func fuzzEngineOn() bool {
+	if f := flag.Lookup("test.fuzz"); f != nil && f.Value.String() != "" {
+		return true
+	}
+	if f := flag.Lookup("test.fuzzworker"); f != nil && f.Value.String() == "true" {
+		return true
+	}
+	return false
 }
 
 func tensorSpec(dt string, start, end int64) map[string]any {

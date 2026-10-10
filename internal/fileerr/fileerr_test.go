@@ -1,6 +1,8 @@
 package fileerr
 
 import (
+	"errors"
+	"io/fs"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -34,7 +36,8 @@ func TestStringKeepsPrefixEllipsisAndLength(t *testing.T) {
 }
 
 func TestErrorDropsOversizedText(t *testing.T) {
-	err := Error(errString(strings.Repeat("1", 1000) + "TAIL"))
+	orig := errString(strings.Repeat("1", 1000) + "TAIL")
+	err := Error(orig)
 	msg := err.Error()
 	if strings.Contains(msg, "TAIL") {
 		t.Fatalf("tail survived: %q", msg)
@@ -45,9 +48,83 @@ func TestErrorDropsOversizedText(t *testing.T) {
 	if reportedLen(t, msg) != 1004 {
 		t.Fatalf("length %d in %q", reportedLen(t, msg), msg)
 	}
+	if errors.Unwrap(err) != error(orig) {
+		t.Fatal("clipped error dropped the original")
+	}
 	short := Error(errString("ok"))
-	if short.Error() != "ok" {
+	if short.Error() != "ok" || short != errString("ok") {
 		t.Fatal(short)
+	}
+}
+
+func TestPresentSanitizesThenClips(t *testing.T) {
+	in := strings.Repeat("\x1b", 400)
+	got := Present(in)
+	if n := utf8.RuneCountInString(got); n > MaxRunes {
+		t.Fatalf("visible runes %d", n)
+	}
+	if strings.ContainsRune(got, '\x1b') {
+		t.Fatal("raw ESC survived sanitizing")
+	}
+	if !strings.Contains(got, "<U+001B>") {
+		t.Fatalf("controls were not tokenized: %q", got)
+	}
+	if reportedLen(t, got) != len(in) {
+		t.Fatalf("reported %d, want %d", reportedLen(t, got), len(in))
+	}
+	body := got[:strings.LastIndex(got, "… (")]
+	if strings.Contains(body, "<") && !strings.HasSuffix(body, ">") {
+		t.Fatalf("token split: %q", body[len(body)-12:])
+	}
+	if String(got) != got {
+		t.Fatal("clipping a sanitized string changed it again")
+	}
+}
+
+func TestStringKeepsCombiningMarkWithBase(t *testing.T) {
+	const mark = "\u0301"
+	in := strings.Repeat("e"+mark, 300)
+	got := String(in)
+	if n := utf8.RuneCountInString(got); n > MaxRunes {
+		t.Fatalf("runes %d", n)
+	}
+	body := got[:strings.LastIndex(got, "… (")]
+	if strings.Count(body, "e") != strings.Count(body, mark) {
+		t.Fatalf("split a base from its combining mark: %q", body[max(0, len(body)-8):])
+	}
+	if strings.HasSuffix(body, "e") {
+		t.Fatal("prefix ends on the base and drops the combining mark")
+	}
+}
+
+func TestErrorElidesLongPathAndUnwraps(t *testing.T) {
+	dir := strings.Repeat("d", 240)
+	path := "/" + dir + "/config.json"
+	orig := &fs.PathError{Op: "lstat", Path: path, Err: fs.ErrNotExist}
+	err := Error(orig)
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("clipped path error is not fs.ErrNotExist")
+	}
+	var pe *fs.PathError
+	if !errors.As(err, &pe) || pe.Path != path {
+		t.Fatalf("unwrap path = %#v", pe)
+	}
+	msg := err.Error()
+	if n := utf8.RuneCountInString(msg); n > MaxRunes {
+		t.Fatalf("visible runes %d: %q", n, msg)
+	}
+	if !strings.Contains(msg, "config.json") || !strings.Contains(msg, "lstat /"+dir[:8]) {
+		t.Fatalf("path clip dropped the head or the filename: %q", msg)
+	}
+	if !strings.Contains(msg, "…/") {
+		t.Fatalf("path was not elided in the middle: %q", msg)
+	}
+	if strings.Contains(msg, dir) {
+		t.Fatal("full directory survived")
+	}
+	short := &fs.PathError{Op: "open", Path: "/no/such", Err: fs.ErrNotExist}
+	if Error(short) != short {
+		t.Fatal("short path error was replaced")
 	}
 }
 

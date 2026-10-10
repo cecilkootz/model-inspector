@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
@@ -84,7 +85,7 @@ func (t Model) scanLines(width int) []scanLine {
 					lines = append(lines, scanLine{text: truncWidth(fmt.Sprintf("    · …and %d more   (all details: inspect --json)", extra), width), check: i})
 					break
 				}
-				lines = append(lines, scanLine{text: truncWidth("    · "+sanitize.From(d).String(), width), check: i})
+				lines = append(lines, scanLine{text: truncWidth("    · "+fileerr.Present(d), width), check: i})
 				shown++
 			}
 		}

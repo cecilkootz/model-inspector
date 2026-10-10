@@ -110,7 +110,7 @@ func ReadFile(path string, roots ...string) (*Header, int64, error) {
 	defer f.Close()
 	h, err := ReadSized(f, f.Size())
 	if err != nil {
-		return nil, f.Size(), fmt.Errorf("%s: %w", path, err)
+		return nil, f.Size(), fileerr.Error(fmt.Errorf("%s: %w", path, err))
 	}
 	return h, f.Size(), nil
 }

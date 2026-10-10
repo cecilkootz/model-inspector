@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 )
@@ -401,7 +402,7 @@ func calloutLines(m *model.Model, cs []model.Callout, width int) []string {
 				if used >= maxLines || i >= 3 {
 					break
 				}
-				lines = append(lines, truncWidth("  "+sanitize.From(w).String(), width))
+				lines = append(lines, truncWidth("  "+fileerr.Present(w), width))
 				used++
 			}
 		}

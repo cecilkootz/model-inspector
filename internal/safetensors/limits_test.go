@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -81,8 +82,36 @@ func TestParseRejectsLongMetadataValue(t *testing.T) {
 	}
 }
 
+var (
+	maxTensorOnce sync.Once
+	maxTensorHdr  []byte
+)
+
+// maxTensorHeader builds the 200000-tensor header once. The reject case
+// appends one object to that buffer instead of walking the keys again.
+func maxTensorHeader() []byte {
+	maxTensorOnce.Do(func() { maxTensorHdr = tensorCountHeader(MaxTensors) })
+	return maxTensorHdr
+}
+
+func TestParseAcceptsMaxTensors(t *testing.T) {
+	h, err := Parse(maxTensorHeader())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(h.Tensors) != MaxTensors {
+		t.Fatalf("got %d tensors, want %d", len(h.Tensors), MaxTensors)
+	}
+}
+
 func TestParseRejectsTooManyTensors(t *testing.T) {
-	_, err := Parse(tensorCountHeader(MaxTensors + 1))
+	hdr := maxTensorHeader()
+	const extra = `,"x":{"dtype":"U8","shape":[],"data_offsets":[0,0]}`
+	plus := make([]byte, 0, len(hdr)+len(extra))
+	plus = append(plus, hdr[:len(hdr)-1]...)
+	plus = append(plus, extra...)
+	plus = append(plus, '}')
+	_, err := Parse(plus)
 	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("more than %d tensors", MaxTensors)) {
 		t.Fatalf("tensor count: %v", err)
 	}
