@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
@@ -216,11 +217,11 @@ func (m *Model) warnf(format string, a ...any) {
 		if !m.warningsTrunc {
 			m.warningsTrunc = true
 			m.Partial = true
-			m.Warnings = append(m.Warnings, fmt.Sprintf("too many warnings; truncated at %d", maxWarnings))
+			m.Warnings = append(m.Warnings, fileerr.String(fmt.Sprintf("too many warnings; truncated at %d", maxWarnings)))
 		}
 		return
 	}
-	m.Warnings = append(m.Warnings, fmt.Sprintf(format, a...))
+	m.Warnings = append(m.Warnings, fileerr.String(fmt.Sprintf(format, a...)))
 }
 
 func (m *Model) scanFiles() error {
@@ -330,7 +331,7 @@ func (m *Model) loadConfig() {
 		// read, including a dangling symlink, is an incomplete inspection:
 		// Stat of a broken symlink is ENOENT, which would otherwise look
 		// like the file was never there.
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			if _, lerr := os.Lstat(p); lerr != nil {
 				return
 			}
@@ -352,6 +353,7 @@ func (m *Model) loadConfig() {
 		return
 	}
 	m.Config = cfg
+	m.noteOutOfRangeNumbers(cfg, "")
 	m.Quant = parseQuant(cfg)
 }
 
@@ -513,8 +515,8 @@ func parseIndex(name string, b []byte) (*Index, error) {
 // fitInt64 converts a JSON number to int64 when the value is finite and in range.
 // Out-of-range floats are rejected instead of truncated into a wrapped int64.
 func fitInt64(v any) (int64, bool) {
-	f, ok := v.(float64)
-	if !ok || math.IsNaN(f) || math.IsInf(f, 0) || f < 0 || f >= float64(uint64(1)<<63) {
+	f, ok := jsonx.FitFloat(v)
+	if !ok || f < 0 || f >= float64(uint64(1)<<63) {
 		return 0, false
 	}
 	return int64(f), true

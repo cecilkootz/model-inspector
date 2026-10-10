@@ -24,7 +24,8 @@ bidi overrides, Unicode format characters, and other invisible characters
 become `<U+XXXX>` tokens. A literal `<` is tokenized too, so the characters
 `<U+001B>` in a file cannot impersonate an ESC. The cap is 4096 runes of
 sanitized text (plus one ellipsis rune when the value is truncated), not
-4096 bytes. `--json` keeps parsed values, and encodes C1, bidi, and other
+4096 bytes. Text and TUI output clip any field over 256 runes (tensor names,
+paths). `--json` keeps parsed values, and encodes C1, bidi, and other
 invisible characters in those strings as `\uXXXX` escapes.
 
 It never writes into the Hugging Face cache. Inspecting a ~106 GiB model takes
@@ -177,6 +178,14 @@ The CLI does not use it for user input; it uses `hfcache.ResolveTarget`.
 
 `tab` / `shift+tab` or `1`-`4` switch screens. In a tree, `←` / `→` and
 `h` / `l` fold a row; on every other screen they switch tabs.
+On Config, `space` toggles the selected node, `p` jumps to its parent,
+`e` expands (stopping at 100,000 visible rows and leaving arrays over
+1,000 closed), `E` collapses back to the default, and `+` / `-` open or
+close one depth. `/` searches keys and values (`k:` or `v:` to limit
+which), `tab` inside that input switches to filter, and `n` / `N` step
+through matches. `y` copies the jq path and `Y` copies the value, both
+through OSC 52. `--no-clipboard` or `MODEL_INSPECTOR_NO_OSC52=1` turns
+those sequences off. `r` toggles the sanitized raw text.
 `↑` / `↓` scroll or select. On Layers, `enter` opens a group and `esc` or
 backspace goes back. `esc` never quits: it closes help, the command palette,
 or a disclosure, then leaves a drill-down. `?` opens the key list. `q`
@@ -185,6 +194,8 @@ closes help when help is open, and otherwise quits. `ctrl+c` always quits.
 `<` and `>` resize the split, `z` zooms the focused pane, and `m` toggles
 the mouse. The mouse is on unless you pass `--no-mouse` or set
 `MODEL_INSPECTOR_MOUSE=0`. Hold Shift to select text while the mouse is on.
+OSC 52 copy is on unless you pass `--no-clipboard` or set
+`MODEL_INSPECTOR_NO_OSC52=1`.
 On Scan, `c` asks before reading file contents. That reader is not in this
 version, and the status line says code and pickle contents arrive in a
 later version. The window must be at least 60×16; below that the screen
@@ -216,9 +227,13 @@ follows the overall result.
    Params line sums those pieces before deciding whether one table is at
    least 10% of the estimate. An incomplete inspection marks the memory
    line and the n-gram callout as incomplete. This is not a load of the weights.
-2. **Config**: key architecture, attention, MoE, and MTP fields (root or
-   `text_config`) plus the sanitized `config.json`. A missing file, an
-   unreadable file, and a file that did not parse each get their own line.
+2. **Config**: key architecture, attention, MoE, quant, vision, and MTP
+   fields (root, then `text_config`, `llm_config`, or `language_config`;
+   vision only from `vision_config`) beside an ordered `config.json` tree.
+   Enter on a field jumps to that node. The tree keeps file order and
+   number literals, pages large arrays, and can show the sanitized raw
+   text. A missing file, an unreadable file, a file over 64 MiB, a file
+   that did not parse, and a tree over 250,000 nodes each get their own card.
 3. **Layers**: tensors grouped by decoder layer (`...layers.N.`) plus
    embeddings, ngram (the PLE n-gram table, even when stored under
    `layers.N.ple.ple_embedding`), norms, hyper_connection (the model-level

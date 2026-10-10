@@ -6,6 +6,7 @@ package hfcache
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -119,15 +120,15 @@ func resolveAutoRepo(arg, hubDir string) (Resolved, error) {
 	lst, lerr := os.Lstat(id)
 	st, serr := os.Stat(id)
 	switch {
-	case lerr == nil && serr != nil && os.IsNotExist(serr):
+	case lerr == nil && serr != nil && errors.Is(serr, fs.ErrNotExist):
 		return Resolved{}, fmt.Errorf("%w: %q matches an HF repo id and a broken symlink; pass --repo to read the hub cache, or --path to read that path", ErrAmbiguousTarget, arg)
 	case serr == nil && st.IsDir():
 		return Resolved{}, fmt.Errorf("%w: %q matches an HF repo id and an existing directory; pass --repo to read the hub cache, or --path to read that directory", ErrAmbiguousTarget, arg)
 	case serr == nil:
 		return resolveRepo(arg, hubDir)
-	case lerr == nil && !lst.Mode().IsRegular() && serr != nil && !os.IsNotExist(serr):
+	case lerr == nil && !lst.Mode().IsRegular() && serr != nil && !errors.Is(serr, fs.ErrNotExist):
 		return Resolved{}, fmt.Errorf("%w: %q matches an HF repo id and a local path (%v); pass --path or --repo", ErrAmbiguousTarget, arg, serr)
-	case os.IsNotExist(serr) || os.IsNotExist(lerr):
+	case errors.Is(serr, fs.ErrNotExist) || errors.Is(lerr, fs.ErrNotExist):
 		return resolveRepo(arg, hubDir)
 	default:
 		if serr == nil {
@@ -158,7 +159,7 @@ func repoShaped(arg string) bool {
 func resolvePath(arg string) (Resolved, error) {
 	fi, err := os.Stat(arg)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return Resolved{}, fmt.Errorf("path %s not found", arg)
 		}
 		return Resolved{}, err
@@ -191,7 +192,7 @@ func resolveRepo(arg, hubDir string) (Resolved, error) {
 	repoDir := filepath.Join(hubDir, RepoFolderName(id))
 	repoReal, err := filepath.EvalSymlinks(repoDir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return Resolved{}, fmt.Errorf("repo %s not found in HF cache %s", id, hubDir)
 		}
 		return Resolved{}, err
@@ -206,7 +207,7 @@ func resolveRepo(arg, hubDir string) (Resolved, error) {
 	refsRoot := filepath.Join(repoReal, "refs")
 	refsReal := refsRoot
 	if real, err := filepath.EvalSymlinks(refsRoot); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, fs.ErrNotExist) {
 			return Resolved{}, err
 		}
 	} else if !safeopen.Within(repoReal, real) {
@@ -230,7 +231,7 @@ func resolveRepo(arg, hubDir string) (Resolved, error) {
 	snapRoot := filepath.Join(repoReal, "snapshots")
 	snapRootReal, err := filepath.EvalSymlinks(snapRoot)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return Resolved{}, fmt.Errorf("snapshot %s not present for %s", commit, id)
 		}
 		return Resolved{}, err
@@ -263,11 +264,11 @@ func readCommit(id, ref, rev, refPath, refsRoot string) (string, error) {
 			return "", fmt.Errorf("repo %s: refs/%s is not a 40-64 character hex commit", id, ref)
 		}
 		return commit, nil
-	case os.IsNotExist(err) && rev != "" && commitRe.MatchString(rev):
+	case errors.Is(err, fs.ErrNotExist) && rev != "" && commitRe.MatchString(rev):
 		return rev, nil
-	case os.IsNotExist(err) && rev == "":
+	case errors.Is(err, fs.ErrNotExist) && rev == "":
 		return "", sanitize.Notef("repo %s has no refs/main; pass org/name@<commit>", id)
-	case os.IsNotExist(err):
+	case errors.Is(err, fs.ErrNotExist):
 		return "", fmt.Errorf("repo %s: ref %q is not a commit hash and refs/%s is missing", id, rev, ref)
 	default:
 		return "", fmt.Errorf("repo %s: refs/%s: %w", id, ref, err)

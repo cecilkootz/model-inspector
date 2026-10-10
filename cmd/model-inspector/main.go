@@ -12,6 +12,7 @@ import (
 
 	"github.com/mattn/go-isatty"
 
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/hfcache"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/report"
@@ -52,6 +53,7 @@ Flags:
   --strict          treat scan warnings as failures (exit 1)
   --no-color        disable color (same as NO_COLOR)
   --no-mouse        start the TUI with the mouse off (ignored by --json and non-TTY)
+  --no-clipboard    do not emit OSC 52 clipboard sequences (also MODEL_INSPECTOR_NO_OSC52=1)
   --hub-dir <dir>   HF hub cache (default: $HF_HUB_CACHE, $HF_HOME/hub, ~/.cache/huggingface/hub)
   --version         print the version and commit
   -h, --help        print this help
@@ -70,14 +72,15 @@ func main() {
 }
 
 type options struct {
-	json    bool
-	strict  bool
-	noColor bool
-	noMouse bool
-	version bool
-	hubDir  string
-	target  string
-	mode    hfcache.TargetMode
+	json        bool
+	strict      bool
+	noColor     bool
+	noMouse     bool
+	noClipboard bool
+	version     bool
+	hubDir      string
+	target      string
+	mode        hfcache.TargetMode
 }
 
 func run(args []string) int {
@@ -128,9 +131,13 @@ func run(args []string) int {
 	interactive := cmd == "tui" && !opts.json && isatty.IsTerminal(os.Stdout.Fd())
 	if interactive {
 		var runOpt []tui.Options
-		if opts.noMouse {
-			off := false
-			runOpt = append(runOpt, tui.Options{Mouse: &off})
+		if opts.noMouse || opts.noClipboard {
+			opt := tui.Options{NoClipboard: opts.noClipboard}
+			if opts.noMouse {
+				off := false
+				opt.Mouse = &off
+			}
+			runOpt = append(runOpt, opt)
 		}
 		if err := tui.Run(m, res, runOpt...); err != nil {
 			fail(err)
@@ -182,6 +189,8 @@ func parseArgs(args []string) (options, error) {
 			o.noColor = true
 		case a == "--no-mouse":
 			o.noMouse = true
+		case a == "--no-clipboard":
+			o.noClipboard = true
 		case a == "--version" || a == "-version":
 			o.version = true
 		case a == "-h" || a == "--help" || a == "help":
@@ -306,15 +315,16 @@ func fail(err error) {
 }
 
 // writeError prints err to w with file-derived controls tokenized.
+// A Note already sanitized its untrusted arguments. Running Present on it
+// would turn a static "<commit>" into a token. Other errors are sanitized
+// and clipped.
 func writeError(w io.Writer, err error) {
 	if err == nil {
 		return
 	}
-	// A Note already sanitized its untrusted arguments. Running From on it
-	// would turn a static "<commit>" into a token.
 	if n, ok := err.(sanitize.Note); ok {
 		fmt.Fprintln(w, "model-inspector:", n.Error())
 		return
 	}
-	fmt.Fprintln(w, "model-inspector:", sanitize.From(err.Error()))
+	fmt.Fprintln(w, "model-inspector:", fileerr.Present(err.Error()))
 }

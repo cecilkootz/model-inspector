@@ -1,0 +1,24 @@
+model-inspector  1 Identity [2 Config] 3 Layers 4 Scan ✗1             m mouse on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [ CONFIG.JSON ]  1/3 matches                                           r raw  
+  config.json › text_config › shared_expert_intermediate_size                   
+   ▾ config.json {7}                                                            
+   ├▾ text_config    : {22}                                                     
+  >│  ├─ shared_expert_intermediate_size: 640                                   
+  *│  ├─ num_experts                 : 512                                      
+  *│  ├─ num_experts_per_tok         : 10                                       
+   … 19 hidden by filter                                                        
+   … 6 hidden by filter                                                         
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+ .text_config.shared_expert_intermediate_size = 640                     13/5238 
+ / expert                                          filter · ⏎ keep · tab switch 
+FILTER │ /model safetensors │ 82.34 KiB │ q4 g32 +50 │ ✗ 1 fail │ – headers-only

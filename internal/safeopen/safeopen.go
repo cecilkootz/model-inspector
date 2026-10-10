@@ -13,6 +13,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 )
 
 // File is an opened regular file. Read stops after max+1 bytes.
@@ -35,6 +37,14 @@ func Open(path string, max int64) (*File, error) {
 // model directory, or an HF blobs directory). Symlinks are followed by
 // open; the check uses the descriptor, not a prior path stat.
 func OpenUnder(path string, max int64, roots ...string) (*File, error) {
+	f, err := openUnder(path, max, roots...)
+	if err != nil {
+		return nil, fileerr.Error(err)
+	}
+	return f, nil
+}
+
+func openUnder(path string, max int64, roots ...string) (*File, error) {
 	if max < 0 {
 		return nil, fmt.Errorf("safeopen: negative read cap")
 	}
@@ -122,6 +132,11 @@ func (f *File) Name() string { return f.name }
 // A longer file, or a read that yields max+1 bytes, returns an error and
 // no truncated buffer.
 func ReadAll(path string, max int64, roots ...string) ([]byte, error) {
+	b, err := readAll(path, max, roots...)
+	return b, fileerr.Error(err)
+}
+
+func readAll(path string, max int64, roots ...string) ([]byte, error) {
 	f, err := OpenUnder(path, max, roots...)
 	if err != nil {
 		return nil, err

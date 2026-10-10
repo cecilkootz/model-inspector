@@ -2,7 +2,6 @@
 package tui
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -77,6 +76,7 @@ type Model struct {
 	detail  *model.Group
 
 	mouse          bool
+	noClipboard    bool
 	motion         bool
 	motionFrame    int
 	blurred        bool
@@ -92,6 +92,7 @@ type Model struct {
 	now            func() time.Time
 	lastClickID    string
 	lastClickAt    time.Time
+	cfg            *configState
 }
 
 type frameCache struct {
@@ -106,11 +107,13 @@ type palState struct {
 }
 
 // Options configures a TUI session. A nil Mouse keeps the default
-// (on, unless MODEL_INSPECTOR_MOUSE=0).
+// (on, unless MODEL_INSPECTOR_MOUSE=0). NoClipboard turns OSC 52 off
+// for the session; MODEL_INSPECTOR_NO_OSC52=1 does the same.
 type Options struct {
-	Mouse  *bool
-	Motion *bool
-	Now    func() time.Time
+	Mouse       *bool
+	Motion      *bool
+	NoClipboard bool
+	Now         func() time.Time
 }
 
 // Run starts the TUI in the alternate screen.
@@ -147,14 +150,13 @@ func New(m *model.Model, res scan.Result) Model {
 	}
 	t := Model{
 		m: m, scan: res, width: 100, height: 30, scanOpen: map[string]bool{},
-		mouse: mouseDefault(), motion: motion, motionFrame: frame,
+		mouse: mouseDefault(), noClipboard: osc52EnvOff(), motion: motion, motionFrame: frame,
 		ratio: 55, derived: &d, cache: &frameCache{}, zones: &ui.Zones{},
-		now: time.Now,
+		now: time.Now, cfg: newConfigState(),
 	}
 	t.identityVP = viewport.New(t.width, t.bodyHeight())
 	t.configVP = viewport.New(t.width, t.bodyHeight())
 	t.identityVP.SetContent(renderIdentity(m, t.width))
-	t.configVP.SetContent(renderConfig(m, t.width))
 
 	styles := table.DefaultStyles()
 	styles.Header = styles.Header.Bold(true).Foreground(lipgloss.AdaptiveColor{Dark: "99", Light: "55"})
@@ -186,7 +188,6 @@ func (t *Model) resize() {
 		vp.Width, vp.Height = t.width, h
 	}
 	t.identityVP.SetContent(t.identityBody())
-	t.configVP.SetContent(renderConfig(t.m, t.width))
 	if t.cache != nil {
 		t.cache.key = ""
 	}
@@ -210,6 +211,14 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.width, t.height, t.ready = msg.Width, msg.Height, true
 		t.resize()
 		t.ensureScanVisible()
+		return t, t.kickConfig()
+	case configParsedMsg:
+		return t.onConfigParsed(msg)
+	case configSpinMsg:
+		if t.cfg != nil && t.cfg.parsing {
+			t.cfg.spin = true
+			t.touchConfig()
+		}
 		return t, nil
 	case tea.MouseMsg:
 		return t.updateMouse(msg)
@@ -235,6 +244,9 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.String() == "ctrl+c" {
 			return t, tea.Quit
+		}
+		if t.configSearching() {
+			return t.updateConfigSearch(msg)
 		}
 		if t.palette.open {
 			return t.updatePalette(msg)
@@ -278,6 +290,10 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.help = false
 				return t, nil
 			}
+			if t.active == tabConfig && t.configCloseTop() {
+				t.touchConfig()
+				return t, nil
+			}
 			if t.zoom {
 				t.zoom = false
 				return t, nil
@@ -307,6 +323,27 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return t, nil
 		case "<", ">":
+			if t.active == tabConfig {
+				if t.cfg != nil && (ui.Breakpoint(t.width, t.height) == "M" || ui.Breakpoint(t.width, t.height) == "L") {
+					d := -5
+					if msg.String() == ">" {
+						d = 5
+					}
+					if !t.cfg.ratioSet {
+						t.cfg.ratio = t.configRatio()
+						t.cfg.ratioSet = true
+					}
+					t.cfg.ratio += d
+					if t.cfg.ratio < 30 {
+						t.cfg.ratio = 30
+					}
+					if t.cfg.ratio > 70 {
+						t.cfg.ratio = 70
+					}
+					t.touchConfig()
+				}
+				return t, nil
+			}
 			if br := ui.Breakpoint(t.width, t.height); br == "M" || br == "L" {
 				d := -5
 				if msg.String() == ">" {
@@ -335,19 +372,24 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.active = (t.active + numTabs - 1) % numTabs
 			return t, nil
 		case "right", "l":
-			if !t.treeFocused() {
-				t.active = (t.active + 1) % numTabs
+			if t.treeFocused() {
+				return t.updateConfigKey(msg)
 			}
+			t.active = (t.active + 1) % numTabs
 			return t, nil
 		case "left", "h":
-			if !t.treeFocused() {
-				t.active = (t.active + numTabs - 1) % numTabs
+			if t.treeFocused() {
+				return t.updateConfigKey(msg)
 			}
+			t.active = (t.active + numTabs - 1) % numTabs
 			return t, nil
 		case "1", "2", "3", "4":
 			t.active = tab(msg.String()[0] - '1')
 			return t, nil
 		case "enter":
+			if t.active == tabConfig && !t.help {
+				return t.updateConfigKey(msg)
+			}
 			if !t.help && t.active == tabIdentity && ui.Breakpoint(t.width, t.height) == "S" {
 				t.drill = true
 				t.resize()
@@ -356,6 +398,9 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if t.help {
 			return t, nil
+		}
+		if t.active == tabConfig {
+			return t.updateConfigKey(msg)
 		}
 		if t.active == tabScan {
 			return t.updateScan(msg)
@@ -385,7 +430,7 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tabIdentity:
 		t.identityVP, cmd = t.identityVP.Update(msg)
 	case tabConfig:
-		t.configVP, cmd = t.configVP.Update(msg)
+		return t, nil
 	case tabLayers:
 		if t.detail != nil {
 			t.tensorY = stepTableY(t.tensorTable, t.tensorY, msg)
@@ -515,75 +560,6 @@ func markGreater(line string) string {
 	return line
 }
 
-func text(s string) sanitize.Text { return sanitize.From(s) }
-
-// renderConfig is the scrollable Config screen. Grouped layout is a later
-// change; this screen keeps the key fields and the sanitized JSON.
-// Missing, unreadable, and unparsed configs each get their own line.
-func renderConfig(m *model.Model, width int) string {
-	if width < 20 {
-		width = 20
-	}
-	if m.Config == nil {
-		msg := "No config.json."
-		switch {
-		case len(m.ConfigRaw) > 0:
-			msg = "config.json did not parse."
-			excerpt := string(m.ConfigRaw)
-			if len(excerpt) > 512 {
-				excerpt = excerpt[:512]
-			}
-			msg += "\n" + sanitize.From(excerpt).String()
-		case configUnreadable(m):
-			msg = "config.json is unreadable."
-		}
-		var b strings.Builder
-		b.WriteString(msg)
-		n := 0
-		for _, w := range m.Warnings {
-			if !strings.Contains(w, "config.json") {
-				continue
-			}
-			if n == 5 {
-				break
-			}
-			b.WriteByte('\n')
-			b.WriteString(sanitize.From(w).String())
-			n++
-		}
-		return cutBlock(b.String(), width)
-	}
-	var b strings.Builder
-	b.WriteString(headingStyle.Render("Key fields") + "\n")
-	var rows []ui.KVRow
-	for _, f := range m.KeyConfig() {
-		rows = append(rows, ui.KVRow{Label: sanitize.From(f.Path), Value: text(compact(f.Value))})
-	}
-	if lt := m.LayerTypeCounts(); lt != nil {
-		for _, k := range model.SortedKeys(lt) {
-			rows = append(rows, ui.KVRow{Label: sanitize.Program("layer_types: " + sanitize.From(k).String()), Value: sanitize.Program(fmt.Sprintf("%d", lt[k]))})
-		}
-	}
-	if m.Quant != nil {
-		rows = append(rows, ui.KVRow{
-			Label: sanitize.From(m.Quant.Source),
-			Value: sanitize.Program(fmt.Sprintf("bits=%d group_size=%d mode=%s", m.Quant.Bits, m.Quant.GroupSize, sanitize.From(m.Quant.Mode).String())),
-		})
-	}
-	if len(rows) > 0 {
-		b.WriteString(ui.KV(rows, width))
-		b.WriteByte('\n')
-	}
-	b.WriteString("\n" + headingStyle.Render("config.json (raw)") + "\n")
-	pretty, err := sanitize.JSON(m.Config)
-	if err != nil {
-		b.WriteString(sanitize.From(string(m.ConfigRaw)).String())
-	} else {
-		b.WriteString(pretty)
-	}
-	return cutBlock(b.String(), width)
-}
-
 func configUnreadable(m *model.Model) bool {
 	for _, w := range m.Warnings {
 		if strings.Contains(w, "config.json") {
@@ -679,12 +655,4 @@ func tensorRows(g *model.Group) []table.Row {
 			model.HumanBytes(t.ByteLen()), role})
 	}
 	return rows
-}
-
-func compact(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return fmt.Sprint(v)
-	}
-	return string(b)
 }

@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
@@ -275,7 +276,7 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 	for _, s := range m.Shards {
 		sd := shardDoc{Name: s.Name, Bytes: s.Size, Readable: s.Header != nil}
 		if s.Err != nil {
-			sd.Error = strPtr(s.Err.Error())
+			sd.Error = strPtr(fileerr.String(s.Err.Error()))
 		}
 		d.Files.Shards = append(d.Files.Shards, sd)
 	}
@@ -313,9 +314,9 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 			Name: h.Name, Group: h.Group, Bytes: h.Bytes, ParamsEst: h.ParamsEst, Rule: h.Rule,
 		})
 	}
-	d.LoadWarnings = append([]string{}, m.Warnings...)
-	if d.LoadWarnings == nil {
-		d.LoadWarnings = []string{}
+	d.LoadWarnings = make([]string, 0, len(m.Warnings))
+	for _, w := range m.Warnings {
+		d.LoadWarnings = append(d.LoadWarnings, fileerr.String(w))
 	}
 	d.Partial = m.Partial
 	outliersByGroup := map[string][]string{}
@@ -355,13 +356,9 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 		d.Groups = append(d.Groups, gd)
 	}
 	for _, c := range res.Checks {
-		details := c.Details
-		if details == nil {
-			details = []string{}
-		}
 		d.Scan.Checks = append(d.Scan.Checks, checkDoc{
 			ID: c.ID, Name: c.Name, Status: string(c.Status),
-			EffectiveStatus: string(c.EffectiveStatus), Summary: c.Summary, Details: details,
+			EffectiveStatus: string(c.EffectiveStatus), Summary: c.Summary, Details: clipDetails(c.Details),
 		})
 	}
 	// Summing host bytes can overflow after the caller already scanned.
@@ -373,19 +370,26 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 	return d
 }
 
+func clipDetails(in []string) []string {
+	if len(in) == 0 {
+		return []string{}
+	}
+	out := make([]string, len(in))
+	for i, s := range in {
+		out[i] = fileerr.String(s)
+	}
+	return out
+}
+
 func scanDocument(res scan.Result) scanDoc {
 	d := scanDoc{
 		Strict: res.Strict, Overall: string(res.Overall), Disclaimer: res.Disclaimer,
 		Counts: res.Count(), Checks: []checkDoc{},
 	}
 	for _, c := range res.Checks {
-		details := c.Details
-		if details == nil {
-			details = []string{}
-		}
 		d.Checks = append(d.Checks, checkDoc{
 			ID: c.ID, Name: c.Name, Status: string(c.Status),
-			EffectiveStatus: string(c.EffectiveStatus), Summary: c.Summary, Details: details,
+			EffectiveStatus: string(c.EffectiveStatus), Summary: c.Summary, Details: clipDetails(c.Details),
 		})
 	}
 	return d
@@ -473,18 +477,11 @@ func configIntPtr(m *model.Model, keys ...string) *int {
 }
 
 func asFloat(v any) float64 {
-	switch n := v.(type) {
-	case float64:
-		return n
-	case int:
-		return float64(n)
-	case json.Number:
-		f, _ := n.Float64()
-		return f
-	default:
-		f, _ := strconv.ParseFloat(fmt.Sprint(v), 64)
-		return f
+	f, ok := jsonx.FitFloat(v)
+	if !ok {
+		return 0
 	}
+	return f
 }
 
 func layerTypeDocs(m *model.Model) []layerTypeDoc {

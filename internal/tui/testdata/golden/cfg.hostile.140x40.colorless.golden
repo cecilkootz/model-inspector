@@ -1,0 +1,40 @@
+model-inspector  1 Identity [2 Config] 3 Layers 4 Scan ✗1                                                   ? keys   : commands   m mouse on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  KEY FIELDS  1 groups · ⏎ jumps to the tree                 [ CONFIG.JSON ]  tree · 7 nodes                                         r raw  
+  TEXT                                                       config.json                                                                    
+  >model_type      qwen4_exp                                 >▾ config.json {6}                                                             
+                                                              ├─ model_type      : "qwen4_exp"                                              
+                                                              ├─ "esc<U+001B>key": "has<U+001B>esc"                                         
+                                                              ├─ bidi            : "a<U+202E>b"                                             
+                                                              ├─ zw              : "a<U+200B>b"                                             
+                                                              ├─ "dotted.key"    : 1                                                        
+                                                              └─ "quote"k"       : "x<U+003C>y"                                             
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                           VALUE                                                                            
+                                                           .                                                                                
+                                                           {6}      y path · Y value                                                        
+                                                                                                                                            
+CONFIG · TREE │ /model │ ←→ fold │ ␣ toggle │ / search │ y/Y copy │ ? keys            safetensors │ 186 B │ bf16 │ ✗ 1 fail │ – headers-only

@@ -70,8 +70,47 @@ var TreeDummy = Context{
 	},
 }
 
+// ConfigFields is the Key fields pane. Arrow keys stay global tab switches.
+var ConfigFields = Context{
+	Name: "config.fields",
+	Bindings: []Bind{
+		{Keys: []string{"/"}, HelpKey: "/", Help: "search", Hint: "/ search"},
+		{Keys: []string{"y"}, HelpKey: "y", Help: "copy path"},
+		{Keys: []string{"Y"}, HelpKey: "Y", Help: "copy value"},
+	},
+}
+
+// ConfigTree is the config tree. It may shadow only left, right, h, and l.
+var ConfigTree = Context{
+	Name:    "config.tree",
+	Tree:    true,
+	Shadows: []string{"left", "right", "h", "l"},
+	Bindings: []Bind{
+		{Keys: []string{"right", "l"}, HelpKey: "→/l", Help: "expand", Hint: "←→ fold"},
+		{Keys: []string{"left", "h"}, HelpKey: "←/h", Help: "collapse"},
+		{Keys: []string{"space"}, HelpKey: "space", Help: "toggle", Hint: "␣ toggle"},
+		{Keys: []string{"p"}, HelpKey: "p", Help: "parent"},
+		{Keys: []string{"e"}, HelpKey: "e", Help: "expand all"},
+		{Keys: []string{"E"}, HelpKey: "E", Help: "collapse all"},
+		{Keys: []string{"+"}, HelpKey: "+", Help: "fold level"},
+		{Keys: []string{"-"}, HelpKey: "-", Help: "fold level"},
+		{Keys: []string{"/"}, HelpKey: "/", Help: "search", Hint: "/ search"},
+		{Keys: []string{"n"}, HelpKey: "n", Help: "next match"},
+		{Keys: []string{"N"}, HelpKey: "N", Help: "prev match"},
+		{Keys: []string{"y"}, HelpKey: "y", Help: "copy path", Hint: "y/Y copy"},
+		{Keys: []string{"Y"}, HelpKey: "Y", Help: "copy value"},
+		{Keys: []string{"r"}, HelpKey: "r", Help: "raw", Hint: "r raw"},
+		{Keys: []string{"b", "u"}, HelpKey: "b/u", Help: "page up"},
+		{Keys: []string{"f", "d"}, HelpKey: "f/d", Help: "page down"},
+	},
+}
+
+// ConfigSearch is the search input. Tab stays global so the handler can
+// consume it while the input is focused; it is not registered here.
+var ConfigSearch = Context{Name: "config.search"}
+
 // Contexts is every context the conflict test walks.
-var Contexts = []Context{Identity, TreeDummy}
+var Contexts = []Context{Identity, TreeDummy, ConfigFields, ConfigTree, ConfigSearch}
 
 // HintLine is the status-bar hint for a context. Tree contexts say fold.
 func HintLine(tree bool) string {

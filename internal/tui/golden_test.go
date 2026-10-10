@@ -86,7 +86,7 @@ func TestGolden(t *testing.T) {
 		spec{name: "layers.80x24.colorless.down5", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"3", "j", "j", "j", "j", "j"}, want: []string{"3 Layers", ">hyper_connec"}},
 		spec{name: "code.80x24.colorless", m: code, w: 80, h: 24, profile: "colorless", want: []string{"!"}},
 		spec{name: "toosmall.59x15.colorless", m: tiny, w: 59, h: 15, profile: "colorless", want: []string{"needs at least 60×16", "59×15"}},
-		spec{name: "config.80x24.colorless", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"2"}, want: []string{"model_type", "Key fields"}},
+		spec{name: "config.80x24.colorless", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"2"}, want: []string{"model_type", "KEY FIELDS"}},
 	)
 
 	for _, c := range cases {
@@ -223,7 +223,7 @@ func renderGolden(t *testing.T, m *model.Model, w, h int, profile string, keys [
 	var x tea.Model = ui
 	x, _ = x.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	for _, k := range keys {
-		x, _ = x.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
+		x, _ = x.Update(keyMsg(k))
 	}
 	// View calls configure, which would force ASCII if NO_COLOR is set.
 	// Re-apply the profile for the colour paths after that.
@@ -239,6 +239,41 @@ func renderGolden(t *testing.T, m *model.Model, w, h int, profile string, keys [
 		}
 	}
 	return x.View()
+}
+
+func keyMsg(k string) tea.Msg {
+	switch k {
+	case "enter":
+		return tea.KeyMsg{Type: tea.KeyEnter}
+	case "tab":
+		return tea.KeyMsg{Type: tea.KeyTab}
+	case "shift+tab":
+		return tea.KeyMsg{Type: tea.KeyShiftTab}
+	case "esc":
+		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "up":
+		return tea.KeyMsg{Type: tea.KeyUp}
+	case "down":
+		return tea.KeyMsg{Type: tea.KeyDown}
+	case "left":
+		return tea.KeyMsg{Type: tea.KeyLeft}
+	case "right":
+		return tea.KeyMsg{Type: tea.KeyRight}
+	case "space":
+		return tea.KeyMsg{Type: tea.KeySpace}
+	case "backspace":
+		return tea.KeyMsg{Type: tea.KeyBackspace}
+	case "pgup":
+		return tea.KeyMsg{Type: tea.KeyPgUp}
+	case "pgdown":
+		return tea.KeyMsg{Type: tea.KeyPgDown}
+	case "home":
+		return tea.KeyMsg{Type: tea.KeyHome}
+	case "end":
+		return tea.KeyMsg{Type: tea.KeyEnd}
+	default:
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
+	}
 }
 
 func firstDiff(want, got string) string {
