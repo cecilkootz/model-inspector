@@ -1,0 +1,16 @@
+model-inspector  [1 Identity] 2 Config 3 Layers 4 Scan ✓    
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ╭──────────────────────────────────────────────────╮    
+    │ COMMANDS                                        │     
+    │                                                 │     
+    │ 3 of 13                                         │     
+    │ › lay                                           │     
+    │                                                 │     
+    │ ▌ Layers: sort by size  in Layers  s            │     
+    │   Layers: filter by type  in Layers  /          │     
+    │   Go to Layers  3                               │     
+    │                                                 │     
+    │ up/down select · enter run · esc close          │     
+    │                                                 │     
+    ╰──────────────────────────────────────────────────╯    
+COMMAND 6.07 KiB │ q4 g32 │ ✓ structure 5/8 │ – headers-only

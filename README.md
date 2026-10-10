@@ -175,28 +175,40 @@ The CLI does not use it for user input; it uses `hfcache.ResolveTarget`.
 
 ### Keys
 
-`tab` / `shift+tab`, `←` / `→`, `h` / `l`, or `1`-`4` switch screens.
+`tab` / `shift+tab` or `1`-`4` switch screens. In a tree, `←` / `→` and
+`h` / `l` fold a row; on every other screen they switch tabs.
 `↑` / `↓` scroll or select. On Layers, `enter` opens a group and `esc` or
-backspace goes back. `esc` never quits: it closes help, then leaves a
-drill-down, then does nothing. `?` opens the key list; `q` quits.
-`ctrl+c` always quits. On Scan, `c` shows a footer notice that code and
-pickle contents arrive in a later version. Filter, sort, and raw-JSON keys
-are listed in help as later and do nothing. The window must be at least
-60×16; below that the screen says so and only `q` works.
+backspace goes back. `esc` never quits: it closes help, the command palette,
+or a disclosure, then leaves a drill-down. `?` opens the key list. `q`
+closes help when help is open, and otherwise quits. `ctrl+c` always quits.
+`:` or `ctrl+k` opens the command palette. `w` moves focus between panes,
+`<` and `>` resize the split, `z` zooms the focused pane, and `m` toggles
+the mouse. The mouse is on unless you pass `--no-mouse` or set
+`MODEL_INSPECTOR_MOUSE=0`. Hold Shift to select text while the mouse is on.
+On Scan, `c` asks before reading file contents. That reader is not in this
+version, and the status line says code and pickle contents arrive in a
+later version. The window must be at least 60×16; below that the screen
+says so and only `q` works.
+
+`MODEL_INSPECTOR_THEME` is `dark` or `light`. `MODEL_INSPECTOR_MOTION=0`
+skips the short storage fill-in. `NO_COLOR` or `--no-color` drops colour.
 
 ### Screens
 
-The header is the model name, format, on-disk size, estimated params, and
-quantization. A missing or unreadable shard sets the same incomplete flag
-as a bad config: the header, the text summary, JSON `partial`, and the
-inspect exit code all follow it.
+The first row is the wordmark and the tabs. The last row is the status
+bar: mode, model name, hints, format, size, quant, scan verdict, and
+whether the read is headers-only. A missing or unreadable shard sets the
+same incomplete flag as a bad config: the status line, the text summary,
+JSON `partial`, and the inspect exit code all follow it.
 GGUF replaces the format and params with "not supported yet". The active
-tab is bracketed. The Scan tab badge follows the overall result.
+tab is a filled pill, and bracketed when colour is off. The Scan tab badge
+follows the overall result.
 
 1. **Identity**: repo and revision (or the directory, with an explicit
-   empty revision), architecture, MoE, on-disk size, estimated params,
-   quantization, a storage bar, a weights-only memory estimate, callouts,
-   then the dtype table. A lookup-table memory line appears when those
+   empty revision), architecture when `config.json` has `model_type`, MoE,
+   on-disk size, estimated params, quantization, a storage bar, callouts,
+   a layer heatmap on one shared log2 scale, and a weights-only memory
+   estimate. A lookup-table memory line appears when those
    tables are at least 1 GiB. A PLE n-gram table split across
    `.shard_N` weights (plus each piece's scales and biases) is one logical
    table for that line and for the n-gram callout. Pieces must share a dtype

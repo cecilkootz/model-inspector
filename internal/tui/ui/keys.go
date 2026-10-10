@@ -1,0 +1,151 @@
+package ui
+
+import "github.com/charmbracelet/bubbles/key"
+
+// Bind is one key binding in the registry.
+type Bind struct {
+	Keys    []string
+	HelpKey string
+	Help    string
+	Hint    string
+	Context string // empty means global
+}
+
+// Context is a screen or overlay keymap.
+type Context struct {
+	Name     string
+	Tree     bool
+	Shadows  []string
+	Bindings []Bind
+}
+
+// Binding converts a Bind into a bubbles key binding.
+func (b Bind) Binding() key.Binding {
+	return key.NewBinding(key.WithKeys(b.Keys...), key.WithHelp(b.HelpKey, b.Help))
+}
+
+// Global bindings apply on every screen except where a context shadows them.
+var Global = []Bind{
+	{Keys: []string{"1"}, HelpKey: "1", Help: "Identity"},
+	{Keys: []string{"2"}, HelpKey: "2", Help: "Config"},
+	{Keys: []string{"3"}, HelpKey: "3", Help: "Layers"},
+	{Keys: []string{"4"}, HelpKey: "4", Help: "Scan"},
+	{Keys: []string{"tab"}, HelpKey: "tab", Help: "next tab", Hint: "tab"},
+	{Keys: []string{"shift+tab"}, HelpKey: "S-tab", Help: "prev tab"},
+	{Keys: []string{"right", "l"}, HelpKey: "→/l", Help: "next tab", Hint: "←→ tabs"},
+	{Keys: []string{"left", "h"}, HelpKey: "←/h", Help: "prev tab"},
+	{Keys: []string{"up", "k"}, HelpKey: "↑/k", Help: "move", Hint: "↑↓ scroll"},
+	{Keys: []string{"down", "j"}, HelpKey: "↓/j", Help: "move"},
+	{Keys: []string{"pgup"}, HelpKey: "pgup", Help: "page"},
+	{Keys: []string{"pgdown"}, HelpKey: "pgdn", Help: "page"},
+	{Keys: []string{"home", "g"}, HelpKey: "g", Help: "top"},
+	{Keys: []string{"end", "G"}, HelpKey: "G", Help: "bottom"},
+	{Keys: []string{"enter"}, HelpKey: "enter", Help: "open"},
+	{Keys: []string{"esc"}, HelpKey: "esc", Help: "back"},
+	{Keys: []string{"backspace"}, HelpKey: "bksp", Help: "back"},
+	{Keys: []string{"?"}, HelpKey: "?", Help: "help", Hint: "? keys"},
+	{Keys: []string{"q"}, HelpKey: "q", Help: "quit"},
+	{Keys: []string{"ctrl+c"}, HelpKey: "ctrl+c", Help: "quit"},
+	{Keys: []string{":"}, HelpKey: ":", Help: "commands", Hint: ": commands"},
+	{Keys: []string{"ctrl+k"}, HelpKey: "ctrl+k", Help: "commands"},
+	{Keys: []string{"w"}, HelpKey: "w", Help: "focus other pane"},
+	{Keys: []string{"<"}, HelpKey: "<", Help: "shrink split"},
+	{Keys: []string{">"}, HelpKey: ">", Help: "grow split"},
+	{Keys: []string{"z"}, HelpKey: "z", Help: "zoom pane"},
+	{Keys: []string{"m"}, HelpKey: "m", Help: "mouse", Hint: "m mouse"},
+}
+
+// Identity context adds no extra keys.
+var Identity = Context{Name: "identity"}
+
+// TreeDummy is the sanctioned tree context used until Config and Layers
+// grow real trees. It may shadow only left, right, h, and l.
+var TreeDummy = Context{
+	Name:    "tree-dummy",
+	Tree:    true,
+	Shadows: []string{"left", "right", "h", "l"},
+	Bindings: []Bind{
+		{Keys: []string{"right", "l"}, HelpKey: "→/l", Help: "expand", Hint: "←→ fold"},
+		{Keys: []string{"left", "h"}, HelpKey: "←/h", Help: "collapse"},
+	},
+}
+
+// Contexts is every context the conflict test walks.
+var Contexts = []Context{Identity, TreeDummy}
+
+// HintLine is the status-bar hint for a context. Tree contexts say fold.
+func HintLine(tree bool) string {
+	up, side := "↑↓", "←→"
+	if !UTF8() {
+		up, side = "up/down", "<->"
+	}
+	if tree {
+		return up + " scroll" + SepWord() + side + " fold" + SepWord() + "? keys"
+	}
+	return up + " scroll" + SepWord() + side + " tabs" + SepWord() + "? keys"
+}
+
+// ActiveKeys returns global keys plus context keys, dropping shadowed globals.
+func ActiveKeys(ctx Context) []string {
+	shadow := map[string]bool{}
+	if ctx.Tree {
+		for _, s := range ctx.Shadows {
+			shadow[s] = true
+		}
+	}
+	var out []string
+	seen := map[string]bool{}
+	add := func(k string) {
+		if seen[k] {
+			return
+		}
+		seen[k] = true
+		out = append(out, k)
+	}
+	for _, b := range Global {
+		for _, k := range b.Keys {
+			if shadow[k] {
+				continue
+			}
+			add(k)
+		}
+	}
+	for _, b := range ctx.Bindings {
+		for _, k := range b.Keys {
+			add(k)
+		}
+	}
+	return out
+}
+
+// DuplicateKeys returns keys bound more than once in global ∪ ctx.
+// Shadowed keys are taken from the context only.
+func DuplicateKeys(ctx Context) []string {
+	shadow := map[string]bool{}
+	if ctx.Tree {
+		for _, s := range ctx.Shadows {
+			shadow[s] = true
+		}
+	}
+	count := map[string]int{}
+	for _, b := range Global {
+		for _, k := range b.Keys {
+			if shadow[k] {
+				continue
+			}
+			count[k]++
+		}
+	}
+	for _, b := range ctx.Bindings {
+		for _, k := range b.Keys {
+			count[k]++
+		}
+	}
+	var dups []string
+	for k, n := range count {
+		if n > 1 {
+			dups = append(dups, k)
+		}
+	}
+	return dups
+}
