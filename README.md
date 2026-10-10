@@ -43,19 +43,39 @@ go install ./cmd/model-inspector
 GNU make targets (on macOS, `gmake` when `/usr/bin/make` is BSD make):
 
 ```sh
-make build   # bin/model-inspector; injects version and commit
-make test    # go vet ./... && go test -race -count=1 ./...
-make clean   # remove bin/
+make build   # bin/model-inspector
+make test    # override check, go vet ./..., go test -race -count=1 ./...
+make clean   # remove BIN, bin/, and coverage.out
 make fuzz    # every fuzz target, for FUZZTIME (default 10s)
 ```
 
-Bare `make` runs `test` (vet and race tests). That is the historical
-default, and it stays the default.
+Bare `make` runs `test`.
 
-`make build` links `internal/version.Version` (the `0.1.0` string in that
-package, or `VERSION=` on the command line) and `internal/version.Commit`
-(`git rev-parse --short HEAD`, or `unknown` when git cannot name a commit).
-`go install` does not set the commit, so `--version` then prints `unknown`.
+`make build` leaves the version at `internal/version.Version` (`0.1.0`) and
+does not pass `-ldflags` unless `VERSION` or `COMMIT` is set. The commit
+printed by `--version` comes from the Go toolchain VCS stamp
+(`runtime/debug.ReadBuildInfo`: full `vcs.revision`, with `-dirty` appended
+when `vcs.modified` is true). `go install ./cmd/model-inspector` uses that
+same stamp. A binary with no VCS stamp prints `unknown`. `--version` runs
+the version and the commit through the terminal sanitizer.
+
+`VERSION`, `COMMIT`, `FUZZTIME`, and `BIN` may be set in the environment or
+on the make command line. A command-line assignment wins. `VERSION` and
+`COMMIT` must match `^[0-9A-Za-z.+_-]+$`; any other value fails the build
+before the linker runs. `FUZZTIME` uses that same character set.
+
+Go's default `-buildvcs=auto` records the git repository that contains the
+main module, the current directory, and the main package. A checkout with
+its own `.git` reports that revision, including when it sits inside another
+repository. A tree with no `.git` of its own that lives inside another
+repository reports the outer repository's revision; `-buildvcs=true` still
+stamps that outer revision. A tree that is not inside any repository, or a
+build with `-buildvcs=false`, prints `unknown`.
+
+`BIN` defaults to `bin/model-inspector` (paths with spaces are quoted).
+`make clean` removes `coverage.out`, that binary when the path stays inside
+this repository, and a real `bin/` directory. An absolute `BIN`, a `BIN`
+containing `..`, or a path that resolves outside the repository is refused.
 `bin/` is gitignored. Recipes call `go` on `PATH` and honor
 `GOTOOLCHAIN=local` (no toolchain download).
 
@@ -78,7 +98,7 @@ cd ~/src/model-inspector
 make          # same as make test
 make build    # bin/model-inspector
 make test
-make clean
+make clean    # BIN, bin/, and coverage.out
 make fuzz     # FUZZTIME=10s by default; make fuzz FUZZTIME=30s
 ```
 
