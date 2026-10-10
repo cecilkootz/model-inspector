@@ -260,7 +260,7 @@ fuzz:
 	fi; \
 	while read -r pkg name; do \
 		printf 'fuzz %s %s (%s)\n' "$$pkg" "$$name" "$(FUZZTIME_RAW)"; \
-		go test "$$pkg" -count=1 -run '^$$' -fuzz "^$$name$$" -fuzztime "$(FUZZTIME_RAW)" || exit 1; \
+		go test "$$pkg" -count=1 -run '^$$' -fuzz "^$$name$$" -fuzztime "$(FUZZTIME_RAW)" -fuzzminimizetime=2s || exit 1; \
 	done < "$$tmp"
 
 # Reject VERSION values that would be shell- or linker-evaluated if they

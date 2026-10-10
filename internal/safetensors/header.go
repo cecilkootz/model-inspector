@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
 )
 
@@ -145,6 +146,11 @@ func readerLen(r io.Reader) (int64, bool) {
 }
 
 func read(r io.Reader, size int64) (*Header, error) {
+	h, err := readHeader(r, size)
+	return h, fileerr.Error(err)
+}
+
+func readHeader(r io.Reader, size int64) (*Header, error) {
 	var lenBuf [8]byte
 	if _, err := io.ReadFull(r, lenBuf[:]); err != nil {
 		return nil, fmt.Errorf("reading header length: %w", err)
@@ -177,8 +183,14 @@ func read(r io.Reader, size int64) (*Header, error) {
 // Parse decodes the JSON portion of a header.
 // It rejects null, {}, duplicate keys, missing dtype or shape, negative
 // dimensions, overflowing shapes, and headers that declare too many tensors
-// or dimensions.
+// or dimensions. Error text copied from the file is capped: a huge number
+// nested in shape or data_offsets is not quoted in full.
 func Parse(js []byte) (*Header, error) {
+	h, err := parseHeader(js)
+	return h, fileerr.Error(err)
+}
+
+func parseHeader(js []byte) (*Header, error) {
 	// A safetensors header is one JSON object. Reject anything else before
 	// encoding/json. A bare number is not an object, and the decoder's error
 	// for one quotes the entire literal: a megabyte of digits becomes a
