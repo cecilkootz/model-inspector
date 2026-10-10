@@ -151,30 +151,42 @@ func containsText(items []string, want string) bool {
 	return false
 }
 
-// FuzzLayoutStructured builds a header from two tensor specs, so Parse
+// FuzzLayoutStructured builds a header from three tensor specs, so Parse
 // accepts most inputs and CheckLayout sees gaps, overlaps, and size
-// mismatches instead of rejected JSON.
+// mismatches instead of rejected JSON. The third spec is what exposes a
+// covered end that is not the max: [0,8] then [2,4] then [4,8] overlaps
+// the outer span only while that end stays 8.
 func FuzzLayoutStructured(f *testing.F) {
-	f.Add("a", "b", byte(0), int64(0), int64(4), int64(4), int64(8), int64(8))
-	f.Add("a", "b", byte(0), int64(0), int64(4), int64(8), int64(12), int64(12))
+	f.Add("a", "b", "c", byte(0), int64(0), int64(4), int64(4), int64(8), int64(-1), int64(-1), int64(8))
+	f.Add("a", "b", "c", byte(0), int64(0), int64(4), int64(8), int64(12), int64(-1), int64(-1), int64(12))
 	// One byte past the previous end is a gap. start == prevEnd is not.
-	f.Add("a", "b", byte(0), int64(0), int64(4), int64(5), int64(9), int64(9))
-	f.Add("a", "b", byte(0), int64(0), int64(4), int64(2), int64(6), int64(6))
-	f.Add("a", "b", byte(0), int64(4), int64(8), int64(8), int64(12), int64(12))
-	f.Fuzz(func(t *testing.T, nameA, nameB string, kind byte, a0, a1, b0, b1, dataLen int64) {
+	f.Add("a", "b", "c", byte(0), int64(0), int64(4), int64(5), int64(9), int64(-1), int64(-1), int64(9))
+	f.Add("a", "b", "c", byte(0), int64(0), int64(4), int64(2), int64(6), int64(-1), int64(-1), int64(6))
+	f.Add("a", "b", "c", byte(0), int64(4), int64(8), int64(8), int64(12), int64(-1), int64(-1), int64(12))
+	// [0,8] [2,4] [4,8]. The third range overlaps only if prevEnd stayed at 8.
+	f.Add("a", "b", "c", byte(0), int64(0), int64(8), int64(2), int64(4), int64(4), int64(8), int64(8))
+	f.Fuzz(func(t *testing.T, nameA, nameB, nameC string, kind byte, a0, a1, b0, b1, c0, c1, dataLen int64) {
 		nameA = clipFuzzName(nameA)
 		nameB = clipFuzzName(nameB)
+		nameC = clipFuzzName(nameC)
 		if nameA == "" {
 			nameA = "a"
 		}
 		if nameB == "" || nameB == nameA {
 			nameB = nameA + "2"
 		}
+		if nameC == "" || nameC == nameA || nameC == nameB {
+			nameC = nameA + "3"
+			if nameC == nameB {
+				nameC += "x"
+			}
+		}
 		dtypes := [...]string{"U8", "U8", "F32", "BF16", "BOOL"}
 		dt := dtypes[int(kind)%len(dtypes)]
 		raw, err := json.Marshal(map[string]any{
 			nameA: tensorSpec(dt, a0, a1),
 			nameB: tensorSpec(dt, b0, b1),
+			nameC: tensorSpec(dt, c0, c1),
 		})
 		if err != nil {
 			return
@@ -190,32 +202,35 @@ func FuzzLayoutStructured(f *testing.F) {
 		if dataLen < 0 {
 			return
 		}
-		wantGap, wantOverlap, wantStart := expectLayout(nameA, a0, a1, nameB, b0, b1)
-		gotGap := containsText(problems, "gap before")
-		gotOverlap := containsText(problems, "overlaps")
-		gotStart := containsText(problems, "want 0")
-		if gotGap != wantGap || gotOverlap != wantOverlap || gotStart != wantStart {
-			t.Fatalf("a=%s [%d,%d] b=%s [%d,%d] data=%d got gap=%v overlap=%v start=%v want gap=%v overlap=%v start=%v problems=%v",
-				nameA, a0, a1, nameB, b0, b1, dataLen, gotGap, gotOverlap, gotStart, wantGap, wantOverlap, wantStart, problems)
+		wantGaps, wantOverlaps, wantStart := expectLayout(
+			layoutSeg{nameA, a0, a1},
+			layoutSeg{nameB, b0, b1},
+			layoutSeg{nameC, c0, c1},
+		)
+		if !layoutMatches(problems, wantGaps, wantOverlaps, wantStart) {
+			t.Fatalf("a=%s [%d,%d] b=%s [%d,%d] c=%s [%d,%d] data=%d problems=%v want gaps=%v overlaps=%v start=%v",
+				nameA, a0, a1, nameB, b0, b1, nameC, c0, c1, dataLen, problems, wantGaps, wantOverlaps, wantStart)
 		}
 	})
 }
 
-// expectLayout is the gap, overlap, and start-at-0 result for two ranges.
+type layoutSeg struct {
+	name       string
+	start, end int64
+}
+
+// expectLayout is the gap, overlap, and start-at-0 result for the ranges.
 // Invalid ranges (start < 0 or end < start) are skipped. The rest are
 // ordered by start, then name. Adjacent ranges (next start == previous
-// end) are neither a gap nor an overlap.
-func expectLayout(nameA string, a0, a1 int64, nameB string, b0, b1 int64) (gap, overlap, start bool) {
-	type seg struct {
-		name       string
-		start, end int64
-	}
-	var valid []seg
-	if a0 >= 0 && a1 >= a0 {
-		valid = append(valid, seg{nameA, a0, a1})
-	}
-	if b0 >= 0 && b1 >= b0 {
-		valid = append(valid, seg{nameB, b0, b1})
+// end) are neither a gap nor an overlap. The covered end is the max end,
+// so a later range still overlaps an outer span after a contained one.
+// Each overlap is "name overlaps prevName"; each gap is the tensor name.
+func expectLayout(segs ...layoutSeg) (gaps, overlaps []string, start bool) {
+	var valid []layoutSeg
+	for _, s := range segs {
+		if s.start >= 0 && s.end >= s.start {
+			valid = append(valid, s)
+		}
 	}
 	sort.Slice(valid, func(i, j int) bool {
 		if valid[i].start == valid[j].start {
@@ -224,24 +239,58 @@ func expectLayout(nameA string, a0, a1 int64, nameB string, b0, b1 int64) (gap, 
 		return valid[i].start < valid[j].start
 	})
 	if len(valid) == 0 {
-		return false, false, false
+		return nil, nil, false
 	}
 	if valid[0].start != 0 {
 		start = true
 	}
 	prevEnd := valid[0].end
+	prevName := valid[0].name
 	for _, s := range valid[1:] {
 		switch {
 		case s.start > prevEnd:
-			gap = true
+			gaps = append(gaps, s.name)
 		case s.start < prevEnd:
-			overlap = true
+			overlaps = append(overlaps, s.name+" overlaps "+prevName)
 		}
 		if s.end > prevEnd {
-			prevEnd = s.end
+			prevEnd, prevName = s.end, s.name
 		}
 	}
-	return gap, overlap, start
+	return gaps, overlaps, start
+}
+
+// layoutMatches requires each expected gap and overlap, not merely that
+// some overlap exists. A contained range still overlaps the outer one
+// before prevEnd is updated, so the following range is the witness that
+// prevEnd stayed at the max.
+func layoutMatches(problems, wantGaps, wantOverlaps []string, wantStart bool) bool {
+	var gotGaps, gotOverlaps int
+	gotStart := false
+	for _, p := range problems {
+		switch {
+		case strings.Contains(p, "gap before"):
+			gotGaps++
+		case strings.Contains(p, " overlaps "):
+			gotOverlaps++
+		case strings.Contains(p, "want 0"):
+			gotStart = true
+		}
+	}
+	if gotStart != wantStart || gotGaps != len(wantGaps) || gotOverlaps != len(wantOverlaps) {
+		return false
+	}
+	for _, name := range wantGaps {
+		if !containsText(problems, "/"+name+": gap before") {
+			return false
+		}
+	}
+	for _, frag := range wantOverlaps {
+		if !containsText(problems, "/"+frag) {
+			return false
+		}
+	}
+	return true
 }
 
 func fuzzEngineOn() bool {

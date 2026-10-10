@@ -95,6 +95,10 @@ func maxTensorHeader() []byte {
 }
 
 func TestParseAcceptsMaxTensors(t *testing.T) {
+	if testing.Short() {
+		t.Skip("200000-tensor header")
+	}
+	t.Parallel()
 	h, err := Parse(maxTensorHeader())
 	if err != nil {
 		t.Fatal(err)
@@ -105,6 +109,10 @@ func TestParseAcceptsMaxTensors(t *testing.T) {
 }
 
 func TestParseRejectsTooManyTensors(t *testing.T) {
+	if testing.Short() {
+		t.Skip("200000-tensor header")
+	}
+	t.Parallel()
 	hdr := maxTensorHeader()
 	const extra = `,"x":{"dtype":"U8","shape":[],"data_offsets":[0,0]}`
 	plus := make([]byte, 0, len(hdr)+len(extra))
