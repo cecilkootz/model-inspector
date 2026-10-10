@@ -19,12 +19,30 @@ index JSON, configs, and HF refs are treated as hostile input. It only:
 - reads small JSON files (`config.json`, `*.safetensors.index.json`), capped
   at 64 MiB, and HF `refs/` files, capped at 1 KiB.
 
-File-derived text shown in the TUI or printed as text is sanitized (controls,
-bidi overrides, and zero-width characters become visible tokens). `--json`
-keeps the parsed values for machines.
+File-derived text shown in the TUI or printed as text is sanitized. Controls,
+bidi overrides, Unicode format characters, and other invisible characters
+become `<U+XXXX>` tokens. A literal `<` is tokenized too, so the characters
+`<U+001B>` in a file cannot impersonate an ESC. The cap is 4096 runes of
+sanitized text (plus one ellipsis rune when the value is truncated), not
+4096 bytes. `--json` keeps parsed values, and encodes C1, bidi, and other
+invisible characters in those strings as `\uXXXX` escapes.
+
+Text output and the TUI scan screen state that 1 of 4 checks is implemented.
 
 It never writes into the Hugging Face cache. Inspecting a ~106 GiB model takes
 ~15 ms and ~11 MB RSS.
+
+## Install
+
+```sh
+go env -w GOPRIVATE=origin.cursor.com
+go install origin.cursor.com/cecilkootz/model-inspector/cmd/model-inspector@latest
+```
+
+`go install` from `origin.cursor.com` needs `GOPRIVATE=origin.cursor.com` and
+git credentials for that host. An SSH remote works
+(`git@origin.cursor.com:cecilkootz/model-inspector.git`). The module path
+stays `origin.cursor.com/cecilkootz/model-inspector`.
 
 ## Build
 
@@ -77,7 +95,8 @@ Keys: `tab`/`shift+tab`, `←`/`→` or `1`-`4` switch screens; `↑`/`↓` scro
    tensor count, params, bytes, whether routed experts are present. Enter
    shows each tensor's name, dtype, shape, bytes, and role (`q4`, `qscales`,
    `qbiases`).
-4. **Scan**: structural checks. **This is not a malware scan.** Implemented:
+4. **Scan**: structural checks. **This is not a malware scan.** 1 of 4 checks
+   is implemented. Implemented:
    an unreadable index fails the check; a missing or empty weight_map fails
    it without being called unreadable; every tensor in the index exists in
    the referenced shard header; shard names must be local files; every
@@ -88,6 +107,10 @@ Keys: `tab`/`shift+tab`, `←`/`→` or `1`-`4` switch screens; `↑`/`↓` scro
 
 "Params" counts MLX packed quantized weights at their dequantized size and
 excludes quantization scales/biases; "stored elements" is the raw count.
+
+A relative model path is resolved against the process working directory.
+An entry on that relative path can shadow the directory you meant. That
+case is not handled in this PR; UX PR1's `--path` / `--repo` flags will own it.
 
 ## Layout
 

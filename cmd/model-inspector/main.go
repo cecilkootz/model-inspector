@@ -3,9 +3,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -34,9 +36,14 @@ Flags:
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "model-inspector:", err)
+		writeError(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// writeError prints err to w with file-derived controls tokenized.
+func writeError(w io.Writer, err error) {
+	fmt.Fprintln(w, "model-inspector:", sanitize.From(err.Error()))
 }
 
 type options struct {
@@ -73,9 +80,16 @@ func run(args []string) error {
 	}
 	s := buildSummary(m, res, time.Since(start))
 	if opts.json {
-		enc := json.NewEncoder(os.Stdout)
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
 		enc.SetIndent("", "  ")
-		return enc.Encode(s)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(s); err != nil {
+			return err
+		}
+		// C0 is already \uXXXX. Escape C1, bidi, and other invisible runes too.
+		_, err := os.Stdout.Write(sanitize.EscapeJSON(buf.Bytes()))
+		return err
 	}
 	printText(s)
 	return nil
@@ -227,7 +241,9 @@ func printText(s summary) {
 	for _, g := range s.Layers.OtherGroups {
 		fmt.Printf("  %-10s %d tensors, %s\n", sanitize.From(g.Name).String()+":", g.Tensors, model.HumanBytes(g.Bytes))
 	}
-	fmt.Printf("  scan:     %s (%s)\n", s.Scan.Overall, s.Scan.Disclaimer)
+	fmt.Printf("  scan:     %s\n", s.Scan.Overall)
+	fmt.Printf("  checks:   %s\n", scan.ChecksImplemented)
+	fmt.Printf("  note:     %s\n", s.Scan.Disclaimer)
 	for _, w := range s.Warnings {
 		fmt.Printf("  warning:  %s\n", sanitize.From(w))
 	}

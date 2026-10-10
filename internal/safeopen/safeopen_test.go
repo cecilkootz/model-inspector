@@ -26,6 +26,23 @@ func TestReadAllExactAndOverCap(t *testing.T) {
 	}
 }
 
+func TestOpenRejectsSymlinkToDevice(t *testing.T) {
+	if _, err := os.Stat("/dev/zero"); err != nil {
+		t.Skip("/dev/zero not available")
+	}
+	link := filepath.Join(t.TempDir(), "z")
+	if err := os.Symlink("/dev/zero", link); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if _, err := Open(link, 64); err == nil {
+		t.Fatal("expected symlink to /dev/zero to be rejected")
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatalf("open took %s", time.Since(start))
+	}
+}
+
 func TestOpenRejectsDevice(t *testing.T) {
 	if _, err := os.Stat("/dev/zero"); err != nil {
 		t.Skip("/dev/zero not available")

@@ -90,12 +90,22 @@ func Resolve(arg, hubDir string) (Resolved, error) {
 		return Resolved{}, fmt.Errorf("repo %s: %w", id, err)
 	}
 	refsRoot := filepath.Join(repoReal, "refs")
-	refPath := filepath.Join(refsRoot, filepath.FromSlash(ref))
-	if !safeopen.Within(refsRoot, refPath) {
+	refsReal := refsRoot
+	if real, err := filepath.EvalSymlinks(refsRoot); err != nil {
+		if !os.IsNotExist(err) {
+			return Resolved{}, err
+		}
+	} else if !safeopen.Within(repoReal, real) {
+		return Resolved{}, fmt.Errorf("repo %s: refs directory escapes the repo", id)
+	} else {
+		refsReal = real
+	}
+	refPath := filepath.Join(refsReal, filepath.FromSlash(ref))
+	if !safeopen.Within(refsReal, refPath) {
 		return Resolved{}, fmt.Errorf("repo %s: ref %q escapes refs/", id, ref)
 	}
 
-	commit, err := readCommit(id, ref, rev, refPath)
+	commit, err := readCommit(id, ref, rev, refPath, refsReal)
 	if err != nil {
 		return Resolved{}, err
 	}
@@ -128,8 +138,10 @@ func Resolve(arg, hubDir string) (Resolved, error) {
 	return Resolved{Dir: realSnap, RepoID: id, Revision: commit, Ref: ref, FromCache: true}, nil
 }
 
-func readCommit(id, ref, rev, refPath string) (string, error) {
-	b, err := safeopen.ReadAll(refPath, MaxRefBytes)
+func readCommit(id, ref, rev, refPath, refsRoot string) (string, error) {
+	// refsRoot contains the opened descriptor. A symlink from refs/ to a
+	// regular file outside the repo is refused, not followed blindly.
+	b, err := safeopen.ReadAll(refPath, MaxRefBytes, refsRoot)
 	switch {
 	case err == nil:
 		commit := strings.TrimSpace(string(b))

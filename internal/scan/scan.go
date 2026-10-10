@@ -25,6 +25,10 @@ const (
 // Disclaimer is shown wherever scan results are displayed.
 const Disclaimer = "Structural integrity checks only. This is NOT a malware scan and does not prove the weights are safe or authentic."
 
+// ChecksImplemented is the plain count of checks that run today.
+// One check is implemented; three more are listed as planned.
+const ChecksImplemented = "1 of 4 checks is implemented."
+
 type Check struct {
 	ID      string   `json:"id"`
 	Name    string   `json:"name"`

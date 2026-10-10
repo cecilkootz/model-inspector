@@ -63,6 +63,9 @@ func readValue(dec *json.Decoder, depth int) (any, error) {
 }
 
 func readObject(dec *json.Decoder, depth int) (map[string]any, error) {
+	if depth > MaxDepth {
+		return nil, fmt.Errorf("JSON nesting exceeds %d", MaxDepth)
+	}
 	m := make(map[string]any)
 	for dec.More() {
 		tok, err := dec.Token()
@@ -93,6 +96,9 @@ func readObject(dec *json.Decoder, depth int) (map[string]any, error) {
 }
 
 func readArray(dec *json.Decoder, depth int) ([]any, error) {
+	if depth > MaxDepth {
+		return nil, fmt.Errorf("JSON nesting exceeds %d", MaxDepth)
+	}
 	var a []any
 	for dec.More() {
 		val, err := readValue(dec, depth)

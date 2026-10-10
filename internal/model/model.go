@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,7 +21,8 @@ const (
 	// maxSmallJSON caps config and index reads; anything bigger is refused.
 	maxSmallJSON = 64 << 20
 	// maxWalkDepth, maxFiles, and maxWarnings stop a hostile tree from
-	// turning a directory walk into unbounded work.
+	// turning a directory walk into unbounded work. maxFiles counts every
+	// visited entry, directories included.
 	maxWalkDepth = 8
 	maxFiles     = 20_000
 	maxWarnings  = 100
@@ -84,6 +86,10 @@ type Index struct {
 	File      string
 	TotalSize int64
 	WeightMap map[string]string
+	// badTotalSize is set when metadata.total_size was present but did not
+	// fit in a non-negative int64. TotalSize stays 0 so it is not displayed
+	// as a wrapped value.
+	badTotalSize bool
 }
 
 type QuantParams struct {
@@ -141,6 +147,7 @@ type Model struct {
 	Warnings []string
 
 	warningsTrunc bool
+	overflowed    bool
 }
 
 // Load inspects dir. Errors in individual shards are recorded, not fatal.
@@ -191,12 +198,23 @@ func (m *Model) scanFiles() error {
 	roots := m.allowedRoots()
 	nfiles := 0
 	return filepath.WalkDir(m.Dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+		rel := p
+		if r, relErr := filepath.Rel(m.Dir, p); relErr == nil {
+			rel = r
 		}
-		rel, relErr := filepath.Rel(m.Dir, p)
-		if relErr != nil {
-			return relErr
+		// A per-entry failure (unreadable directory, vanished path) is a
+		// warning that marks the inspection incomplete. It must not abort
+		// the load: the error string contains the raw path.
+		if err != nil {
+			m.Partial = true
+			m.warnf("%s: %v", rel, err)
+			return nil
+		}
+		nfiles++
+		if nfiles > maxFiles {
+			m.Partial = true
+			m.warnf("stopped after %d entries", maxFiles)
+			return fs.SkipAll
 		}
 		depth := 0
 		if rel != "." {
@@ -217,12 +235,6 @@ func (m *Model) scanFiles() error {
 			m.Partial = true
 			m.warnf("skipping %s past depth %d", rel, maxWalkDepth)
 			return nil
-		}
-		nfiles++
-		if nfiles > maxFiles {
-			m.Partial = true
-			m.warnf("stopped after %d files", maxFiles)
-			return fs.SkipAll
 		}
 		f := File{Name: rel, Symlink: d.Type()&fs.ModeSymlink != 0}
 		if f.Symlink {
@@ -250,7 +262,7 @@ func (m *Model) scanFiles() error {
 			m.warnf("%s: not a regular file", rel)
 		} else {
 			f.Size = st.Size()
-			m.TotalSize += st.Size()
+			m.acc(&m.TotalSize, st.Size())
 		}
 		m.Files = append(m.Files, f)
 		return nil
@@ -288,6 +300,9 @@ func (m *Model) loadConfig() {
 		if os.IsNotExist(err) {
 			return
 		}
+		// The file is there but cannot be read safely (device, FIFO, escape).
+		// That is an incomplete inspection, not a clean pass.
+		m.Partial = true
 		m.warnf("%v", err)
 		return
 	}
@@ -343,26 +358,25 @@ func parseQuant(cfg map[string]any) *Quantization {
 }
 
 func (m *Model) loadIndex() {
-	matches, err := filepath.Glob(filepath.Join(m.Dir, "*.safetensors.index.json"))
+	// Read the directory and suffix-match. filepath.Glob treats "[" in the
+	// directory name as a character class, so a folder like "Qwen3 [4bit]"
+	// would lose its index and a folder named "m[" would be a pattern error.
+	names, err := m.indexFileNames()
 	if err != nil {
+		m.Partial = true
 		m.IndexErr = err
 		m.warnf("%v", err)
 		return
 	}
-	if len(matches) == 0 {
+	if len(names) == 0 {
 		return
 	}
-	sort.Strings(matches)
-	if len(matches) > 1 {
-		names := make([]string, len(matches))
-		for i, p := range matches {
-			names[i] = filepath.Base(p)
-		}
+	if len(names) > 1 {
 		m.IndexErr = fmt.Errorf("%w: %s", ErrMultipleIndex, strings.Join(names, ", "))
 		m.warnf("%v", m.IndexErr)
 		return
 	}
-	p := matches[0]
+	p := filepath.Join(m.Dir, names[0])
 	b, err := safeopen.ReadAll(p, maxSmallJSON, m.allowedRoots()...)
 	if err != nil {
 		m.IndexErr = err
@@ -375,7 +389,34 @@ func (m *Model) loadIndex() {
 		m.warnf("%v", err)
 		return
 	}
+	if idx.badTotalSize {
+		m.warnf("%s: metadata.total_size is not a non-negative int64", idx.File)
+	}
 	m.Index = idx
+}
+
+// indexFileNames lists top-level *.safetensors.index.json names.
+// The conventional model.safetensors.index.json is included by the same
+// suffix check; more than one match is left for the caller to reject.
+// Names are not globbed.
+func (m *Model) indexFileNames() ([]string, error) {
+	entries, err := os.ReadDir(m.Dir)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".safetensors.index.json") {
+			continue
+		}
+		if !filepath.IsLocal(name) || strings.ContainsRune(name, os.PathSeparator) {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 func parseIndex(name string, b []byte) (*Index, error) {
@@ -409,10 +450,55 @@ func parseIndex(name string, b []byte) (*Index, error) {
 	idx := &Index{File: name, WeightMap: weight}
 	if meta, ok := obj["metadata"].(map[string]any); ok {
 		if ts, ok := meta["total_size"]; ok {
-			idx.TotalSize = int64(floatOf(ts))
+			n, ok := fitInt64(ts)
+			if !ok {
+				idx.badTotalSize = true
+			} else {
+				idx.TotalSize = n
+			}
 		}
 	}
 	return idx, nil
+}
+
+// fitInt64 converts a JSON number to int64 when the value is finite and in range.
+// Out-of-range floats are rejected instead of truncated into a wrapped int64.
+func fitInt64(v any) (int64, bool) {
+	f, ok := v.(float64)
+	if !ok || math.IsNaN(f) || math.IsInf(f, 0) || f < 0 || f >= float64(uint64(1)<<63) {
+		return 0, false
+	}
+	return int64(f), true
+}
+
+func mulNonNeg(a, b int64) (int64, bool) {
+	if a < 0 || b < 0 {
+		return 0, false
+	}
+	if a == 0 || b == 0 {
+		return 0, true
+	}
+	if a > math.MaxInt64/b {
+		return 0, false
+	}
+	return a * b, true
+}
+
+func (m *Model) acc(dst *int64, n int64) {
+	if n < 0 || *dst < 0 || *dst > math.MaxInt64-n {
+		m.noteOverflow()
+		return
+	}
+	*dst += n
+}
+
+func (m *Model) noteOverflow() {
+	if m.overflowed {
+		return
+	}
+	m.overflowed = true
+	m.Partial = true
+	m.warnf("displayed size overflowed int64 and was not accumulated")
 }
 
 func (m *Model) loadShards() {
@@ -522,15 +608,24 @@ func inferQuant(w, scales *Tensor, groupSize int) (bits int, logical int64) {
 		return 0, 0
 	}
 	packed := w.Shape[len(w.Shape)-1]
-	in := scales.Shape[len(scales.Shape)-1] * int64(groupSize)
-	if packed == 0 || in == 0 {
+	in, ok := mulNonNeg(scales.Shape[len(scales.Shape)-1], int64(groupSize))
+	if !ok || packed == 0 || in == 0 {
 		return 0, 0
 	}
-	total := packed * int64(storage)
-	if total%in != 0 {
+	total, ok := mulNonNeg(packed, int64(storage))
+	if !ok || total%in != 0 {
 		return 0, 0
 	}
-	return int(total / in), w.NumElements() / packed * in
+	bits64 := total / in
+	if bits64 > int64(math.MaxInt) {
+		return 0, 0
+	}
+	perPacked := w.NumElements() / packed
+	logical, ok = mulNonNeg(perPacked, in)
+	if !ok {
+		return 0, 0
+	}
+	return int(bits64), logical
 }
 
 func (m *Model) buildTensors() {
@@ -573,11 +668,11 @@ func (m *Model) buildTensors() {
 			m.DTypes[t.DType] = d
 		}
 		d.Tensors++
-		d.Elements += t.NumElements()
-		d.Bytes += t.ByteLen()
-		m.TotalElements += t.NumElements()
-		m.TotalLogicalParams += t.LogicalParams
-		m.TensorBytes += t.ByteLen()
+		m.acc(&d.Elements, t.NumElements())
+		m.acc(&d.Bytes, t.ByteLen())
+		m.acc(&m.TotalElements, t.NumElements())
+		m.acc(&m.TotalLogicalParams, t.LogicalParams)
+		m.acc(&m.TensorBytes, t.ByteLen())
 		if t.Role == RoleQuantWeight {
 			m.BitsHistogram[t.Bits]++
 		}
@@ -594,9 +689,9 @@ func (m *Model) buildGroups() {
 			m.Groups = append(m.Groups, g)
 		}
 		g.Tensors = append(g.Tensors, t)
-		g.Elements += t.NumElements()
-		g.LogicalParams += t.LogicalParams
-		g.Bytes += t.ByteLen()
+		m.acc(&g.Elements, t.NumElements())
+		m.acc(&g.LogicalParams, t.LogicalParams)
+		m.acc(&g.Bytes, t.ByteLen())
 		if IsExpertTensor(t.Name) {
 			g.HasExperts = true
 		}

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -71,6 +72,51 @@ func TestRefDeviceRejected(t *testing.T) {
 	_, err := Resolve("Org/M", hub)
 	if err == nil {
 		t.Fatal("accepted /dev/zero ref")
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatalf("resolve took %s", time.Since(start))
+	}
+}
+
+func TestRefSymlinkOutsideRepoRejected(t *testing.T) {
+	hub := t.TempDir()
+	repo := filepath.Join(hub, "models--Org--M")
+	const commit = "cccccccccccccccccccccccccccccccccccccccc"
+	if err := os.MkdirAll(filepath.Join(repo, "snapshots", commit), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, "refs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(hub, "commit.txt")
+	if err := os.WriteFile(outside, []byte(commit+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(repo, "refs", "main")); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Resolve("Org/M", hub)
+	if err == nil {
+		t.Fatalf("followed a ref symlink outside refs/: %+v", r)
+	}
+}
+
+func TestRefFIFORejected(t *testing.T) {
+	hub := t.TempDir()
+	repo := filepath.Join(hub, "models--Org--M")
+	if err := os.MkdirAll(filepath.Join(repo, "refs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, "snapshots"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(repo, "refs", "main"), 0o644); err != nil {
+		t.Skip(err)
+	}
+	start := time.Now()
+	r, err := Resolve("Org/M", hub)
+	if err == nil {
+		t.Fatalf("resolved a FIFO ref: %+v", r)
 	}
 	if time.Since(start) > 2*time.Second {
 		t.Fatalf("resolve took %s", time.Since(start))

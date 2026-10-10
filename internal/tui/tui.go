@@ -291,6 +291,7 @@ func renderConfig(m *model.Model) string {
 
 func renderScan(r scan.Result) string {
 	var b strings.Builder
+	b.WriteString(scan.ChecksImplemented + "\n")
 	b.WriteString(warnStyle.Render("⚠ "+r.Disclaimer) + "\n\n")
 	b.WriteString(labelStyle.Render("Overall") + statusStyles[r.Overall].Render(strings.ToUpper(string(r.Overall))) + "\n")
 	for _, c := range r.Checks {

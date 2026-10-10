@@ -1,9 +1,11 @@
 // Package safeopen reads untrusted filesystem paths.
 //
-// Every open is a single descriptor: Open opens, fstats that same fd, and
-// requires a regular file. There is no stat-then-open window. Reads go
-// through io.LimitReader(max+1) so a file past the cap is detected instead
-// of silently truncated.
+// Open Lstats (and Stats through a symlink) and refuses anything that is
+// not a regular file before the descriptor exists. It then opens that path,
+// fstats the same fd, and requires a regular file again: the pre-check is
+// not a substitute for the post-open check. Reads go through
+// io.LimitReader(max+1) so a file past the cap is detected instead of
+// silently truncated.
 package safeopen
 
 import (
@@ -36,6 +38,9 @@ func OpenUnder(path string, max int64, roots ...string) (*File, error) {
 	if max < 0 {
 		return nil, fmt.Errorf("safeopen: negative read cap")
 	}
+	if err := rejectNonRegular(path); err != nil {
+		return nil, err
+	}
 	f, err := os.OpenFile(path, os.O_RDONLY|extraOpenFlags, 0)
 	if err != nil {
 		return nil, err
@@ -67,6 +72,28 @@ func OpenUnder(path string, max int64, roots ...string) (*File, error) {
 		max:  max,
 		name: path,
 	}, nil
+}
+
+// rejectNonRegular refuses devices, FIFOs, and other non-files before open.
+// A symlink is followed with Stat; the target must be a regular file.
+// The opened descriptor is still fstat'd by the caller.
+func rejectNonRegular(path string) error {
+	lst, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	mode := lst.Mode()
+	if mode&os.ModeSymlink != 0 {
+		st, err := os.Stat(path)
+		if err != nil {
+			return err
+		}
+		mode = st.Mode()
+	}
+	if !mode.IsRegular() {
+		return fmt.Errorf("%s: not a regular file", path)
+	}
+	return nil
 }
 
 func resolvedPath(f *os.File, fallback string) (string, error) {
