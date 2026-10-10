@@ -88,55 +88,31 @@ build:
 		go build -o "$$BIN_RAW" ./cmd/model-inspector; \
 	fi
 
-# Remove coverage.out, the built binary, and a real bin/ directory.
-# coverage.out is removed first, so a later rm failure still drops it.
-# A directory BIN is removed with rm -rf. BIN must be a relative path inside
-# this repository. Absolute paths, a path segment that is exactly "..", and
-# a path whose parent resolves outside the repo are refused. "bin/v1..2" is
-# a single segment and is allowed. A symlinked bin/ is removed as a symlink.
+# Delete only this repo's bin/ directory and a regular coverage.out.
+# BIN is ignored. It is an environment variable as well as a make setting,
+# and treating it as an rm path deleted .git, tracked trees, and Makefile.
+# A custom binary placed under bin/ is removed with that directory. The only
+# rm -rf is bin/ after it resolves (symlinks and "..") to exactly $PWD/bin.
+# A symlinked bin is removed as a symlink and is not followed.
 clean:
 	@set -eu; \
 	repo=$$(pwd -P); \
-	rm -f coverage.out; \
-	case "$$BIN_RAW" in \
-	  ""|/*) echo "make clean: BIN must be a relative path inside the repo" >&2; exit 1 ;; \
-	esac; \
-	set -f; \
-	oldifs=$$IFS; \
-	IFS=/; \
-	set -- $$BIN_RAW; \
-	IFS=$$oldifs; \
-	set +f; \
-	for seg in "$$@"; do \
-	  if [ "$$seg" = ".." ]; then \
-	    echo "make clean: BIN must not contain a .. path segment" >&2; \
+	if [ -e coverage.out ] || [ -L coverage.out ]; then \
+	  if [ -d coverage.out ] && [ ! -L coverage.out ]; then \
+	    echo "make clean: coverage.out is a directory; not removing it" >&2; \
 	    exit 1; \
 	  fi; \
-	done; \
-	if [ -e "$$BIN_RAW" ] || [ -L "$$BIN_RAW" ]; then \
-	  parent=$$(dirname -- "$$BIN_RAW"); \
-	  base=$$(basename -- "$$BIN_RAW"); \
-	  resolved=$$(cd -- "$$parent" && pwd -P) || { echo "make clean: cannot resolve $$BIN_RAW" >&2; exit 1; }; \
-	  case "$$resolved/" in \
-	    "$$repo/"*) ;; \
-	    *) echo "make clean: refusing to remove $$BIN_RAW (outside the repo)" >&2; exit 1 ;; \
-	  esac; \
-	  target=$$resolved/$$base; \
-	  if [ -d "$$target" ] && [ ! -L "$$target" ]; then \
-	    rtarget=$$(cd -- "$$target" && pwd -P); \
-	    if [ "$$rtarget" = "$$repo" ]; then \
-	      echo "make clean: refusing to remove the repository root" >&2; \
-	      exit 1; \
-	    fi; \
-	    rm -rf -- "$$target"; \
-	  else \
-	    rm -f -- "$$target"; \
-	  fi; \
+	  rm -f -- coverage.out; \
 	fi; \
 	if [ -L bin ]; then \
-	  rm -f bin; \
+	  rm -f -- bin; \
 	elif [ -d bin ]; then \
-	  rm -rf bin; \
+	  resolved=$$(cd -- bin && pwd -P) || { echo "make clean: cannot resolve bin/" >&2; exit 1; }; \
+	  if [ "$$resolved" != "$$repo/bin" ]; then \
+	    echo "make clean: refusing to remove bin (resolves to $$resolved)" >&2; \
+	    exit 1; \
+	  fi; \
+	  rm -rf -- bin; \
 	fi
 
 # Expands recipe exports without building or deleting. check-overrides uses it.
@@ -172,13 +148,14 @@ check-overrides:
 	tmp=$$(mktemp "$${TMPDIR:-/tmp}/model-inspector.XXXXXX"); \
 	ran="$$tmp.ran"; \
 	spaced=; \
+	wtparent=; \
 	restore() { \
 	  if [ -n "$$spaced" ]; then rm -rf "$$spaced"; fi; \
-	  if [ -d "$$tmp.bin-save" ] || [ -L "$$tmp.bin-save" ]; then \
-	    rm -rf bin; mv "$$tmp.bin-save" bin; \
+	  if [ -n "$$wtparent" ]; then \
+	    git worktree remove --force "$$wtparent/repo" >/dev/null 2>&1 || true; \
+	    git worktree prune >/dev/null 2>&1 || true; \
+	    rm -rf "$$wtparent"; \
 	  fi; \
-	  if [ -e "$$tmp.cov-save" ]; then mv "$$tmp.cov-save" coverage.out; fi; \
-	  rm -rf .qa-clean-dir; \
 	  rm -f "$$tmp" "$$tmp.out" "$$tmp.script" "$$ran"; \
 	}; \
 	trap restore EXIT; \
@@ -270,15 +247,64 @@ check-overrides:
 	  *"MI_LDFLAGS :="|*"MI_LDFLAGS := ") ;; \
 	  *) echo "internal ldflags followed a command-line override: [$$out]" >&2; exit 1 ;; \
 	esac; \
-	if [ -d bin ] || [ -L bin ]; then mv bin "$$tmp.bin-save"; fi; \
-	if [ -e coverage.out ]; then mv coverage.out "$$tmp.cov-save"; fi; \
-	mkdir -p .qa-clean-dir; \
-	printf x > coverage.out; \
-	clean_make clean BIN='.qa-clean-dir'; \
-	if [ -e coverage.out ] || [ -e .qa-clean-dir ]; then \
-	  echo "directory BIN left coverage.out or the directory" >&2; exit 1; \
+	wtparent=$$(mktemp -d "$${TMPDIR:-/tmp}/model-inspector.XXXXXX"); \
+	if ! git worktree add --detach "$$wtparent/repo" HEAD >"$$tmp.out" 2>&1; then \
+	  echo "git worktree add failed" >&2; cat "$$tmp.out" >&2; exit 1; \
 	fi; \
-	clean_make clean BIN='bin/v1..2'; \
-	if clean_make clean BIN='foo/../bar' >"$$tmp.out" 2>&1; then \
-	  echo ".. path segment was accepted" >&2; exit 1; \
-	fi
+	wt=$$wtparent/repo; \
+	makefile=$(CURDIR)/Makefile; \
+	clean_wt() { \
+	  env -u BIN -u VERSION -u COMMIT -u FUZZTIME \
+	    -u VERSION_RAW -u COMMIT_RAW -u FUZZTIME_RAW -u BIN_RAW \
+	    -u MI_LDFLAGS -u LDFLAGS \
+	    MAKEFLAGS= MAKEOVERRIDES= \
+	    $(MAKE) -C "$$wt" -f "$$makefile" -s --no-print-directory clean "BIN=$$1" >"$$tmp.out" 2>&1; \
+	}; \
+	printf keep > "$$wtparent/x"; \
+	mkdir -p "$$wtparent/outside"; \
+	printf sentinel > "$$wtparent/outside/keep"; \
+	ln -s "$$wtparent/outside" "$$wt/bin"; \
+	clean_wt 'bin/.'; \
+	if [ ! -f "$$wtparent/outside/keep" ] || [ -e "$$wt/bin" ] || [ -L "$$wt/bin" ]; then \
+	  echo "clean followed a symlinked bin/" >&2; exit 1; \
+	fi; \
+	seed_clean_targets() { \
+	  mkdir -p "$$wt/bin"; \
+	  printf x > "$$wt/bin/model-inspector"; \
+	  printf x > "$$wt/coverage.out"; \
+	}; \
+	assert_clean_safe() { \
+	  label=$$1; \
+	  if grep -q '^rm:' "$$tmp.out"; then \
+	    echo "raw rm error for $$label" >&2; cat "$$tmp.out" >&2; exit 1; \
+	  fi; \
+	  if [ ! -e "$$wt/.git" ] || [ ! -d "$$wt/internal" ] || [ ! -f "$$wt/Makefile" ]; then \
+	    echo "clean removed a protected path for $$label" >&2; exit 1; \
+	  fi; \
+	  if [ ! -f "$$wtparent/x" ] || [ ! -f "$$wtparent/outside/keep" ]; then \
+	    echo "clean removed an outside path for $$label" >&2; exit 1; \
+	  fi; \
+	  if [ -e "$$wt/bin" ] || [ -L "$$wt/bin" ] || [ -e "$$wt/coverage.out" ] || [ -L "$$wt/coverage.out" ]; then \
+	    echo "clean left bin/ or coverage.out for $$label" >&2; exit 1; \
+	  fi; \
+	  status=$$(git -C "$$wt" status --porcelain); \
+	  if [ -n "$$status" ]; then \
+	    echo "tracked tree changed for $$label" >&2; printf '%s\n' "$$status" >&2; exit 1; \
+	  fi; \
+	}; \
+	seed_clean_targets; \
+	if ! env -u VERSION -u COMMIT -u FUZZTIME \
+	    -u VERSION_RAW -u COMMIT_RAW -u FUZZTIME_RAW -u BIN_RAW \
+	    -u MI_LDFLAGS -u LDFLAGS \
+	    BIN=.git MAKEFLAGS= MAKEOVERRIDES= \
+	    $(MAKE) -C "$$wt" -f "$$makefile" -s --no-print-directory clean >"$$tmp.out" 2>&1; then \
+	  echo "env BIN=.git clean failed" >&2; cat "$$tmp.out" >&2; exit 1; \
+	fi; \
+	assert_clean_safe "env BIN=.git"; \
+	for b in .git internal Makefile ../x 'bin/../..' "$$wtparent/x" 'bin/.'; do \
+	  seed_clean_targets; \
+	  if ! clean_wt "$$b"; then \
+	    echo "clean failed for BIN=$$b" >&2; cat "$$tmp.out" >&2; exit 1; \
+	  fi; \
+	  assert_clean_safe "BIN=$$b"; \
+	done

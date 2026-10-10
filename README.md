@@ -45,7 +45,7 @@ GNU make targets (on macOS, `gmake` when `/usr/bin/make` is BSD make):
 ```sh
 make build   # bin/model-inspector
 make test    # override check, go vet ./..., go test -race -count=1 ./...
-make clean   # remove BIN, bin/, and coverage.out
+make clean   # bin/ and coverage.out only; BIN is not a delete path
 make fuzz    # every fuzz target, for FUZZTIME (default 10s)
 ```
 
@@ -76,12 +76,14 @@ stamps that outer revision. A tree that is not inside any repository, or a
 build with `-buildvcs=false`, prints `unknown`.
 
 `BIN` defaults to `bin/model-inspector` (paths with spaces are quoted).
-`make clean` removes `coverage.out` first, then that path when it stays
-inside this repository (a directory `BIN` is removed as a directory), and a
-real `bin/` directory. An absolute `BIN`, a `..` path segment, or a path
-that resolves outside the repository is refused. A name such as `bin/v1..2`
-is allowed. `bin/` is gitignored. Recipes call `go` on `PATH` and honor
-`GOTOOLCHAIN=local` (no toolchain download).
+`make clean` deletes only `coverage.out` (when it is a regular file or a
+symlink) and this checkout's `bin/` directory. It does not remove `BIN`.
+That variable is also read from the environment, and using it as a delete
+path removed `.git` and tracked files. A binary written under `bin/`,
+including a custom name, is removed with the directory. `rm -rf` runs only
+after `bin` resolves to this repository's `bin` directory; a symlinked
+`bin` is unlinked and not followed. `bin/` is gitignored. Recipes call
+`go` on `PATH` and honor `GOTOOLCHAIN=local` (no toolchain download).
 
 `go install origin.cursor.com/cecilkootz/model-inspector/cmd/model-inspector@latest`
 fails even with `GOPRIVATE=origin.cursor.com`. Origin does not answer Go's
@@ -102,7 +104,7 @@ cd ~/src/model-inspector
 make          # same as make test
 make build    # bin/model-inspector
 make test
-make clean    # BIN, bin/, and coverage.out
+make clean    # bin/ and coverage.out only
 make fuzz     # FUZZTIME=10s by default; make fuzz FUZZTIME=30s
 ```
 
