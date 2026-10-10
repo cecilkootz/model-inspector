@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -462,32 +463,39 @@ func (t Model) layersBody() string {
 	}
 	if t.detail != nil {
 		head := sanitize.From(t.detail.Key).String() + fmt.Sprintf(" · %d tensors · %s", len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))
-		return head + "\n" + markTableCursor(t.tensorTable.View(), t.tensorTable.Rows(), t.tensorTable.Cursor())
+		return head + "\n" + markTableCursor(t.tensorTable.View(), t.tensorTable)
 	}
-	return markTableCursor(t.groupTable.View(), t.groupTable.Rows(), t.groupTable.Cursor())
+	return markTableCursor(t.groupTable.View(), t.groupTable)
 }
 
 // markTableCursor puts a ">" on the selected row when colour is off.
 // The table's selection is a background fill, which the ASCII profile drops,
-// so a NO_COLOR frame would otherwise hide the cursor.
-func markTableCursor(view string, rows []table.Row, cursor int) string {
+// so a NO_COLOR frame would otherwise hide the cursor. The marker follows
+// the row index: the first cell is truncated with an ellipsis, so the
+// rendered text is not the full name.
+func markTableCursor(view string, tbl table.Model) string {
+	cursor := tbl.Cursor()
+	rows := tbl.Rows()
 	if !ui.ColorOff() || cursor < 0 || cursor >= len(rows) || len(rows[cursor]) == 0 {
 		return view
 	}
-	key := rows[cursor][0]
 	lines := strings.Split(view, "\n")
-	for i := 1; i < len(lines); i++ {
-		if rowStartsWith(lines[i], key) {
-			lines[i] = markGreater(lines[i])
-			break
-		}
+	idx := tableCursorLine(tbl)
+	if idx < 1 || idx >= len(lines) {
+		return view
 	}
+	lines[idx] = markGreater(lines[idx])
 	return strings.Join(lines, "\n")
 }
 
-func rowStartsWith(line, key string) bool {
-	s := strings.TrimLeft(line, " ")
-	return s == key || strings.HasPrefix(s, key+" ")
+// tableCursorLine is the view line of the selected row. Line 0 is the
+// header. bubbles keeps the rendered window start and the viewport scroll
+// unexported; the visible row is cursor-start-YOffset.
+func tableCursorLine(tbl table.Model) int {
+	v := reflect.ValueOf(tbl)
+	start := int(v.FieldByName("start").Int())
+	yoff := int(v.FieldByName("viewport").FieldByName("YOffset").Int())
+	return 1 + tbl.Cursor() - start - yoff
 }
 
 func markGreater(line string) string {

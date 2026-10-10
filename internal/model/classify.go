@@ -95,11 +95,6 @@ func DroppedLayerWarning(index int) string {
 	return fmt.Sprintf("layer index %d exceeds %d; dropped", index, MaxLayerIndex)
 }
 
-// IsDroppedLayerWarning reports a warning produced by DroppedLayerWarning.
-func IsDroppedLayerWarning(s string) bool {
-	return strings.HasPrefix(s, "layer index ") && strings.Contains(s, "exceeds ") && strings.HasSuffix(s, "; dropped")
-}
-
 // NoteAbsurdLayers marks the inspection partial when a tensor or group
 // carries a decoder index above MaxLayerIndex, or an index that did not
 // fit in int. Each distinct index is recorded once as a load warning.
@@ -133,14 +128,19 @@ func (m *Model) NoteAbsurdLayers() {
 }
 
 func (m *Model) noteDroppedLayer(index int) {
-	m.Partial = true
-	msg := DroppedLayerWarning(index)
-	for _, w := range m.Warnings {
-		if w == msg {
-			return
-		}
+	if m == nil {
+		return
 	}
-	m.warnf("%s", msg)
+	m.Partial = true
+	if m.dropped == nil {
+		m.dropped = map[int]struct{}{}
+	}
+	if _, ok := m.dropped[index]; ok {
+		return
+	}
+	m.dropped[index] = struct{}{}
+	m.DroppedLayers = append(m.DroppedLayers, index)
+	m.warnf("%s", DroppedLayerWarning(index))
 }
 
 func hasSeg(segs []string, f func(string) bool) bool {

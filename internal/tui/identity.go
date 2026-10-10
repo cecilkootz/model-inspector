@@ -346,20 +346,40 @@ func storageSegs(d derived, frac float64) []ui.Seg {
 }
 
 func classLabel(class string) sanitize.Text {
-	switch {
-	case class == "q_scales_biases":
+	// The patterns below are disjoint, so the order of the checks does not
+	// decide whether a file dtype is sanitized.
+	switch class {
+	case "q_scales_biases":
 		return sanitize.Program("scales/biases")
-	case class == "other":
+	case "other":
 		return sanitize.Program("other")
-	case strings.HasPrefix(class, "plain_"):
-		// The dtype after the prefix comes from the file.
-		dt := sanitize.From(strings.TrimPrefix(class, "plain_")).String()
-		return sanitize.Program("plain " + dt)
-	case strings.HasSuffix(class, "_packed"):
-		return sanitize.Program(strings.TrimSuffix(class, "_packed") + " packed")
-	default:
-		return sanitize.From(class)
 	}
+	if label, ok := packedQuantLabel(class); ok {
+		return sanitize.Program(label)
+	}
+	if dt, ok := strings.CutPrefix(class, "plain_"); ok {
+		return sanitize.Program("plain " + sanitize.From(dt).String())
+	}
+	return sanitize.From(class)
+}
+
+// packedQuantLabel matches only q<digits>_packed, the class this program
+// builds from a bit width. plain_<dtype>_packed is not this shape.
+func packedQuantLabel(class string) (string, bool) {
+	rest, ok := strings.CutPrefix(class, "q")
+	if !ok {
+		return "", false
+	}
+	digits, ok := strings.CutSuffix(rest, "_packed")
+	if !ok || digits == "" {
+		return "", false
+	}
+	for _, r := range digits {
+		if r < '0' || r > '9' {
+			return "", false
+		}
+	}
+	return "q" + digits + " packed", true
 }
 
 func calloutBlock(m *model.Model, d derived, width int) []string {
