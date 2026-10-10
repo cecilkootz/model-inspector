@@ -459,24 +459,24 @@ func plannedMetadata(m *model.Model) Check {
 	if m == nil {
 		return c
 	}
-	var drops []string
-	for _, w := range m.Warnings {
-		if model.IsDroppedLayerWarning(w) {
-			drops = append(drops, w)
-		}
-	}
+	drops := m.DroppedLayers
 	if len(drops) == 0 {
 		return c
 	}
 	// The files are present. The index itself is what the inspection dropped.
+	// The summary is built from the typed indexes, not by matching warning text.
 	c.Name = "Layer index"
 	c.Status = StatusFail
+	details := make([]string, len(drops))
+	for i, idx := range drops {
+		details[i] = model.DroppedLayerWarning(idx)
+	}
 	if len(drops) == 1 {
-		c.Summary = drops[0]
+		c.Summary = details[0]
 	} else {
 		c.Summary = fmt.Sprintf("%d layer indices exceed %d; dropped", len(drops), model.MaxLayerIndex)
 	}
-	c.Details = capDetails(drops)
+	c.Details = capDetails(details)
 	return c
 }
 
@@ -484,11 +484,11 @@ func plannedMetadata(m *model.Model) Check {
 // dropped decoder indices. File presence still fails when a shard is
 // missing or some other warning made the walk incomplete.
 func layerDropsOnly(m *model.Model) bool {
-	if m == nil || !m.Partial || len(m.Warnings) == 0 {
+	if m == nil || !m.Partial || len(m.DroppedLayers) == 0 || len(m.Warnings) != len(m.DroppedLayers) {
 		return false
 	}
-	for _, w := range m.Warnings {
-		if !model.IsDroppedLayerWarning(w) {
+	for i, idx := range m.DroppedLayers {
+		if m.Warnings[i] != model.DroppedLayerWarning(idx) {
 			return false
 		}
 	}

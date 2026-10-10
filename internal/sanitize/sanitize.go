@@ -11,6 +11,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"reflect"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -34,24 +36,168 @@ func (t Text) String() string { return t.s }
 func Program(s string) Text { return Text{s: s} }
 
 // Note is an error safe to print. Notef leaves the format string alone and
-// runs From on string arguments. Callers must not pass the result through From
+// sanitizes the arguments. Callers must not pass the result through From
 // again, or the "<" in the format becomes a token.
 type Note struct{ msg string }
 
 // Error returns the formatted sentence.
 func (n Note) Error() string { return n.msg }
 
-// Notef formats a program sentence. String arguments are untrusted.
+// Notef formats a program sentence. The format string is trusted and must be
+// a constant literal. Every argument is formatted and then passed through
+// From, except numbers and bools, which stay raw so verbs such as %d keep
+// working. %c is untrusted even for a number: the character is sanitized.
+// A width or precision star stays a raw integer, which is what fmt requires.
 func Notef(format string, args ...any) error {
+	roles := scanFormat(format)
 	safe := make([]any, len(args))
 	for i, a := range args {
-		if s, ok := a.(string); ok {
-			safe[i] = From(s).String()
-			continue
+		switch {
+		case roles.star[i]:
+			safe[i] = a
+		case roles.char[i] || !isNumberOrBool(a):
+			safe[i] = sanitized{a}
+		default:
+			safe[i] = a
 		}
-		safe[i] = a
 	}
 	return Note{msg: fmt.Sprintf(format, safe...)}
+}
+
+// sanitized prints v with the verb fmt selected, then tokenizes that text.
+type sanitized struct{ v any }
+
+func (s sanitized) Format(f fmt.State, verb rune) {
+	formatted := fmt.Sprintf(fmt.FormatString(f, verb), s.v)
+	_, _ = io.WriteString(f, From(formatted).String())
+}
+
+func isNumberOrBool(a any) bool {
+	switch a.(type) {
+	case bool,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64, uintptr,
+		float32, float64,
+		complex64, complex128:
+		return true
+	}
+	if a == nil {
+		return false
+	}
+	switch reflect.TypeOf(a).Kind() {
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64,
+		reflect.Complex64, reflect.Complex128:
+		return true
+	default:
+		return false
+	}
+}
+
+// formatRoles records which argument indexes are %c values and which are
+// width or precision stars. Stars must stay integers for fmt.
+type formatRoles struct {
+	char map[int]bool
+	star map[int]bool
+}
+
+func scanFormat(format string) formatRoles {
+	var r formatRoles
+	r.char = map[int]bool{}
+	r.star = map[int]bool{}
+	argNum := 0
+	end := len(format)
+	for i := 0; i < end; {
+		if format[i] != '%' {
+			i++
+			continue
+		}
+		i++
+		if i >= end {
+			break
+		}
+		if format[i] == '%' {
+			i++
+			continue
+		}
+		for i < end {
+			switch format[i] {
+			case '#', '0', '+', '-', ' ':
+				i++
+				continue
+			}
+			break
+		}
+		if n, ni, ok := argIndex(format, i); ok {
+			argNum = n
+			i = ni
+		}
+		if i < end && format[i] == '*' {
+			r.star[argNum] = true
+			argNum++
+			i++
+		} else {
+			for i < end && format[i] >= '0' && format[i] <= '9' {
+				i++
+			}
+		}
+		if i < end && format[i] == '.' {
+			i++
+			if n, ni, ok := argIndex(format, i); ok {
+				argNum = n
+				i = ni
+			}
+			if i < end && format[i] == '*' {
+				r.star[argNum] = true
+				argNum++
+				i++
+			} else {
+				for i < end && format[i] >= '0' && format[i] <= '9' {
+					i++
+				}
+			}
+		}
+		if n, ni, ok := argIndex(format, i); ok {
+			argNum = n
+			i = ni
+		}
+		if i >= end {
+			break
+		}
+		verb, size := utf8.DecodeRuneInString(format[i:])
+		i += size
+		if verb == '%' {
+			continue
+		}
+		if verb == 'c' {
+			r.char[argNum] = true
+		}
+		argNum++
+	}
+	return r
+}
+
+// argIndex parses a leading [n] argument index. n is 1-based in the format
+// and 0-based in the result, matching fmt.
+func argIndex(format string, i int) (n, newi int, ok bool) {
+	if i >= len(format) || format[i] != '[' {
+		return 0, i, false
+	}
+	j := i + 1
+	if j >= len(format) || format[j] < '0' || format[j] > '9' {
+		return 0, i, false
+	}
+	num := 0
+	for j < len(format) && format[j] >= '0' && format[j] <= '9' {
+		num = num*10 + int(format[j]-'0')
+		j++
+	}
+	if j >= len(format) || format[j] != ']' || num < 1 {
+		return 0, i, false
+	}
+	return num - 1, j + 1, true
 }
 
 // From sanitizes s. Printable characters pass through. Controls, bidi
