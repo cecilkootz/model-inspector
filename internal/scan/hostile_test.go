@@ -115,14 +115,16 @@ func TestIndexDotDotShard(t *testing.T) {
 		t.Fatal("non-local shard name was dropped")
 	}
 	res := Run(m)
-	if res.Overall != StatusFail {
-		t.Fatalf("overall %s", res.Overall)
+	files := findCheck(t, res, CheckFiles)
+	if res.Overall != StatusFail || files.Status != StatusFail {
+		t.Fatalf("overall %s file-presence %+v", res.Overall, files)
 	}
-	var all []string
-	for _, c := range res.Checks {
-		all = append(all, c.Details...)
+	detailsContain(t, files, "non-local", "../outside.safetensors", "model-00001.safetensors")
+	indexCheck := findCheck(t, res, CheckIndex)
+	if indexCheck.Status != StatusFail {
+		t.Fatalf("index %+v", indexCheck)
 	}
-	detailsContain(t, Check{Details: all}, "non-local", "../outside.safetensors", "model-00001.safetensors")
+	detailsContain(t, indexCheck, "../outside.safetensors", "not a local file name")
 }
 
 func TestUnreferencedShardIsChecked(t *testing.T) {
@@ -145,6 +147,13 @@ func TestUnreferencedShardIsChecked(t *testing.T) {
 	bounds := checkID(t, m, CheckOffsets)
 	if bounds.Status == StatusSkip {
 		t.Fatal("extra shard was not examined")
+	}
+	if bounds.Status == StatusPass && !strings.Contains(bounds.Summary, "2 ranges") {
+		t.Fatalf("extra tensor was not examined: %s", bounds.Summary)
+	}
+	indexCheck := checkID(t, m, CheckIndex)
+	if !strings.Contains(strings.Join(indexCheck.Details, "\n"), "model.extra.weight") {
+		t.Fatalf("extra tensor was not examined: %+v", indexCheck)
 	}
 }
 

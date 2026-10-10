@@ -359,16 +359,17 @@ func indexConsistency(m *model.Model) Check {
 				problems = append(problems, fmt.Sprintf("%s: not present in %s header", name, shard))
 			}
 		}
-		extra := 0
+		var unmapped []string
 		for shard, set := range headerNames {
 			for name := range set {
 				if m.Index.WeightMap[name] != shard {
-					extra++
+					unmapped = append(unmapped, fmt.Sprintf("%s: not mapped to %s by the index", name, shard))
 				}
 			}
 		}
-		if extra > 0 {
-			warnings = append(warnings, fmt.Sprintf("%d tensors in shard headers are not mapped to that shard by the index", extra))
+		if len(unmapped) > 0 {
+			warnings = append(warnings, fmt.Sprintf("%d tensors in shard headers are not mapped to that shard by the index", len(unmapped)))
+			warnings = append(warnings, unmapped...)
 		}
 		if m.Index.TotalSize > 0 && m.Index.TotalSize != m.TensorBytes {
 			warnings = append(warnings, fmt.Sprintf("index metadata.total_size=%d but header byte ranges sum to %d", m.Index.TotalSize, m.TensorBytes))

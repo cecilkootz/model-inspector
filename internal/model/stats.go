@@ -189,15 +189,24 @@ func (m *Model) UnifiedMemory() bool {
 
 // HostTensor is one lookup table flagged by lookup_table_v1.
 // Bytes includes the table's q-scales and q-biases.
+// A table stored as .shard_N pieces is one entry: Name is the shared stem,
+// and Bytes and ParamsEst are the sums across the pieces.
 type HostTensor struct {
 	Name      string
 	Group     string
 	Bytes     int64
 	ParamsEst int64
 	Rule      string
+	// sharded is true when Name is the stem of .shard_N pieces rather than
+	// one weight tensor. It is not part of the JSON document.
+	sharded bool
 }
 
 // HostCapable returns lookup tables the heuristic says can stay in host RAM.
+// Pieces named stem.shard_N (plus .weight) are one logical table. Each piece
+// still has to be a 2-D table of at least 1024 rows; the bytes, scales,
+// biases, and dequantized params are then summed. One shard of the PLE
+// n-gram table is under the 1 GiB / 10% callout thresholds on its own.
 func (m *Model) HostCapable() []HostTensor {
 	if m == nil {
 		return nil
@@ -207,7 +216,8 @@ func (m *Model) HostCapable() []HostTensor {
 		byName[t.Name] = t
 	}
 	tied := m.tiedWordEmbeddings() && !m.hasKind(KindLMHead)
-	var out []HostTensor
+	buckets := map[string]*HostTensor{}
+	var keys []string
 	for _, t := range m.Tensors {
 		if t.Role != RolePlain && t.Role != RoleQuantWeight {
 			continue
@@ -215,30 +225,45 @@ func (m *Model) HostCapable() []HostTensor {
 		if t.Kind == KindVision {
 			continue
 		}
-		if !hostName(t.Name) {
+		stem, sharded := lookupStem(t.Name)
+		key := t.Name
+		nameForHost := t.Name
+		if sharded {
+			key = stem
+			nameForHost = stem
+		}
+		if !hostName(nameForHost) {
 			continue
 		}
 		if len(t.Shape) != 2 || t.Shape[0] < 1024 {
 			continue
 		}
-		if tied && tokenEmbedSegment(t.Name) {
+		if tied && tokenEmbedSegment(nameForHost) {
 			continue
 		}
-		ht := HostTensor{
-			Name: t.Name, Group: t.Group,
-			ParamsEst: t.LogicalParams, Rule: RuleLookupTable,
+		b := buckets[key]
+		if b == nil {
+			b = &HostTensor{
+				Name: key, Group: t.Group, Rule: RuleLookupTable, sharded: sharded,
+			}
+			buckets[key] = b
+			keys = append(keys, key)
 		}
-		addInto(m, &ht.Bytes, t.ByteLen())
+		addInto(m, &b.ParamsEst, t.LogicalParams)
+		addInto(m, &b.Bytes, t.ByteLen())
 		base := strings.TrimSuffix(t.Name, ".weight")
 		if base != t.Name {
 			if s := byName[base+".scales"]; s != nil {
-				addInto(m, &ht.Bytes, s.ByteLen())
+				addInto(m, &b.Bytes, s.ByteLen())
 			}
 			if s := byName[base+".biases"]; s != nil {
-				addInto(m, &ht.Bytes, s.ByteLen())
+				addInto(m, &b.Bytes, s.ByteLen())
 			}
 		}
-		out = append(out, ht)
+	}
+	out := make([]HostTensor, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, *buckets[k])
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
@@ -290,7 +315,11 @@ func (m *Model) Outliers() []Callout {
 	host := m.HostCapable()
 	var hostBytes int64
 	var maxShare float64
+	aggregated := map[string]struct{}{}
 	for _, h := range host {
+		if h.sharded {
+			aggregated[h.Name] = struct{}{}
+		}
 		addInto(m, &hostBytes, h.Bytes)
 		if m.TensorBytes > 0 {
 			if s := float64(h.Bytes) / float64(m.TensorBytes); s > maxShare {
@@ -306,6 +335,11 @@ func (m *Model) Outliers() []Callout {
 	}
 
 	for _, t := range m.Tensors {
+		if stem, sharded := lookupStem(t.Name); sharded {
+			if _, ok := aggregated[stem]; ok {
+				continue
+			}
+		}
 		if m.TensorBytes <= 0 || t.ByteLen()*10 < m.TensorBytes {
 			continue
 		}
@@ -316,6 +350,19 @@ func (m *Model) Outliers() []Callout {
 			Kind: "big_tensor", Group: t.Group, Tensor: t.Name,
 			Message: fmt.Sprintf("%s is %s, %.1f%% of weights", ShortName(t.Name), HumanBytes(t.ByteLen()), pct(t.ByteLen(), m.TensorBytes)),
 		})
+	}
+	for _, h := range host {
+		if !h.sharded || mentioned[h.Name] {
+			continue
+		}
+		if m.TensorBytes <= 0 || (h.Bytes <= math.MaxInt64/10 && h.Bytes*10 < m.TensorBytes) {
+			continue
+		}
+		msg := fmt.Sprintf("%s is %s, %.1f%% of weights", ShortName(h.Name), HumanBytes(h.Bytes), pct(h.Bytes, m.TensorBytes))
+		if ngramName(h.Name) {
+			msg += fmt.Sprintf(": ~%s-param n-gram embedding table", HumanCount(h.ParamsEst))
+		}
+		out = append(out, Callout{Kind: "big_tensor", Group: h.Group, Tensor: h.Name, Message: msg})
 	}
 
 	quantBytes := int64(0)
@@ -535,6 +582,41 @@ func (m *Model) hasKind(kind string) bool {
 	return false
 }
 
+// lookupStem strips a trailing .weight/.scales/.biases and, when the
+// remainder ends in .shard_<digits>, the shard suffix. sharded is false
+// for an ordinary tensor name. The original spelling of the stem is kept.
+func lookupStem(name string) (stem string, sharded bool) {
+	base := name
+	lower := strings.ToLower(name)
+	for _, suf := range []string{".weight", ".scales", ".biases"} {
+		if strings.HasSuffix(lower, suf) {
+			base = base[:len(base)-len(suf)]
+			lower = lower[:len(lower)-len(suf)]
+			break
+		}
+	}
+	const mark = ".shard_"
+	i := strings.LastIndex(lower, mark)
+	if i < 0 {
+		return base, false
+	}
+	digits := lower[i+len(mark):]
+	if digits == "" {
+		return base, false
+	}
+	for _, r := range digits {
+		if r < '0' || r > '9' {
+			return base, false
+		}
+	}
+	return base[:i], true
+}
+
+func ngramName(name string) bool {
+	lower := strings.ToLower(name)
+	return strings.Contains(lower, "ngram") || strings.Contains(lower, "n_gram")
+}
+
 func hostName(name string) bool {
 	seg := lastSegment(stripWeightSuffix(name))
 	for _, bad := range []string{"patch", "pos", "position", "proj", "norm", "head"} {
@@ -596,16 +678,14 @@ func largestTensor(g *Group) (*Tensor, float64) {
 }
 
 func tensorPhrase(t *Tensor) string {
-	lower := strings.ToLower(t.Name)
-	if strings.Contains(lower, "ngram") || strings.Contains(lower, "n_gram") {
+	if ngramName(t.Name) {
 		return fmt.Sprintf("~%s-param n-gram embedding table", HumanCount(t.LogicalParams))
 	}
 	return ShortName(t.Name)
 }
 
 func hostMessage(h HostTensor) string {
-	lower := strings.ToLower(h.Name)
-	if strings.Contains(lower, "ngram") || strings.Contains(lower, "n_gram") {
+	if ngramName(h.Name) {
 		return fmt.Sprintf("n-gram embedding table %s can stay in CPU RAM (heuristic)", HumanBytes(h.Bytes))
 	}
 	return fmt.Sprintf("%s (%s) can stay in CPU RAM (heuristic)", ShortName(h.Name), HumanBytes(h.Bytes))
@@ -719,10 +799,23 @@ func exceeds3x(v, med int64) bool {
 }
 
 func pct(part, total int64) float64 {
-	if total <= 0 || part < 0 {
+	if total <= 0 || part <= 0 {
 		return 0
 	}
-	return math.Round(float64(part)/float64(total)*1000) / 10
+	// A saturated total can be smaller than one class that still fit in
+	// int64, and float64 rounding can push a ratio just over 1. The bar
+	// and its legend stay inside [0, 100].
+	if part >= total {
+		return 100
+	}
+	v := math.Round(float64(part)/float64(total)*1000) / 10
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
 }
 
 // satAdd adds n to *dst when the sum fits in a non-negative int64.

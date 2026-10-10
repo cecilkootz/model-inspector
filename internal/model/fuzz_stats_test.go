@@ -43,12 +43,12 @@ func FuzzStats(f *testing.F) {
 			}
 		}()
 		for _, c := range m.StorageBreakdown() {
-			if c.Bytes < 0 || c.Pct < 0 {
+			if c.Bytes < 0 || c.Pct < 0 || c.Pct > 100 {
 				t.Fatalf("storage %+v", c)
 			}
 		}
 		for _, c := range MergeStorage(m, m.StorageBreakdown(), 4) {
-			if c.Bytes < 0 || c.Pct < 0 {
+			if c.Bytes < 0 || c.Pct < 0 || c.Pct > 100 {
 				t.Fatalf("merged %+v", c)
 			}
 		}

@@ -40,6 +40,7 @@ type Document struct {
 	Scan               scanDoc      `json:"scan"`
 	Code               *struct{}    `json:"code"`
 	LoadWarnings       []string     `json:"load_warnings"`
+	Partial            bool         `json:"partial"`
 	ElapsedMS          int64        `json:"elapsed_ms"`
 }
 
@@ -257,6 +258,7 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 			Counts: res.Count(), Checks: []checkDoc{},
 		},
 		LoadWarnings: append([]string{}, m.Warnings...),
+		Partial:      m.Partial,
 		ElapsedMS:    elapsed.Milliseconds(),
 	}
 	if d.LoadWarnings == nil {

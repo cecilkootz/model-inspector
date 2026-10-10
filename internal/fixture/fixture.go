@@ -49,6 +49,17 @@ func EncodeHeader(header, data []byte) []byte {
 // Offsets are contiguous in the order tensors are given. Returns the file
 // bytes and the data-section size (the sum of tensor byte ranges).
 func WriteShard(format string, tensors []Tensor) ([]byte, int64, error) {
+	return writeShard(format, tensors, true)
+}
+
+// WriteHeaderOnly encodes the same header and offsets as WriteShard but
+// omits the tensor payload. The returned size is still the sum of the
+// declared ranges, so a loader sees the real shapes without the bytes.
+func WriteHeaderOnly(format string, tensors []Tensor) ([]byte, int64, error) {
+	return writeShard(format, tensors, false)
+}
+
+func writeShard(format string, tensors []Tensor, withData bool) ([]byte, int64, error) {
 	entries := map[string]any{}
 	if format != "" {
 		entries["__metadata__"] = map[string]string{"format": format}
@@ -81,7 +92,11 @@ func WriteShard(format string, tensors []Tensor) ([]byte, int64, error) {
 	if pad := len(js) % 8; pad != 0 {
 		js = append(js, bytesRepeat(' ', 8-pad)...)
 	}
-	return EncodeHeader(js, make([]byte, offset)), offset, nil
+	var data []byte
+	if withData {
+		data = make([]byte, offset)
+	}
+	return EncodeHeader(js, data), offset, nil
 }
 
 func elements(shape []int64) (int64, error) {
@@ -337,6 +352,41 @@ func NgramTable() ([]File, error) {
 	return []File{
 		{Name: "config.json", Data: cfg},
 		{Name: "model.safetensors.index.json", Data: idx},
+		{Name: "model.safetensors", Data: shard},
+	}, nil
+}
+
+// VontraNgramShards is the piece count of the PLE n-gram table in
+// Vontra/Qwen3.8-Flash-Next-MLX-4bit-MTP.
+const VontraNgramShards = 128
+
+// ShardedNgram is that table's on-disk layout: shard_0 through shard_127,
+// each a U32 4-bit pack of shape [2500012, 20] with BF16 scales and biases
+// of shape [2500012, 5] (group size 32). The payload is omitted; the header
+// offsets still describe the full ranges so stats see the real sizes.
+func ShardedNgram() ([]File, error) {
+	tensors := make([]Tensor, 0, VontraNgramShards*3)
+	for i := 0; i < VontraNgramShards; i++ {
+		base := fmt.Sprintf("language_model.model.layers.1.ple.ple_embedding.ngram_embedding.shard_%d", i)
+		tensors = append(tensors,
+			Tensor{Name: base + ".weight", DType: "U32", Shape: []int64{2500012, 20}},
+			Tensor{Name: base + ".scales", DType: "BF16", Shape: []int64{2500012, 5}},
+			Tensor{Name: base + ".biases", DType: "BF16", Shape: []int64{2500012, 5}},
+		)
+	}
+	shard, _, err := WriteHeaderOnly("mlx", tensors)
+	if err != nil {
+		return nil, err
+	}
+	cfg := []byte(`{
+  "model_type": "qwen3_next",
+  "num_hidden_layers": 48,
+  "tie_word_embeddings": false,
+  "quantization": {"bits": 4, "group_size": 32, "mode": "affine"}
+}
+`)
+	return []File{
+		{Name: "config.json", Data: cfg},
 		{Name: "model.safetensors", Data: shard},
 	}, nil
 }
