@@ -219,7 +219,10 @@ func elidePath(p string, budget int) string {
 		return middle(p, budget)
 	}
 	tailN := utf8.RuneCountInString(tail)
-	if budget > tailN+1 {
+	// Keep the whole filename only while the directory head still has
+	// minDirHead runes. The band just above that (head of 1..7) used to
+	// shrink "/KEEPHEAD" to "/K" and then "/".
+	if budget-tailN-1 >= minDirHead {
 		head := takeAtoms(p, budget-tailN-1)
 		return head + "…" + tail
 	}

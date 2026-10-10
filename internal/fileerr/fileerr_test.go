@@ -155,6 +155,61 @@ func TestErrorKeepsDirectoryHeadWhenFilenameDominates(t *testing.T) {
 	}
 }
 
+// TestElideKeepsMinDirectoryHeadOnBoundary covers every filename length
+// where keeping the whole name would leave a directory head shorter than
+// minDirHead. That is the band between a full "/KEEPHEA…" head and the
+// switch that used to produce "/K…" and then "/…", for a path shaped like
+// scan /KEEPHEAD/sub/ + n's + .bin.
+func TestElideKeepsMinDirectoryHeadOnBoundary(t *testing.T) {
+	const dir = "/KEEPHEAD/sub/"
+	var band []int
+	atMin := -1
+	for n := 1; n <= 400; n++ {
+		name := strings.Repeat("n", n) + ".bin"
+		path := dir + name
+		raw := (&fs.PathError{Op: "scan", Path: path, Err: fs.ErrNotExist}).Error()
+		rest := utf8.RuneCountInString(raw) - utf8.RuneCountInString(path)
+		budget := MaxRunes - rest
+		if budget < 8 {
+			budget = 8
+		}
+		headRoom := budget - (1 + utf8.RuneCountInString(name)) - 1
+		msg := String(raw)
+		if utf8.RuneCountInString(msg) > MaxRunes {
+			t.Fatalf("n=%d visible runes %d: %q", n, utf8.RuneCountInString(msg), msg)
+		}
+		switch {
+		case headRoom == minDirHead:
+			atMin = n
+			if !strings.Contains(msg, "/KEEPHEA") || !strings.Contains(msg, name) {
+				t.Fatalf("n=%d on the min-head boundary: %q", n, msg)
+			}
+		case headRoom >= 1 && headRoom < minDirHead:
+			band = append(band, n)
+			if !strings.Contains(msg, "/KEEPHEA") || !strings.Contains(msg, ".bin") {
+				t.Fatalf("n=%d head room %d collapsed: %q", n, headRoom, msg)
+			}
+			if strings.Contains(msg, "/K…/") || strings.Contains(msg, "/…/") {
+				t.Fatalf("n=%d head room %d shrunk the directory head: %q", n, headRoom, msg)
+			}
+			if strings.Contains(msg, name) {
+				t.Fatalf("n=%d kept the whole filename: %q", n, msg)
+			}
+		}
+	}
+	if atMin < 0 {
+		t.Fatal("no filename length sits on the minDirHead boundary")
+	}
+	if len(band) != minDirHead-1 {
+		t.Fatalf("band %v, want %d lengths", band, minDirHead-1)
+	}
+	for i := 1; i < len(band); i++ {
+		if band[i] != band[i-1]+1 {
+			t.Fatalf("band is not contiguous: %v", band)
+		}
+	}
+}
+
 func reportedLen(t *testing.T, msg string) int {
 	t.Helper()
 	const mark = "… ("
