@@ -1,0 +1,24 @@
+model-inspector  [1 Identity] 2 Config 3 Layers 4 Scan ✗1             m mouse on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+/model  revision: — · qwen3_next · safetensors · u8                             
+                                                                                
+SIZE ON DISK    PARAMETERS      QUANT           LAYERS          EXPERTS         
+24.20 KiB       ~61.1K          u8              48              8 · 2/tok       
+2 files|1 shard 245 tensors                     ○36 lin · ●12 f routed          
+                                                                                
+STORAGE  24.20 KiB on disk                                                      
+████████████████████████████████████████████████████████████████████████████    
+█ plain u8 100%                                                                 
+Memory  weights ≥ 59.65 KiB (0.0 GB)                                            
+  text-only ≥ 58.48 KiB                                                         
+  weights only: no KV cache, activations or runtime overhead                    
+  weights only; excludes KV cache, activations, runtime overhead                
+                                                                                
+CALLOUTS  1 notable                                                             
+[MTP] MTP layer present (1.17 KiB): used only for speculative decoding          
+                                                                                
+BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2×
+2 layers/cell                                                                   
+            ○○○○○○○○○○○○○○○○○○○○○○○○ ●                                          
+attention   ░░░░░░░░░░░░░░░░░░░░░░░░ ░  +18% ● 1000 B-1.2                       
+IDENTITY │ /model       safetensors │ 24.20 KiB │ u8 │ ✗ 1 fail │ – headers-only

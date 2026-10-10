@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -15,6 +16,7 @@ import (
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 type tab int
@@ -51,18 +53,73 @@ type Model struct {
 	groupTable  table.Model
 	tensorTable table.Model
 	detail      *model.Group
+
+	mouse          bool
+	motion         bool
+	motionFrame    int
+	blurred        bool
+	focusSecondary bool
+	ratio          int
+	zoom           bool
+	drill          bool
+	disclosure     bool
+	palette        palState
+	derived        *derived
+	cache          *frameCache
+	zones          *ui.Zones
+	now            func() time.Time
+	lastClickID    string
+	lastClickAt    time.Time
+}
+
+type frameCache struct {
+	key   string
+	frame string
+}
+
+type palState struct {
+	open   bool
+	query  string
+	cursor int
+}
+
+// Options configures a TUI session. A nil Mouse keeps the default
+// (on, unless MODEL_INSPECTOR_MOUSE=0).
+type Options struct {
+	Mouse  *bool
+	Motion *bool
+	Now    func() time.Time
 }
 
 // Run starts the TUI in the alternate screen.
-func Run(m *model.Model, res scan.Result) error {
-	_, err := tea.NewProgram(New(m, res), tea.WithAltScreen()).Run()
+func Run(m *model.Model, res scan.Result, opt ...Options) error {
+	t := New(m, res)
+	if len(opt) > 0 {
+		t.apply(opt[0])
+	}
+	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
+	if t.mouse {
+		opts = append(opts, tea.WithMouseCellMotion())
+	}
+	_, err := tea.NewProgram(t, opts...).Run()
 	return err
 }
 
 // New builds the UI for a loaded model.
 func New(m *model.Model, res scan.Result) Model {
 	configure()
-	t := Model{m: m, scan: res, width: 100, height: 30, scanOpen: map[string]bool{}}
+	d := derive(m)
+	motion := motionDefault()
+	frame := 6
+	if motion {
+		frame = 0
+	}
+	t := Model{
+		m: m, scan: res, width: 100, height: 30, scanOpen: map[string]bool{},
+		mouse: mouseDefault(), motion: motion, motionFrame: frame,
+		ratio: 55, derived: &d, cache: &frameCache{}, zones: &ui.Zones{},
+		now: time.Now,
+	}
 	t.identityVP = viewport.New(t.width, t.bodyHeight())
 	t.configVP = viewport.New(t.width, t.bodyHeight())
 	t.identityVP.SetContent(renderIdentity(m, t.width))
@@ -78,7 +135,12 @@ func New(m *model.Model, res scan.Result) Model {
 	return t
 }
 
-func (t Model) Init() tea.Cmd { return nil }
+func (t Model) Init() tea.Cmd {
+	if t.motion && t.motionFrame < 6 {
+		return tick()
+	}
+	return nil
+}
 
 func (t Model) bodyHeight() int {
 	if h := t.height - 3; h > 1 {
@@ -92,8 +154,11 @@ func (t *Model) resize() {
 	for _, vp := range []*viewport.Model{&t.identityVP, &t.configVP} {
 		vp.Width, vp.Height = t.width, h
 	}
-	t.identityVP.SetContent(renderIdentity(t.m, t.width))
+	t.identityVP.SetContent(t.identityBody())
 	t.configVP.SetContent(renderConfig(t.m, t.width))
+	if t.cache != nil {
+		t.cache.key = ""
+	}
 	t.groupTable.SetColumns(groupColumns(t.width))
 	t.groupTable.SetWidth(t.width)
 	t.groupTable.SetHeight(h)
@@ -113,6 +178,24 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.resize()
 		t.ensureScanVisible()
 		return t, nil
+	case tea.MouseMsg:
+		return t.updateMouse(msg)
+	case tea.FocusMsg:
+		t.blurred = false
+		return t, nil
+	case tea.BlurMsg:
+		t.blurred = true
+		return t, nil
+	case tickMsg:
+		if !t.motion || t.blurred || t.motionFrame >= 6 {
+			return t, nil
+		}
+		t.motionFrame++
+		t.resize()
+		if t.motionFrame < 6 {
+			return t, tick()
+		}
+		return t, nil
 	case tea.KeyMsg:
 		if t.notice != "" && msg.String() != "ctrl+c" {
 			t.notice = ""
@@ -120,12 +203,18 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return t, tea.Quit
 		}
+		if t.palette.open {
+			return t.updatePalette(msg)
+		}
 		if t.inputFocused {
 			if msg.String() == "esc" {
 				t.inputFocused = false
 			}
 			// q and other keys do not quit or change tabs while a text input is focused.
 			return t, nil
+		}
+		if t.disclosure {
+			return t.updateDisclosure(msg)
 		}
 		if t.ready && (t.width < 60 || t.height < 16) {
 			if msg.String() == "q" {
@@ -135,13 +224,33 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.String() {
 		case "q":
+			if t.help {
+				t.help = false
+				return t, nil
+			}
 			return t, tea.Quit
 		case "?":
 			t.help = !t.help
 			return t, nil
+		case ":", "ctrl+k":
+			t.palette.open = true
+			t.palette.query = ""
+			t.palette.cursor = 0
+			t.inputFocused = true
+			return t, nil
+		case "m":
+			return t.toggleMouse()
 		case "esc":
 			if t.help {
 				t.help = false
+				return t, nil
+			}
+			if t.zoom {
+				t.zoom = false
+				return t, nil
+			}
+			if t.drill {
+				t.drill = false
 				return t, nil
 			}
 			if t.detail != nil {
@@ -150,19 +259,67 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return t, nil
 		case "backspace":
+			if t.drill {
+				t.drill = false
+				return t, nil
+			}
 			if t.detail != nil {
 				t.detail = nil
 			}
 			return t, nil
-		case "tab", "right", "l":
+		case "w":
+			if ui.Breakpoint(t.width, t.height) == "M" || ui.Breakpoint(t.width, t.height) == "L" {
+				t.focusSecondary = !t.focusSecondary
+				t.resize()
+			}
+			return t, nil
+		case "<", ">":
+			if br := ui.Breakpoint(t.width, t.height); br == "M" || br == "L" {
+				d := -5
+				if msg.String() == ">" {
+					d = 5
+				}
+				t.ratio += d
+				if t.ratio < 30 {
+					t.ratio = 30
+				}
+				if t.ratio > 70 {
+					t.ratio = 70
+				}
+				t.resize()
+			}
+			return t, nil
+		case "z":
+			if br := ui.Breakpoint(t.width, t.height); br == "M" || br == "L" {
+				t.zoom = !t.zoom
+				t.resize()
+			}
+			return t, nil
+		case "tab":
 			t.active = (t.active + 1) % numTabs
 			return t, nil
-		case "shift+tab", "left", "h":
+		case "shift+tab":
 			t.active = (t.active + numTabs - 1) % numTabs
+			return t, nil
+		case "right", "l":
+			if !t.treeFocused() {
+				t.active = (t.active + 1) % numTabs
+			}
+			return t, nil
+		case "left", "h":
+			if !t.treeFocused() {
+				t.active = (t.active + numTabs - 1) % numTabs
+			}
 			return t, nil
 		case "1", "2", "3", "4":
 			t.active = tab(msg.String()[0] - '1')
 			return t, nil
+		case "enter":
+			if !t.help && t.active == tabIdentity && ui.Breakpoint(t.width, t.height) == "S" {
+				t.drill = true
+				t.resize()
+				return t, nil
+			}
 		}
 		if t.help {
 			return t, nil
@@ -241,6 +398,7 @@ func (t Model) updateScan(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "c":
 		t.notice = "Code & pickles arrives in a later version"
+		t.disclosure = true
 	}
 	t.ensureScanVisible()
 	return t, nil
@@ -249,27 +407,18 @@ func (t Model) updateScan(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (t Model) View() string {
 	configure()
 	if !t.ready {
-		return t.headerLine(80) + "\n" + t.tabLine(80)
+		return fitLine("model-inspector   1 Identity   2 Config   3 Layers   4 Scan", 80)
 	}
-	if t.width < 60 || t.height < 16 {
-		return frame(t.tooSmall(), t.width, t.height)
+	key := t.frameKey()
+	if t.cache != nil && t.cache.key == key && t.cache.frame != "" {
+		return t.cache.frame
 	}
-	var body string
-	switch {
-	case t.help:
-		body = t.helpText(t.width, t.bodyHeight())
-	case t.active == tabIdentity:
-		body = t.identityVP.View()
-	case t.active == tabConfig:
-		body = t.configVP.View()
-	case t.active == tabLayers:
-		body = t.layersBody()
-	case t.active == tabScan:
-		body = t.scanBody(t.width, t.bodyHeight())
+	s := t.renderFrame()
+	if t.cache != nil {
+		t.cache.key = key
+		t.cache.frame = s
 	}
-	body = clipLines(body, t.bodyHeight(), t.width)
-	raw := t.headerLine(t.width) + "\n" + t.tabLine(t.width) + "\n" + body + "\n" + t.footerLine(t.width)
-	return frame(raw, t.width, t.height)
+	return s
 }
 
 func (t Model) layersBody() string {
@@ -284,10 +433,6 @@ func (t Model) layersBody() string {
 		return head + "\n" + t.tensorTable.View()
 	}
 	return t.groupTable.View()
-}
-
-func kv(label string, value sanitize.Text) string {
-	return labelStyle.Render(sanitize.From(label).String()) + valueStyle.Render(value.String()) + "\n"
 }
 
 func text(s string) sanitize.Text { return sanitize.From(s) }
@@ -334,16 +479,24 @@ func renderConfig(m *model.Model, width int) string {
 	}
 	var b strings.Builder
 	b.WriteString(headingStyle.Render("Key fields") + "\n")
+	var rows []ui.KVRow
 	for _, f := range m.KeyConfig() {
-		b.WriteString(kv(f.Path, text(compact(f.Value))))
+		rows = append(rows, ui.KVRow{Label: sanitize.From(f.Path), Value: text(compact(f.Value))})
 	}
 	if lt := m.LayerTypeCounts(); lt != nil {
 		for _, k := range model.SortedKeys(lt) {
-			b.WriteString(kv("layer_types: "+k, textf("%d", lt[k])))
+			rows = append(rows, ui.KVRow{Label: sanitize.From("layer_types: " + k), Value: textf("%d", lt[k])})
 		}
 	}
 	if m.Quant != nil {
-		b.WriteString(kv(m.Quant.Source, textf("bits=%d group_size=%d mode=%s", m.Quant.Bits, m.Quant.GroupSize, m.Quant.Mode)))
+		rows = append(rows, ui.KVRow{
+			Label: sanitize.From(m.Quant.Source),
+			Value: textf("bits=%d group_size=%d mode=%s", m.Quant.Bits, m.Quant.GroupSize, m.Quant.Mode),
+		})
+	}
+	if len(rows) > 0 {
+		b.WriteString(ui.KV(rows, width))
+		b.WriteByte('\n')
 	}
 	b.WriteString("\n" + headingStyle.Render("config.json (raw)") + "\n")
 	pretty, err := sanitize.JSON(m.Config)

@@ -10,6 +10,7 @@ import (
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 type scanLine struct {
@@ -54,11 +55,15 @@ func (t Model) scanLines(width int) []scanLine {
 	}
 	counts := t.scan.Count()
 	notRun := counts.Skip + counts.Planned
-	head := fmt.Sprintf("Integrity & provenance · structure only    %d passed · %d warn · %d fail · %d n/r",
+	dot := " · "
+	if !ui.UTF8() {
+		dot = " | "
+	}
+	head := fmt.Sprintf("Integrity & provenance"+dot+"structure only    %d passed"+dot+"%d warn"+dot+"%d fail"+dot+"%d n/r",
 		counts.Pass, counts.Warn, counts.Fail, notRun)
 	if t.scan.Strict {
 		eff := effectiveCounts(t.scan)
-		head = fmt.Sprintf("Integrity & provenance · structure only    %d passed · %d warn · %d fail · %d n/r · strict: warnings count as failures",
+		head = fmt.Sprintf("Integrity & provenance"+dot+"structure only    %d passed"+dot+"%d warn"+dot+"%d fail"+dot+"%d n/r"+dot+"strict: warnings count as failures",
 			eff.pass, eff.warn, eff.fail, notRun)
 	}
 	add(head)
@@ -82,21 +87,21 @@ func (t Model) scanLines(width int) []scanLine {
 			for _, d := range c.Details {
 				if shown == 5 {
 					extra := len(c.Details) - shown
-					lines = append(lines, scanLine{text: truncWidth(fmt.Sprintf("    · …and %d more   (all details: inspect --json)", extra), width), check: i})
+					lines = append(lines, scanLine{text: truncWidth(fmt.Sprintf("    "+dot+"%sand %d more   (all details: inspect --json)", ui.G().Ellipsis, extra), width), check: i})
 					break
 				}
-				lines = append(lines, scanLine{text: truncWidth("    · "+fileerr.Present(d), width), check: i})
+				lines = append(lines, scanLine{text: truncWidth("    "+dot+fileerr.Present(d), width), check: i})
 				shown++
 			}
 		}
 	}
 	add("")
 	add("Not covered by these checks")
-	add(" · whether the weights are benign, unmodified or what the publisher intended")
-	add(" · what the model outputs or how it behaves")
-	add(" · tokenizer, chat template, license, or training-data provenance")
-	add(" · " + revisionNote(t.m))
-	add(" · This is not a malware or behavior scan.")
+	add(dot + "whether the weights are benign, unmodified or what the publisher intended")
+	add(dot + "what the model outputs or how it behaves")
+	add(dot + "tokenizer, chat template, license, or training-data provenance")
+	add(dot + revisionNote(t.m))
+	add(dot + "This is not a malware or behavior scan.")
 	return lines
 }
 
@@ -154,7 +159,7 @@ func statusWord(c scan.Check) (string, lipgloss.Style) {
 
 func revisionNote(m *model.Model) string {
 	if m.Revision == "" {
-		return "revision: — ; file contents were not hashed"
+		return "revision: " + ui.Dash() + " ; file contents were not hashed"
 	}
 	rev := m.Revision
 	if len(rev) > 7 {

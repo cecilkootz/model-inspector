@@ -4,200 +4,284 @@ import (
 	"fmt"
 	"strings"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 func renderIdentity(m *model.Model, width int) string {
+	return renderIdentityView(m, derive(m), width, 40, idState{})
+}
+
+type idState struct {
+	frac           float64
+	focusSecondary bool
+	zoom           bool
+	drill          bool
+	height         int
+}
+
+func renderIdentityView(m *model.Model, d derived, width, height int, st idState) string {
 	if width < 20 {
 		width = 20
 	}
+	if height < 1 {
+		height = 1
+	}
+	if st.frac <= 0 {
+		st.frac = 1
+	}
+	st.height = height
+	if m == nil {
+		return ""
+	}
+	br := ui.Breakpoint(width, height)
 	var lines []string
-	add := func(s string) { lines = append(lines, truncWidth(s, width)) }
-
+	add := func(s string) { lines = append(lines, ui.Fit(s, width)) }
 	if strings.HasPrefix(m.Format, "gguf") {
 		add("GGUF parsing is coming. model-inspector read file sizes only.")
 		add("")
 	}
-	add(kvLine("Repo", repoValue(m), width))
-	add(kvLine("Arch", archValue(m), width))
-	if moe := moeValue(m); moe != "" {
-		add(kvLine("MoE", moe, width))
+	if st.drill && br == "S" {
+		add(ui.Title("IDENTITY", "detail", width))
+		lines = append(lines, heatLines(d, width, false)...)
+		lines = append(lines, legacyMemory(m, d.mem, width)...)
+		return strings.Join(fitAll(lines, width), "\n")
 	}
-	add(kvLine("Size", sizeValue(m), width))
-	add(kvLine("Params", paramsValue(m), width))
-	add(kvLine("Quant", quantValue(m), width))
-	add("Storage (tensor bytes)")
-	bar, legend := storageBar(m, width-2)
-	add(" " + bar)
-	add(" " + legend)
-
-	mem := m.MemoryEstimate()
-	add(kvLine("Memory", memoryValue(m, mem), width))
-	if hasVisionOrMTP(m) {
-		add(indent("text-only ≥ " + model.HumanBytes(mem.TextOnlyBytes)))
+	name := modelTitle(m)
+	if br == "L" && !st.zoom {
+		lines = append(lines, heroLines(m, d, width)...)
+		add("")
+	} else {
+		add(name + "  " + subtitle(m, d))
+		add("")
 	}
-	if mem.HostCapableBytes >= model.GiB {
-		bytes := model.HumanBytes(mem.HostCapableBytes)
-		line := g.host + " of which " + bytes + " are lookup tables that can stay in CPU RAM"
-		if mem.HostCapablePartial {
-			line = g.host + " of which ≥ " + bytes + " are lookup tables that can stay in CPU RAM (incomplete)"
+	tiles := tileSpecs(m, d)
+	th := 3
+	if br == "L" {
+		th = 5
+	}
+	lines = append(lines, ui.TileRow(tiles, width, th)...)
+	add("")
+	if st.zoom {
+		if st.focusSecondary {
+			lines = append(lines, calloutBlock(m, d, width)...)
+		} else {
+			lines = append(lines, storageBlock(m, d, width, st.frac, br != "S")...)
 		}
-		add(indent(line))
-		// The subtraction is a lower bound only when the host total is exact.
-		// A partial host figure is itself a lower bound; subtracting it can
-		// overstate the accelerator remainder, so the line is omitted.
-		if !mem.HostCapablePartial {
-			add(indent("  (heuristic) → ≥ " + model.HumanBytes(mem.AcceleratorMinBytes) + " on the GPU/accelerator"))
-		}
-	}
-	if mem.UnifiedMemory {
-		add(indent("unified memory (MLX): CPU and GPU share RAM, total is unchanged"))
-	}
-	add(indent("weights only: no KV cache, activations or runtime overhead"))
-
-	callouts := m.Outliers()
-	if len(callouts) > 0 {
-		add("Callouts")
-		lines = append(lines, calloutLines(m, callouts, width)...)
+	} else if br == "M" || br == "L" {
+		lines = append(lines, splitBand(m, d, width, st)...)
+	} else {
+		lines = append(lines, storageBlock(m, d, width, st.frac, false)...)
+		add("")
+		lines = append(lines, calloutBlock(m, d, width)...)
 	}
 	add("")
-	add("Dtypes")
-	for _, dt := range model.SortedKeys(m.DTypes) {
-		d := m.DTypes[dt]
-		add(indent(sanitize.From(fmt.Sprintf("%s  %d tensors, %s elems, %s", dt, d.Tensors, model.HumanCount(d.Elements), model.HumanBytes(d.Bytes))).String()))
+	lines = append(lines, heatLines(d, width, br == "L")...)
+	// The sentences below are the same facts the text summary prints.
+	// They stay in the scrollback so a partial load still says incomplete.
+	// Callout messages are repeated at the full width: the pane column
+	// truncates them, and tests look for the whole sentence.
+	lines = append(lines, legacyMemory(m, d.mem, width)...)
+	for _, c := range d.callouts {
+		add(sanitize.From(c.Message).String())
 	}
-	return strings.Join(lines, "\n")
+	if m.Partial {
+		add("incomplete")
+	}
+	return strings.Join(fitAll(lines, width), "\n")
 }
 
-func kvLine(label, value string, width int) string {
-	lab := padLabel(label, 9)
-	room := width - 9
-	if room < 1 {
-		room = 1
+func fitAll(lines []string, width int) []string {
+	out := make([]string, len(lines))
+	for i, ln := range lines {
+		out[i] = ui.Fit(ln, width)
 	}
-	return lab + truncWidth(sanitize.From(value).String(), room)
+	return out
 }
 
-func indent(s string) string { return padLabel("", 9) + s }
+func modelTitle(m *model.Model) string {
+	name := m.RepoID
+	if name == "" {
+		name = m.Dir
+	}
+	if i := strings.LastIndex(name, "/"); i >= 0 && m.RepoID != "" {
+		name = name[i+1:]
+	}
+	return sanitize.From(name).String()
+}
 
-func repoValue(m *model.Model) string {
-	rev := ""
-	if m.Revision != "" {
-		rev = m.Revision
-		if len(rev) > 7 {
-			rev = rev[:7]
-		}
-	}
-	if m.RepoID != "" && rev != "" {
-		return m.RepoID + " @ " + rev + " (cache ref)"
-	}
+func subtitle(m *model.Model, d derived) string {
+	var parts []string
 	if m.RepoID != "" {
-		return m.RepoID + "  revision: —"
+		org := m.RepoID
+		if i := strings.Index(org, "/"); i >= 0 {
+			org = org[:i]
+		}
+		parts = append(parts, sanitize.From(org).String())
 	}
-	if rev != "" {
-		return m.Dir + " @ " + rev + " (cache ref)"
+	if m.Revision != "" {
+		rev := m.Revision
+		if len(rev) > 12 {
+			rev = rev[:12]
+		}
+		parts = append(parts, "revision "+sanitize.From(rev).String())
+	} else if m.RepoID == "" {
+		parts = append(parts, "revision: "+ui.Dash())
 	}
-	return m.Dir + "  revision: —"
+	if d.modelType != "" {
+		parts = append(parts, sanitize.From(d.modelType).String())
+	}
+	parts = append(parts, compactFormat(m.Format))
+	if q := quantHeader(m); q != "" {
+		parts = append(parts, q)
+	}
+	return strings.Join(parts, ui.SepWord())
 }
 
-func archValue(m *model.Model) string {
-	mt := "—"
-	for _, kv := range m.KeyConfig() {
-		if kv.Key == "model_type" && fmt.Sprint(kv.Value) != "" {
-			mt = fmt.Sprint(kv.Value)
-			break
+func heroLines(m *model.Model, d derived, width int) []string {
+	word := "model-inspector"
+	var lines []string
+	gl := ui.G()
+	for k := 0; k < 5; k++ {
+		var pill string
+		switch {
+		case ui.ColorOff():
+			pill = word
+		case ui.Profile() == "ansi16":
+			pill = ui.Pill(ui.FillKindViolet, ui.L("model-inspector"))
+		default:
+			t := 0.0
+			if k > 0 {
+				t = float64(k) / 4
+			}
+			hex := string(ui.GradBrand.At(t))
+			fg := ui.OnFill(hex)
+			pill = paintWord(word, fg, hex)
 		}
+		indent := strings.Repeat(" ", k*2)
+		rest := ""
+		switch k {
+		case 0:
+			rest = "  " + modelTitle(m)
+		case 1:
+			rest = "  " + subtitle(m, d)
+		case 2:
+			rest = "  " + sanitize.From(m.Dir).String()
+		case 4:
+			rest = "  " + heroPills(m, d)
+		}
+		if ui.ColorOff() && k == 2 {
+			rest = "  " + sanitize.From(m.Dir).String()
+		}
+		if !ui.ColorOff() && k == 2 {
+			path := sanitize.From(m.Dir).String()
+			rest = "  " + paintFG(path, ui.TextLink)
+		}
+		line := indent + pill + rest
+		_ = gl
+		lines = append(lines, ui.Fit(line, width))
 	}
+	return lines
+}
+
+func paintWord(word, fg, bg string) string {
+	return paintPlain(word, fg, bg, true)
+}
+
+func paintFG(s string, tok ui.Token) string {
+	if ui.ColorOff() {
+		return s
+	}
+	return paintPlain(s, tok.Hex(), "", false)
+}
+
+func heroPills(m *model.Model, d derived) string {
+	var parts []string
+	if m.Partial {
+		parts = append(parts, ui.Pill(ui.FillKindWarn, ui.L("incomplete")))
+	} else {
+		parts = append(parts, ui.Pill(ui.FillKindNR, sanitize.From(ui.G().NR+" headers-only")))
+	}
+	n := len(d.callouts)
+	if n > 0 {
+		parts = append(parts, ui.Pill(ui.FillKindWarn, sanitize.From(fmt.Sprintf("%s %d callouts", ui.G().Size, n))))
+	}
+	if d.mem.HostCapableBytes > 0 {
+		parts = append(parts, ui.Pill(ui.FillKindHost, sanitize.From(fmt.Sprintf("%s %s host-capable", ui.G().Host, model.HumanBytes(d.mem.HostCapableBytes)))))
+	}
+	return strings.Join(parts, "  ")
+}
+
+func tileSpecs(m *model.Model, d derived) []ui.TileSpec {
 	layers, _ := m.LayerCount()
-	counts := m.LayerTypeCounts()
-	if len(counts) == 0 {
-		for _, t := range m.LayerTypes() {
-			if t == "" {
-				continue
-			}
-			if counts == nil {
-				counts = map[string]int{}
-			}
-			counts[t]++
-		}
+	files := fmt.Sprintf("%s files", model.Comma(int64(len(m.Files))))
+	if len(m.Shards) > 0 {
+		files += "|" + fmt.Sprintf("%d shards", len(m.Shards))
 	}
-	s := mt
+	params := "~" + model.HumanCount(m.TotalLogicalParams)
+	quant := quantHeader(m)
+	if quant == "" {
+		quant = ui.Dash()
+	}
+	layerSub := "layers"
 	if layers > 0 {
-		if len(counts) == 0 {
-			s += fmt.Sprintf(" · %d layers", layers)
-		} else {
-			s += fmt.Sprintf(" · %d layers: %s", layers, joinTypes(counts))
+		lin, full := 0, 0
+		for _, t := range m.LayerTypes() {
+			if t == "full_attention" {
+				full++
+			} else if t != "" {
+				lin++
+			}
+		}
+		if lin+full > 0 {
+			layerSub = fmt.Sprintf("%s%d lin%s%s%d full", ui.G().Linear, lin, ui.SepWord(), ui.G().Full, full)
 		}
 	}
-	if hasKind(m, model.KindMTP) {
-		s += " · + MTP"
+	experts := ui.Dash()
+	expertSub := ""
+	if n, per, ok := moeCounts(m); ok {
+		experts = fmt.Sprintf("%d", n)
+		if per > 0 {
+			experts = fmt.Sprintf("%d%s%d/tok", n, ui.SepWord(), per)
+		}
+		expertSub = "routed"
+	}
+	edge := func(k int) string { return string(ui.GradBrand.At(float64(k) / 5)) }
+	return []ui.TileSpec{
+		{Label: ui.L("SIZE ON DISK"), Value: sanitize.From(model.HumanBytes(m.TotalSize)), Sub: sanitize.From(files), Edge: edge(0)},
+		{Label: ui.L("PARAMETERS"), Value: sanitize.From(params), Sub: sanitize.From(fmt.Sprintf("%s tensors", model.Comma(int64(len(m.Tensors))))), Edge: edge(1)},
+		{Label: ui.L("QUANT"), Value: sanitize.From(quant), Sub: sanitize.From(quantSub(m)), Edge: edge(2)},
+		{Label: ui.L("LAYERS"), Value: sanitize.From(fmt.Sprintf("%d", layers)), Sub: sanitize.From(layerSub), Edge: edge(3)},
+		{Label: ui.L("EXPERTS"), Value: sanitize.From(experts), Sub: sanitize.From(expertSub), Edge: edge(4)},
+		{Label: ui.L("WEIGHTS"), Value: sanitize.From(ui.Geq() + " " + model.HumanBytes(d.mem.WeightsBytes)), Sub: ui.L("weights only"), Edge: edge(5)},
+	}
+}
+
+func quantSub(m *model.Model) string {
+	if m.Quant == nil {
+		return ""
+	}
+	s := m.Quant.Mode
+	if s == "" {
+		s = "quant"
 	}
 	return s
 }
 
-func joinTypes(counts map[string]int) string {
-	order := []string{}
-	pref := []string{"linear_attention", "full_attention"}
-	seen := map[string]bool{}
-	for _, p := range pref {
-		if counts[p] > 0 {
-			order = append(order, p)
-			seen[p] = true
-		}
-	}
-	rest := model.SortedKeys(counts)
-	for _, k := range rest {
-		if !seen[k] {
-			order = append(order, k)
-		}
-	}
-	parts := make([]string, len(order))
-	for i, k := range order {
-		parts[i] = fmt.Sprintf("%d %s", counts[k], shortType(k))
-	}
-	return strings.Join(parts, ", ")
-}
-
-func shortType(s string) string {
-	switch s {
-	case "linear_attention":
-		return "linear-attn"
-	case "full_attention":
-		return "full-attn"
-	default:
-		return s
-	}
-}
-
-func moeValue(m *model.Model) string {
-	var n, per int
-	var haveN, havePer bool
+func moeCounts(m *model.Model) (n, per int, ok bool) {
 	for _, kv := range m.KeyConfig() {
 		switch kv.Key {
 		case "num_experts", "num_local_experts", "n_routed_experts":
-			if !haveN {
+			if !ok {
 				n = intOf(kv.Value)
-				haveN = n > 0
+				ok = n > 0
 			}
 		case "num_experts_per_tok":
 			per = intOf(kv.Value)
-			havePer = per > 0
 		}
 	}
-	if !haveN {
-		return ""
-	}
-	layers, with := m.LayerCount()
-	s := fmt.Sprintf("%d routed experts", n)
-	if havePer {
-		s += fmt.Sprintf(", %d/token", per)
-	}
-	if layers > 0 {
-		s += fmt.Sprintf(" · experts in %d/%d layers", with, layers)
-	}
-	return s
+	return n, per, ok
 }
 
 func intOf(v any) int {
@@ -205,82 +289,200 @@ func intOf(v any) int {
 	return int(f)
 }
 
-func sizeValue(m *model.Model) string {
-	return fmt.Sprintf("%s on disk · %s files · %d shards · %s tensors",
-		model.HumanBytes(m.TotalSize), model.Comma(int64(len(m.Files))), len(m.Shards), model.Comma(int64(len(m.Tensors))))
-}
-
-func paramsValue(m *model.Model) string {
-	s := fmt.Sprintf("~%s dequantized est.", model.HumanCount(m.TotalLogicalParams))
-	if m.TotalLogicalParams <= 0 {
-		return s
+func storageBlock(m *model.Model, d derived, width int, frac float64, tall bool) []string {
+	var lines []string
+	lines = append(lines, ui.Title("STORAGE", model.HumanBytes(m.TotalSize)+" on disk", width))
+	h := 1
+	if tall {
+		h = 2
 	}
-	// Shard pieces of one lookup table are summed before the 10% check.
-	name, params, ngram := m.NotableParams()
-	if params*10 < m.TotalLogicalParams {
-		return s
+	barW := width - 4
+	if barW < 8 {
+		barW = width
 	}
-	if ngram {
-		return s + fmt.Sprintf(" (~%s in one n-gram table)", model.HumanCount(params))
-	}
-	if name != "" {
-		return s + " (" + model.ShortName(name) + ")"
-	}
-	return s
-}
-
-func quantValue(m *model.Model) string {
-	if m.Quant == nil {
-		d := model.DisplayDType(dominantDType(m))
-		if d == "" {
-			return "—"
-		}
-		return d
-	}
-	if len(m.BitsHistogram) > 1 {
-		bits := make([]int, 0, len(m.BitsHistogram))
-		for b := range m.BitsHistogram {
-			bits = append(bits, b)
-		}
-		sortInts(bits)
-		parts := make([]string, len(bits))
-		for i, b := range bits {
-			parts[i] = fmt.Sprintf("%d-bit %s", b, model.Comma(int64(m.BitsHistogram[b])))
-		}
-		return "mixed: " + strings.Join(parts, " · ")
-	}
-	head := ""
-	mode := m.Quant.Mode
-	if _, variant, _ := model.FormatName(m.Format); variant == "mlx" || strings.EqualFold(mode, "mlx") {
-		head = "MLX "
-	}
-	if mode != "" && !strings.EqualFold(mode, "mlx") {
-		head += mode + " "
-	}
-	s := fmt.Sprintf("%s%d-bit", head, m.Quant.Bits)
-	if m.Quant.GroupSize > 0 {
-		s += fmt.Sprintf(", group %d", m.Quant.GroupSize)
-	}
-	if m.Quant.NumOverrides > 0 {
-		s += fmt.Sprintf(" · %d per-module overrides", m.Quant.NumOverrides)
-	}
-	return s
-}
-
-func sortInts(s []int) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j] < s[j-1]; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
+	if barW > int(float64(width-4)*frac) && frac < 1 {
+		barW = int(float64(width-4) * frac)
+		if barW < 4 {
+			barW = 4
 		}
 	}
+	rows, legend := ui.Stacked(storageSegs(d, frac), barW, h)
+	for _, r := range rows {
+		lines = append(lines, ui.Fit(r, width))
+	}
+	lines = append(lines, ui.Fit(legend, width))
+	lines = append(lines, legacyMemory(m, d.mem, width)...)
+	return lines
 }
 
-func memoryValue(m *model.Model, mem model.MemoryEstimate) string {
-	return fmt.Sprintf("weights alone ≥ %s (%s)", model.HumanBytes(mem.WeightsBytes), model.HumanDecimalGB(mem.WeightsBytes))
+func storageSegs(d derived, frac float64) []ui.Seg {
+	var segs []ui.Seg
+	for _, c := range d.storage {
+		f := c.Pct / 100 * frac
+		if f < 0 {
+			f = 0
+		}
+		s := ui.Seg{Label: classLabel(c.Class), Frac: f}
+		switch {
+		case strings.Contains(c.Class, "packed"):
+			s.Grad = ui.GradQ
+		case strings.Contains(c.Class, "scale") || strings.Contains(c.Class, "bias"):
+			s.Grad = ui.GradS
+		default:
+			s.Flat = ui.DTypeBF16.Hex()
+		}
+		segs = append(segs, s)
+	}
+	if len(segs) == 0 {
+		segs = append(segs, ui.Seg{Label: "empty", Frac: 1, Flat: ui.SurfaceSeg.Hex()})
+	}
+	return segs
 }
 
-func hasVisionOrMTP(m *model.Model) bool {
-	return hasKind(m, model.KindVision) || hasKind(m, model.KindMTP)
+func classLabel(class string) string {
+	var s string
+	switch {
+	case class == "q_scales_biases":
+		s = "scales/biases"
+	case strings.HasPrefix(class, "plain_"):
+		s = "plain " + strings.TrimPrefix(class, "plain_")
+	case strings.HasSuffix(class, "_packed"):
+		s = strings.TrimSuffix(class, "_packed") + " packed"
+	default:
+		s = class
+	}
+	return sanitize.From(s).String()
+}
+
+func calloutBlock(m *model.Model, d derived, width int) []string {
+	var lines []string
+	lines = append(lines, ui.Title("CALLOUTS", fmt.Sprintf("%d notable", len(d.callouts)), width))
+	if len(d.callouts) == 0 {
+		lines = append(lines, ui.Fit("none", width))
+		return lines
+	}
+	for _, c := range d.callouts {
+		msg := sanitize.From(c.Message)
+		spec := ui.CalloutSpec{
+			Kind:  calloutKind(c.Kind),
+			Tag:   sanitize.From(calloutTag(c.Kind)),
+			Title: msg,
+		}
+		lines = append(lines, ui.Callout(spec, width)...)
+	}
+	_ = m
+	return lines
+}
+
+func calloutKind(kind string) ui.FillKind {
+	switch kind {
+	case "host_capable":
+		return ui.FillKindHost
+	case "precision_outlier":
+		return ui.FillKindWarn
+	case "structural":
+		return ui.FillKindViolet
+	default:
+		return ui.FillKindWarn
+	}
+}
+
+func calloutTag(kind string) string {
+	g := ui.G()
+	switch kind {
+	case "host_capable":
+		return g.Host + " HOST"
+	case "precision_outlier":
+		return "BF16"
+	case "structural":
+		return "MTP"
+	default:
+		return g.Size
+	}
+}
+
+func splitBand(m *model.Model, d derived, width int, st idState) []string {
+	leftW := width * 55 / 100
+	if ui.Breakpoint(width, st.height) == "L" {
+		leftW = width * 42 / 100
+	}
+	if leftW < 20 {
+		leftW = width / 2
+	}
+	gutter := 2
+	rightW := width - leftW - gutter
+	if rightW < 10 {
+		return append(storageBlock(m, d, width, st.frac, true), calloutBlock(m, d, width)...)
+	}
+	left := storageBlock(m, d, leftW, st.frac, true)
+	right := calloutBlock(m, d, rightW)
+	n := len(left)
+	if len(right) > n {
+		n = len(right)
+	}
+	var lines []string
+	for i := 0; i < n; i++ {
+		var l, r string
+		if i < len(left) {
+			l = left[i]
+		}
+		if i < len(right) {
+			r = right[i]
+		}
+		l = ui.Fit(l, leftW)
+		r = ui.Fit(r, rightW)
+		focusedL := !st.focusSecondary
+		if i == 0 {
+			if focusedL {
+				l = ui.Fit(ui.Pill(ui.FillKindViolet, ui.L("STORAGE"))+" "+model.HumanBytes(m.TotalSize), leftW)
+			}
+			if !focusedL {
+				r = ui.Fit(ui.Pill(ui.FillKindViolet, ui.L("CALLOUTS")), rightW)
+			}
+		}
+		lines = append(lines, ui.Fit(l+strings.Repeat(" ", gutter)+r, width))
+	}
+	return lines
+}
+
+func heatLines(d derived, width int, large bool) []string {
+	lines := ui.Heatmap(d.heat, width, large)
+	for i, ln := range lines {
+		lines[i] = ui.Fit(ln, width)
+	}
+	return lines
+}
+
+func legacyMemory(m *model.Model, mem model.MemoryEstimate, width int) []string {
+	var lines []string
+	add := func(s string) { lines = append(lines, ui.Fit(s, width)) }
+	add("Memory  weights " + ui.Geq() + " " + model.HumanBytes(mem.WeightsBytes) + " (" + model.HumanDecimalGB(mem.WeightsBytes) + ")")
+	if hasKind(m, model.KindVision) || hasKind(m, model.KindMTP) {
+		add("  text-only " + ui.Geq() + " " + model.HumanBytes(mem.TextOnlyBytes))
+	}
+	if mem.HostCapableBytes >= model.GiB {
+		bytes := model.HumanBytes(mem.HostCapableBytes)
+		line := ui.G().Host + " of which " + bytes + " are lookup tables that can stay in CPU RAM"
+		if mem.HostCapablePartial {
+			line = ui.G().Host + " of which " + ui.Geq() + " " + bytes + " are lookup tables that can stay in CPU RAM (incomplete)"
+		}
+		add("  " + line)
+		// The subtraction is a lower bound only when the host total is exact.
+		// A partial host figure is itself a lower bound; subtracting it can
+		// overstate the accelerator remainder, so the line is omitted.
+		if !mem.HostCapablePartial {
+			add("    (heuristic) " + ui.RArrow() + " " + ui.Geq() + " " + model.HumanBytes(mem.AcceleratorMinBytes) + " on the GPU/accelerator")
+		}
+	}
+	if mem.UnifiedMemory {
+		add("  unified memory (MLX): CPU and GPU share RAM, total is unchanged")
+	}
+	add("  weights only: no KV cache, activations or runtime overhead")
+	add("  " + mem.Note)
+	if mem.HostCapableBytes > 0 {
+		add("  " + mem.HostCapableNote)
+	}
+	return lines
 }
 
 func hasKind(m *model.Model, kind string) bool {
@@ -292,137 +494,9 @@ func hasKind(m *model.Model, kind string) bool {
 	return false
 }
 
-func storageBar(m *model.Model, width int) (string, string) {
-	if width < 4 {
-		width = 4
+func paintPlain(s, fg, bg string, bold bool) string {
+	if ui.ColorOff() || s == "" {
+		return s
 	}
-	classes := model.MergeStorage(m, m.StorageBreakdown(), 4)
-	if len(classes) == 0 || m.TensorBytes <= 0 {
-		return strings.Repeat(g.bar[3], width), "no tensor bytes"
-	}
-	for _, c := range classes {
-		if c.Bytes < 0 || c.Pct < 0 {
-			return strings.Repeat(g.bar[3], width), "size overflow"
-		}
-	}
-	cells := make([]int, len(classes))
-	used := 0
-	for i, c := range classes {
-		n := 0
-		if c.Bytes > 0 && m.TensorBytes > 0 {
-			n = int(float64(c.Bytes)/float64(m.TensorBytes)*float64(width) + 0.5)
-		}
-		if n < 0 {
-			n = 0
-		}
-		if n > width {
-			n = width
-		}
-		if c.Bytes > 0 && n < 1 {
-			n = 1
-		}
-		cells[i] = n
-		used += n
-	}
-	for used > width {
-		// Shrink the largest segment that can give a cell back.
-		best := -1
-		for i, n := range cells {
-			if n > 1 && (best < 0 || n > cells[best]) {
-				best = i
-			}
-		}
-		if best < 0 {
-			break
-		}
-		cells[best]--
-		used--
-	}
-	for used < width {
-		best := 0
-		for i, c := range classes {
-			if c.Bytes > classes[best].Bytes {
-				best = i
-			}
-		}
-		cells[best]++
-		used++
-	}
-	var bar strings.Builder
-	var legend []string
-	for i, c := range classes {
-		fill := g.bar[i%len(g.bar)]
-		n := cells[i]
-		if n < 0 {
-			n = 0
-		}
-		if n > width {
-			n = width
-		}
-		bar.WriteString(strings.Repeat(fill, n))
-		legend = append(legend, sanitize.From(fmt.Sprintf("%s %s %.1f%%", fill, classLabel(c.Class), c.Pct)).String())
-	}
-	return bar.String(), strings.Join(legend, "  ")
-}
-
-func classLabel(class string) string {
-	switch {
-	case class == "q_scales_biases":
-		return "q-scales/biases"
-	case strings.HasPrefix(class, "plain_"):
-		return "plain " + strings.TrimPrefix(class, "plain_")
-	case strings.HasSuffix(class, "_packed"):
-		return strings.TrimSuffix(class, "_packed") + " packed"
-	default:
-		return class
-	}
-}
-
-func calloutLines(m *model.Model, cs []model.Callout, width int) []string {
-	var lines []string
-	prevSizeGroup := ""
-	used := 0
-	const maxLines = 4
-	for _, c := range cs {
-		if used >= maxLines {
-			break
-		}
-		glyph := calloutGlyph(c.Kind)
-		text := glyph + " " + sanitize.From(c.Message).String()
-		if c.Kind == "host_capable" && c.Group != "" && c.Group == prevSizeGroup {
-			text = "  " + text
-		}
-		lines = append(lines, truncWidth(text, width))
-		used++
-		if c.Kind == "size_outlier" {
-			prevSizeGroup = c.Group
-		}
-		if c.Kind == "load_warnings" {
-			for i, w := range m.Warnings {
-				if used >= maxLines || i >= 3 {
-					break
-				}
-				lines = append(lines, truncWidth("  "+fileerr.Present(w), width))
-				used++
-			}
-		}
-	}
-	return lines
-}
-
-func calloutGlyph(kind string) string {
-	switch kind {
-	case "size_outlier", "big_tensor":
-		return g.size
-	case "host_capable":
-		return g.host
-	case "precision_outlier":
-		return g.precision
-	case "structural":
-		return g.note
-	case "load_warnings":
-		return g.warnMark
-	default:
-		return "·"
-	}
+	return ui.Paint(s, fg, bg, bold)
 }

@@ -1,0 +1,16 @@
+model-inspector  [1 Identity] 2 Config 3 Layers 4 Scan +    
+============================================================
+/model  revision: - | qwen3_5 | safetensors|mlx | q4 g32    
+                                                            
+SIZE ON DISK   PARAMETERS     QUANT          LAYERS         
+6.07 KiB       ~86            q4 g32         2              
+4 files|2 shar 25 tensors     affine         o1 lin | O1 ful
+                                                            
+STORAGE  6.07 KiB on disk                                   
+#####################################============++++++.    
+# plain bf16 65.8%   = plain i64 21.1%   + q4 packed 10.5%  
+Memory  weights >= 152 B (0.0 GB)                           
+  text-only >= 128 B                                        
+  unified memory (MLX): CPU and GPU share RAM, total is unch
+  weights only: no KV cache, activations or runtime overhead
+IDENTITY | 6.07 KiB | q4 g32 | + structure 5/8 | - headers-o

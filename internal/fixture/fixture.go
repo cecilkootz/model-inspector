@@ -456,6 +456,58 @@ func CodeExec() ([]File, error) {
 	}, nil
 }
 
+// QwenShape is a 48-layer header-only checkpoint. Attention bytes spread
+// (linear 1000, full 1180), norms alternate 10 and 11, and the router,
+// shared, and routed rows are constant. The UI derives every figure from
+// these shapes.
+func QwenShape() ([]File, error) {
+	var tensors []Tensor
+	for i := 0; i < 48; i++ {
+		attn := int64(1000)
+		if (i+1)%4 == 0 {
+			attn = 1180
+		}
+		norm := int64(10)
+		if i%2 == 1 {
+			norm = 11
+		}
+		p := fmt.Sprintf("model.layers.%d.", i)
+		tensors = append(tensors,
+			Tensor{Name: p + "self_attn.q_proj.weight", DType: "U8", Shape: []int64{attn}},
+			Tensor{Name: p + "mlp.gate.weight", DType: "U8", Shape: []int64{64}},
+			Tensor{Name: p + "mlp.shared_expert.up_proj.weight", DType: "U8", Shape: []int64{64}},
+			Tensor{Name: p + "mlp.experts.0.down_proj.weight", DType: "U8", Shape: []int64{64}},
+			Tensor{Name: p + "input_layernorm.weight", DType: "U8", Shape: []int64{norm}},
+		)
+	}
+	tensors = append(tensors,
+		Tensor{Name: "model.mtp.layers.0.self_attn.q_proj.weight", DType: "U8", Shape: []int64{1000}},
+		Tensor{Name: "model.mtp.layers.0.mlp.gate.weight", DType: "U8", Shape: []int64{64}},
+		Tensor{Name: "model.mtp.layers.0.mlp.shared_expert.up_proj.weight", DType: "U8", Shape: []int64{64}},
+		Tensor{Name: "model.mtp.layers.0.mlp.experts.0.down_proj.weight", DType: "U8", Shape: []int64{64}},
+		Tensor{Name: "model.mtp.layers.0.input_layernorm.weight", DType: "U8", Shape: []int64{10}},
+	)
+	shard, _, err := WriteHeaderOnly("", tensors)
+	if err != nil {
+		return nil, err
+	}
+	cfg := []byte(`{
+  "model_type": "qwen3_next",
+  "text_config": {
+    "num_hidden_layers": 48,
+    "hidden_size": 8,
+    "full_attention_interval": 4,
+    "num_experts": 8,
+    "num_experts_per_tok": 2
+  }
+}
+`)
+	return []File{
+		{Name: "config.json", Data: cfg},
+		{Name: "model.safetensors", Data: shard},
+	}, nil
+}
+
 // TinyQwenMLXQuant is TinyQwen with quantization recorded as a top-level
 // "quantization" object (mlx-lm style) instead of text_config.quantization_config.
 func TinyQwenMLXQuant() ([]File, int64, error) {

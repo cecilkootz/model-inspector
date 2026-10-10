@@ -1,0 +1,40 @@
+[1 Identity] 2 Config 3 Layers 4 Scan ✓                                                                     ? keys   : commands   m mouse on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                ╭──────────────────────────────────────────────────────────────────────────╮                                
+                                │ KEYS  HELP                                                              │                                 
+                                │                                                                         │                                 
+                                │ GLOBAL                                                                  │                                 
+                                │   1 2 3 4  jump to tab                                                  │                                 
+                                │   tab  next / prev tab                                                  │                                 
+                                │   : ctrl+k  command palette                                             │                                 
+                                │   ?  this help                                                          │                                 
+                                │   q ctrl+c  quit                                                        │                                 
+                                │                                                                         │                                 
+                                │ NAVIGATION                                                              │                                 
+                                │   up down  move                                                         │                                 
+                                │   pgup pgdn  page                                                       │                                 
+                                │   g G  top / bottom                                                     │                                 
+                                │   enter  open / drill in                                                │                                 
+                                │   esc  back / close                                                     │                                 
+                                │                                                                         │                                 
+                                │ PANES                                                                   │                                 
+                                │   w  focus other pane                                                   │                                 
+                                │   < >  resize split                                                     │                                 
+                                │   z  zoom focused pane                                                  │                                 
+                                │                                                                         │                                 
+                                │ VIEW                                                                    │                                 
+                                │   m  mouse on / off                                                     │                                 
+                                │                                                                         │                                 
+                                │ Mouse is on. Hold Shift to select text.                                 │                                 
+                                │                                                                         │                                 
+                                │ ←→ tabs                                                                 │                                 
+                                │ esc close · ? close                                                     │                                 
+                                │                                                                         │                                 
+                                ╰──────────────────────────────────────────────────────────────────────────╯                                
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+HELP │ /model │ ↑↓ scroll · ←→ tabs · ? keys                          safetensors·mlx │ 6.07 KiB │ q4 g32 │ ✓ structure 5/8 │ – headers-only
