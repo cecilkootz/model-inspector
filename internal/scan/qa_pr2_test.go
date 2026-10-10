@@ -119,7 +119,11 @@ func TestQA_BracketedDirKeepsIndex(t *testing.T) {
 			if res.Overall == StatusPass {
 				t.Fatalf("%s PASS (%s)", sub, res.Checks[0].Summary)
 			}
-			blob := checkBlob(res)
+			// The missing shard is an index finding. Checks[0] is header-parse
+			// after the check list was split, so the assertion is pinned to
+			// index-shard-consistency rather than searched across every check.
+			indexCheck := findCheck(t, res, CheckIndex)
+			blob := indexCheck.Summary + "\n" + strings.Join(indexCheck.Details, "\n")
 			if strings.Contains(blob, "no index file") {
 				t.Fatalf("%s summary claims no index: %s", sub, blob)
 			}
@@ -149,22 +153,9 @@ func TestQA_AbsoluteShardName(t *testing.T) {
 	if res.Overall == StatusPass {
 		t.Fatalf("PASS with absolute shard name: %s", res.Checks[0].Summary)
 	}
-	if !strings.Contains(checkBlob(res), "not a local file name") {
-		t.Fatalf("absolute shard name was not reported:\n%s", checkBlob(res))
-	}
-}
-
-func checkBlob(res Result) string {
-	var b strings.Builder
-	for _, c := range res.Checks {
-		b.WriteString(c.Summary)
-		b.WriteByte('\n')
-		for _, d := range c.Details {
-			b.WriteString(d)
-			b.WriteByte('\n')
-		}
-	}
-	return b.String()
+	// Pinned to the index check. Checks[0] is header-parse, which does not
+	// carry shard-name findings.
+	detailsContain(t, findCheck(t, res, CheckIndex), "not a local file name")
 }
 
 func TestQA_DuplicateIndexKey(t *testing.T) {

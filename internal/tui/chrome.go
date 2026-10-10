@@ -202,6 +202,9 @@ func (t Model) footerLine(width int) string {
 		}
 	}
 	gap := width - lipgloss.Width(keys) - lipgloss.Width(status)
+	if gap < 0 {
+		gap = 0
+	}
 	if gap < 1 {
 		if t.notice != "" && lipgloss.Width(status) <= width {
 			return truncWidth(status, width)

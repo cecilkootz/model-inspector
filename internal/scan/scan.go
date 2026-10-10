@@ -133,7 +133,7 @@ func Why(id string) string {
 	case CheckIndex:
 		return "The index maps tensor names to shards. If it disagrees with the headers, a loader and this tool are not looking at the same bytes."
 	case CheckCodeExec:
-		return "These names are formats that can run code when some other tool loads the model. This check looks at names only, not file contents."
+		return "These formats can run code when some other tool loads the model. This check matches file names and reads top-level auto_map in config files. It does not import or execute anything."
 	case CheckCode:
 		return "Reading code and pickle contents is not part of this version."
 	case CheckHash:
@@ -407,6 +407,9 @@ func codeExecFormats(m *model.Model) Check {
 	for _, e := range m.AutoMapEntries() {
 		details = append(details, fmt.Sprintf("%s auto_map %s -> %s", e.File, e.Key, e.Target))
 	}
+	for _, name := range m.UncheckedAutoMap {
+		details = append(details, "could not check auto_map in "+name)
+	}
 	sort.Strings(details)
 	if len(details) == 0 {
 		c.Status = StatusPass
@@ -418,7 +421,7 @@ func codeExecFormats(m *model.Model) Check {
 		return c
 	}
 	c.Status = StatusWarn
-	c.Summary = fmt.Sprintf("%d name matches (pickle-family, .py, or auto_map)", len(details))
+	c.Summary = fmt.Sprintf("%d findings (code-exec formats or auto_map)", len(details))
 	c.Details = capDetails(details)
 	return c
 }

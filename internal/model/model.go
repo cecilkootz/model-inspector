@@ -123,8 +123,14 @@ type Model struct {
 
 	ConfigRaw []byte
 	Config    map[string]any
-	Quant     *Quantization
-	Index     *Index
+	// auxParsed holds tokenizer/processor/preprocessor configs that parsed.
+	auxParsed map[string]map[string]any
+	// UncheckedAutoMap lists config files that exist but could not be read
+	// or parsed, so top-level auto_map was not checked. The inspection is
+	// partial, and code-exec warns instead of passing as "none".
+	UncheckedAutoMap []string
+	Quant            *Quantization
+	Index            *Index
 	// IndexErr is set when an index file is present but cannot be used
 	// (unreadable JSON, a missing or empty weight_map, or several index
 	// files). Index stays nil so shard discovery can still see the
@@ -132,7 +138,8 @@ type Model struct {
 	IndexErr error `json:"-"`
 	// Partial is set when the inspection did not finish, or a value it
 	// needed could not be used: a walk cap, a per-entry walk error, an
-	// unreadable or dangling config.json, an index directory that could
+	// unreadable, dangling, or unparseable config.json (or an aux config
+	// that exists but cannot be read or parsed), an index directory that could
 	// not be listed, a display counter that overflowed, or an index
 	// metadata.total_size that is not a non-negative int64. A partial
 	// inspection must not produce an overall pass.
@@ -178,6 +185,7 @@ func Load(dir string) (*Model, error) {
 		return nil, err
 	}
 	m.loadConfig()
+	m.loadAuxConfigs()
 	m.loadIndex()
 	m.loadShards()
 	m.buildTensors()
@@ -309,29 +317,37 @@ func (m *Model) loadConfig() {
 			if _, lerr := os.Lstat(p); lerr != nil {
 				return
 			}
-			m.Partial = true
 			m.warnf("config.json: broken symlink: %v", err)
+			m.noteUnchecked("config.json")
 			return
 		}
 		// The file is there but cannot be read safely (device, FIFO, escape).
 		// That is an incomplete inspection, not a clean pass.
-		m.Partial = true
 		m.warnf("%v", err)
+		m.noteUnchecked("config.json")
 		return
 	}
 	m.ConfigRaw = raw
-	v, err := jsonx.Unmarshal(raw)
+	cfg, err := parseConfigObject("config.json", raw)
 	if err != nil {
-		m.warnf("parsing config.json: %v", err)
-		return
-	}
-	cfg, ok := v.(map[string]any)
-	if !ok || cfg == nil {
-		m.warnf("parsing config.json: expected a JSON object")
+		m.warnf("%s", err.Error())
+		m.noteUnchecked("config.json")
 		return
 	}
 	m.Config = cfg
 	m.Quant = parseQuant(cfg)
+}
+
+func parseConfigObject(name string, raw []byte) (map[string]any, error) {
+	v, err := jsonx.Unmarshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s: %v", name, err)
+	}
+	cfg, ok := v.(map[string]any)
+	if !ok || cfg == nil {
+		return nil, fmt.Errorf("parsing %s: expected a JSON object", name)
+	}
+	return cfg, nil
 }
 
 func parseQuant(cfg map[string]any) *Quantization {

@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
@@ -108,9 +110,29 @@ func TestViewSizesAndNoColor(t *testing.T) {
 		t.Fatalf("too-small screen:\n%s", smallView)
 	}
 
-	t.Setenv("NO_COLOR", "1")
+	// Both states are explicit. An inherited NO_COLOR must not make the
+	// color-on case a no-op, and TrueColor is forced so the color path
+	// actually emits ESC before NO_COLOR strips it.
+	t.Setenv("NO_COLOR", "")
+	os.Unsetenv("NO_COLOR")
+	t.Cleanup(func() {
+		lipgloss.SetColorProfile(termenv.Ascii)
+		SetNoColor(false)
+	})
+	SetNoColor(false)
+	lipgloss.SetColorProfile(termenv.TrueColor)
 	ui = New(m, scan.Run(m))
 	sized, _ := ui.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	colorView := sized.View()
+	assertFrame(t, colorView, 80, 24)
+	if !strings.Contains(colorView, "\x1b") {
+		t.Fatal("TrueColor with NO_COLOR unset produced no ESC")
+	}
+
+	t.Setenv("NO_COLOR", "1")
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	ui = New(m, scan.Run(m))
+	sized, _ = ui.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	view := sized.View()
 	assertFrame(t, view, 80, 24)
 	if strings.Contains(view, "\x1b") {

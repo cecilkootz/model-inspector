@@ -3,6 +3,9 @@ package report
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/rivo/uniseg"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
@@ -204,6 +207,8 @@ func glyph(kind string) string {
 }
 
 func writeWrapped(b *strings.Builder, label, value string) {
+	// Sanitize first, then wrap. A cut is only on a grapheme boundary or
+	// between atoms, and never inside a <U+XXXX> token.
 	value = san(value)
 	const width = 80
 	prefix := fmt.Sprintf("  %-10s", label)
@@ -214,22 +219,105 @@ func writeWrapped(b *strings.Builder, label, value string) {
 		if !first {
 			pad = strings.Repeat(" ", len(prefix))
 		}
-		room := width - len(pad)
+		room := width - uniseg.StringWidth(pad)
 		if room < 8 {
 			room = 8
 		}
-		if len(rest) <= room {
+		if uniseg.StringWidth(rest) <= room {
 			fmt.Fprintf(b, "%s%s\n", pad, rest)
 			return
 		}
-		cut := room
-		if i := strings.LastIndex(rest[:room], " "); i > 16 {
-			cut = i
+		line, next := takeLine(rest, room)
+		if line == "" || next == rest {
+			atom, after, _, _ := nextAtom(rest, -1)
+			line = atom
+			next = strings.TrimLeft(after, " ")
 		}
-		fmt.Fprintf(b, "%s%s\n", pad, strings.TrimRight(rest[:cut], " "))
-		rest = strings.TrimLeft(rest[cut:], " ")
+		fmt.Fprintf(b, "%s%s\n", pad, line)
+		rest = next
 		first = false
 	}
+}
+
+// takeLine returns the next display row of s, at most room columns wide.
+// It breaks on a space when one sits inside the row, and otherwise on a
+// grapheme boundary. Sanitizer tokens are one atom.
+func takeLine(s string, room int) (line, rest string) {
+	if room < 1 {
+		room = 1
+	}
+	var b strings.Builder
+	width := 0
+	breakAt := -1
+	state := -1
+	remaining := s
+	for remaining != "" {
+		atom, next, w, st := nextAtom(remaining, state)
+		if atom == "" {
+			break
+		}
+		if w < 0 {
+			w = 0
+		}
+		if width > 0 && width+w > room {
+			break
+		}
+		b.WriteString(atom)
+		width += w
+		state = st
+		if atom == " " && width > 16 {
+			breakAt = b.Len()
+		}
+		remaining = next
+		if width >= room {
+			break
+		}
+	}
+	full := b.String()
+	if remaining != "" && breakAt > 0 && breakAt < len(full) {
+		return strings.TrimRight(full[:breakAt], " "), strings.TrimLeft(full[breakAt:]+remaining, " ")
+	}
+	return strings.TrimRight(full, " "), strings.TrimLeft(remaining, " ")
+}
+
+// nextAtom returns one wrap unit: a <U+XXXX> token, or one grapheme cluster.
+func nextAtom(s string, state int) (atom, rest string, width, newState int) {
+	if n := tokenLen(s); n > 0 {
+		return s[:n], s[n:], n, -1
+	}
+	atom, rest, width, newState = uniseg.FirstGraphemeClusterInString(s, state)
+	if atom == "" && s != "" {
+		// A lone invalid byte is still one unit, so the loop makes progress
+		// and the following line cannot start with a continuation byte.
+		r, size := utf8.DecodeRuneInString(s)
+		if size < 1 {
+			size = 1
+		}
+		_ = r
+		return s[:size], s[size:], 1, -1
+	}
+	if width < 0 {
+		width = 0
+	}
+	return atom, rest, width, newState
+}
+
+// tokenLen is the byte length of a leading sanitizer token, or 0.
+// Tokens look like <U+009B> (4 to 6 hex digits).
+func tokenLen(s string) int {
+	if !strings.HasPrefix(s, "<U+") {
+		return 0
+	}
+	i := strings.IndexByte(s, '>')
+	if i < 7 || i > 9 {
+		return 0
+	}
+	for _, c := range s[3:i] {
+		if (c < '0' || c > '9') && (c < 'A' || c > 'F') {
+			return 0
+		}
+	}
+	return i + 1
 }
 
 func san(s string) string { return sanitize.From(s).String() }

@@ -391,16 +391,31 @@ func tensorColumns(width int) []table.Column {
 }
 
 // flex gives column 0 whatever width remains (cells have 1 char padding each side).
+// Every column width is clamped to at least 0.
 func flex(cols []table.Column, width, minW int) []table.Column {
+	if width < 0 {
+		width = 0
+	}
+	if minW < 0 {
+		minW = 0
+	}
 	used := 0
-	for _, c := range cols[1:] {
-		used += c.Width
+	for i := 1; i < len(cols); i++ {
+		if cols[i].Width < 0 {
+			cols[i].Width = 0
+		}
+		used += cols[i].Width
 	}
 	w := width - used - 2*len(cols)
 	if w < minW {
 		w = minW
 	}
-	cols[0].Width = w
+	if w < 0 {
+		w = 0
+	}
+	if len(cols) > 0 {
+		cols[0].Width = w
+	}
 	return cols
 }
 

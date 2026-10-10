@@ -151,7 +151,7 @@ Check ids, in order:
 | `file-presence` | Missing, unreadable, or non-local shards, an incomplete inspection (`Partial`), and `.safetensors` files the index does not name. |
 | `offsets-bounds` | `safetensors.CheckLayout`: bounds, dtype×shape, overlap, gaps, trailing bytes. |
 | `index-shard-consistency` | Index against shard headers. |
-| `code-exec-formats` | Names only (`.bin`, `.pt`, `.pth`, `.ckpt`, `.pkl`, `.pickle`, `.joblib`, `.npy`, `.pyc`, `.py`, and top-level `auto_map`). Warns. `--strict` makes that a failure. Contents are not read. |
+| `code-exec-formats` | File names (`.bin`, `.pt`, `.pth`, `.ckpt`, `.pkl`, `.pickle`, `.joblib`, `.npy`, `.pyc`, `.py`, `.h5`, `.keras`, `.nemo`, `.dill`, `.mar`, and `.bin.gz` / `.pt.gz` / `.pkl.gz`) and top-level `auto_map` read from `config.json`, `tokenizer_config.json`, `processor_config.json`, and `preprocessor_config.json`. Warns. `--strict` makes that a failure. A file that exists but cannot be read or parsed warns `could not check auto_map in <file>` and does not pass as none. The check does not import or execute anything. |
 | `code-content` | Always `skip`. |
 | `hash-vs-revision` | Always `planned`. |
 | `metadata-sanity` | Always `planned`. |

@@ -186,7 +186,7 @@ func TestMergeStorageCapsAtFour(t *testing.T) {
 		{Class: "d", Bytes: 3},
 		{Class: "e", Bytes: 2},
 	}
-	out := MergeStorage(in, 4)
+	out := MergeStorage(nil, in, 4)
 	if len(out) != 4 {
 		t.Fatalf("got %d: %+v", len(out), out)
 	}

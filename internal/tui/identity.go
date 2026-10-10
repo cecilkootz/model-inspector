@@ -285,14 +285,28 @@ func storageBar(m *model.Model, width int) (string, string) {
 	if width < 4 {
 		width = 4
 	}
-	classes := model.MergeStorage(m.StorageBreakdown(), 4)
+	classes := model.MergeStorage(m, m.StorageBreakdown(), 4)
 	if len(classes) == 0 || m.TensorBytes <= 0 {
 		return strings.Repeat(g.bar[3], width), "no tensor bytes"
+	}
+	for _, c := range classes {
+		if c.Bytes < 0 || c.Pct < 0 {
+			return strings.Repeat(g.bar[3], width), "size overflow"
+		}
 	}
 	cells := make([]int, len(classes))
 	used := 0
 	for i, c := range classes {
-		n := int(float64(c.Bytes)/float64(m.TensorBytes)*float64(width) + 0.5)
+		n := 0
+		if c.Bytes > 0 && m.TensorBytes > 0 {
+			n = int(float64(c.Bytes)/float64(m.TensorBytes)*float64(width) + 0.5)
+		}
+		if n < 0 {
+			n = 0
+		}
+		if n > width {
+			n = width
+		}
 		if c.Bytes > 0 && n < 1 {
 			n = 1
 		}
@@ -327,7 +341,14 @@ func storageBar(m *model.Model, width int) (string, string) {
 	var legend []string
 	for i, c := range classes {
 		fill := g.bar[i%len(g.bar)]
-		bar.WriteString(strings.Repeat(fill, cells[i]))
+		n := cells[i]
+		if n < 0 {
+			n = 0
+		}
+		if n > width {
+			n = width
+		}
+		bar.WriteString(strings.Repeat(fill, n))
 		legend = append(legend, sanitize.From(fmt.Sprintf("%s %s %.1f%%", fill, classLabel(c.Class), c.Pct)).String())
 	}
 	return bar.String(), strings.Join(legend, "  ")

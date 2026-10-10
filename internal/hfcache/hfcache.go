@@ -92,7 +92,11 @@ func Resolve(arg, hubDir string) (Resolved, error) {
 //   - TargetAuto treats an absolute path, a "./" or "../" prefix, a trailing
 //     separator, or anything that is not org/name[@ref] as a path.
 //     A bare org/name[@ref] that does not exist as a directory is a repo id.
-//     A bare org/name[@ref] that is also a directory is ErrAmbiguousTarget.
+//     The local check uses the repo id with @ref removed, so org/name@main
+//     is ambiguous when ./org/name is a directory.
+//     A bare org/name[@ref] that is also a directory, or a broken symlink
+//     of that name, is ErrAmbiguousTarget. It is not looked up in the hub.
+//     A leading ~ is not expanded.
 func ResolveTarget(arg, hubDir string, mode TargetMode) (Resolved, error) {
 	switch mode {
 	case TargetPath:
@@ -103,17 +107,32 @@ func ResolveTarget(arg, hubDir string, mode TargetMode) (Resolved, error) {
 		if explicitPath(arg) || !repoShaped(arg) {
 			return resolvePath(arg)
 		}
-		fi, err := os.Stat(arg)
-		switch {
-		case err == nil && fi.IsDir():
-			return Resolved{}, fmt.Errorf("%w: %q matches an HF repo id and an existing directory; pass --repo to read the hub cache, or --path to read that directory", ErrAmbiguousTarget, arg)
-		case err == nil:
-			return resolveRepo(arg, hubDir)
-		case os.IsNotExist(err):
-			return resolveRepo(arg, hubDir)
-		default:
-			return Resolved{}, fmt.Errorf("%q: stat: %v; pass --path or --repo", arg, err)
+		return resolveAutoRepo(arg, hubDir)
+	}
+}
+
+// resolveAutoRepo decides a bare org/name[@ref]. The directory check uses
+// the id without @ref. A broken symlink is ambiguous, not a hub miss.
+func resolveAutoRepo(arg, hubDir string) (Resolved, error) {
+	id, _, _ := strings.Cut(arg, "@")
+	lst, lerr := os.Lstat(id)
+	st, serr := os.Stat(id)
+	switch {
+	case lerr == nil && serr != nil && os.IsNotExist(serr):
+		return Resolved{}, fmt.Errorf("%w: %q matches an HF repo id and a broken symlink; pass --repo to read the hub cache, or --path to read that path", ErrAmbiguousTarget, arg)
+	case serr == nil && st.IsDir():
+		return Resolved{}, fmt.Errorf("%w: %q matches an HF repo id and an existing directory; pass --repo to read the hub cache, or --path to read that directory", ErrAmbiguousTarget, arg)
+	case serr == nil:
+		return resolveRepo(arg, hubDir)
+	case lerr == nil && !lst.Mode().IsRegular() && serr != nil && !os.IsNotExist(serr):
+		return Resolved{}, fmt.Errorf("%w: %q matches an HF repo id and a local path (%v); pass --path or --repo", ErrAmbiguousTarget, arg, serr)
+	case os.IsNotExist(serr) || os.IsNotExist(lerr):
+		return resolveRepo(arg, hubDir)
+	default:
+		if serr == nil {
+			serr = lerr
 		}
+		return Resolved{}, fmt.Errorf("%q: stat: %v; pass --path or --repo", arg, serr)
 	}
 }
 

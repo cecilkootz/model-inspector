@@ -167,7 +167,7 @@
         "name": "Code-executing formats",
         "status": "warn",
         "effective_status": "warn",
-        "summary": "3 name matches (pickle-family, .py, or auto_map)",
+        "summary": "3 findings (code-exec formats or auto_map)",
         "details": [
           "config.json auto_map AutoModelForCausalLM -> modeling_demo.DemoForCausalLM",
           "modeling_demo.py",

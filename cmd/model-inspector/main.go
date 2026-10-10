@@ -33,11 +33,14 @@ or @commit) resolved through the hub cache.
 
 A bare org/name that is also a directory in the current working directory
 is refused: it is not opened as a path and it is not looked up in the hub.
-Pass --path to read that directory, or --repo to read the hub cache.
+The same check uses the id with @ref removed, so org/name@main is refused
+when ./org/name is a directory. A broken symlink named like org/name is
+refused the same way. Pass --path to read that directory, or --repo to
+read the hub cache.
 A path that is absolute, starts with ./ or ../, or has a trailing slash is
 always a directory and is never looked up in the hub, even when the hub
 has a repo of a similar name. A bare org/name that is not a local directory
-is a repo id.
+is a repo id. A leading ~ is not expanded.
 
 When stdout is not a terminal, the default command prints the text summary
 instead of opening the TUI. --json prints JSON instead of opening the TUI.
@@ -55,9 +58,9 @@ Flags:
 --path, --repo, and a positional target are mutually exclusive.
 
 Exit codes:
-  0  inspected, and no check failed (warnings are fine unless --strict); the TUI always exits 0
+  0  inspected, and no check failed (warnings are fine unless --strict). The interactive TUI exits 0. When stdout is not a terminal, the default command is the text summary and uses the inspect codes below.
   1  inspected, and a check failed (or a warning under --strict); the summary is still printed
-  2  usage: bad flags, a missing target, an invalid repo id, or an ambiguous path/repo id
+  2  usage: bad flags, a missing or empty target, an empty --path or --repo, an invalid repo id, or an ambiguous path/repo id
   3  the target could not be inspected (missing, not a directory, GGUF-only, or no weights)
 `
 
@@ -152,6 +155,7 @@ func parseArgs(args []string) (options, error) {
 	o := options{hubDir: hfcache.DefaultHubDir(), mode: hfcache.TargetAuto}
 	var pos []string
 	var path, repo string
+	var pathSet, repoSet bool
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
@@ -175,6 +179,7 @@ func parseArgs(args []string) (options, error) {
 		case strings.HasPrefix(a, "--hub-dir="):
 			o.hubDir = strings.TrimPrefix(a, "--hub-dir=")
 		case a == "--path":
+			pathSet = true
 			v, next, err := takeValue(args, i, "--path")
 			if err != nil {
 				return o, err
@@ -182,8 +187,10 @@ func parseArgs(args []string) (options, error) {
 			i = next
 			path = v
 		case strings.HasPrefix(a, "--path="):
+			pathSet = true
 			path = strings.TrimPrefix(a, "--path=")
 		case a == "--repo":
+			repoSet = true
 			v, next, err := takeValue(args, i, "--repo")
 			if err != nil {
 				return o, err
@@ -191,12 +198,19 @@ func parseArgs(args []string) (options, error) {
 			i = next
 			repo = v
 		case strings.HasPrefix(a, "--repo="):
+			repoSet = true
 			repo = strings.TrimPrefix(a, "--repo=")
 		case strings.HasPrefix(a, "-"):
 			return o, fmt.Errorf("unknown flag %s", a)
 		default:
 			pos = append(pos, a)
 		}
+	}
+	if pathSet && path == "" {
+		return o, errors.New("--path needs a value")
+	}
+	if repoSet && repo == "" {
+		return o, errors.New("--repo needs a value")
 	}
 	n := 0
 	if path != "" {
@@ -209,6 +223,9 @@ func parseArgs(args []string) (options, error) {
 		return o, fmt.Errorf("expected exactly one model path or repo id, got %d", len(pos))
 	}
 	if len(pos) == 1 {
+		if pos[0] == "" {
+			return o, errors.New("missing model path or repo id")
+		}
 		n++
 	}
 	if n == 0 {

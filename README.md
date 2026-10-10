@@ -92,11 +92,17 @@ always reads an HF repo id and never stats the working directory. The two
 flags cannot be combined with each other or with a positional target.
 
 A bare `org/name` that is also a directory in the current working directory
-is ambiguous. The command exits 2 and does not open either one. Pass
-`--path` or `--repo` to say which you mean. An absolute path, a `./` or
-`../` prefix, or a trailing slash is a directory even when the string looks
-like a repo id, and a missing directory does not fall through to the hub.
-A bare `org/name` that is not a local directory is still a repo id.
+is ambiguous. The command exits 2 and does not open either one. The check
+uses the repo id with `@ref` removed, so `org/name@main` is ambiguous when
+`./org/name` is a directory. A broken symlink named like `org/name` is
+ambiguous too and is not looked up in the hub. Pass `--path` or `--repo`
+to say which you mean. An absolute path, a `./` or `../` prefix, or a
+trailing slash is a directory even when the string looks like a repo id,
+and a missing directory does not fall through to the hub. A bare `org/name`
+that is not a local directory is still a repo id. A leading `~` is not
+expanded; pass an absolute path or a path relative to the working directory.
+An empty target, or `--path=` / `--repo=` with an empty value, is a usage
+error (exit 2).
 
 The library helper `hfcache.Resolve` still prefers an existing directory.
 The CLI does not use it for user input; it uses `hfcache.ResolveTarget`.
@@ -105,9 +111,9 @@ The CLI does not use it for user input; it uses `hfcache.ResolveTarget`.
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Inspected, and no check failed. Warnings are fine unless `--strict`. The TUI always exits 0. |
-| 1 | Inspected, and a check failed, or a warning under `--strict`. The summary is still printed. |
-| 2 | Usage: unknown flag, missing target, invalid repo id, or an ambiguous path/repo id. |
+| 0 | Inspected, and no check failed. Warnings are fine unless `--strict`. The interactive TUI exits 0. When stdout is not a terminal, the default command prints the text summary and uses the inspect exit codes. |
+| 1 | Inspected, and a check failed, or a warning under `--strict`. The summary is still printed. The non-TTY fallback uses this code too. |
+| 2 | Usage: unknown flag, missing or empty target, empty `--path` or `--repo`, invalid repo id, or an ambiguous path/repo id. |
 | 3 | Could not inspect: not found, not a directory, GGUF-only, or no weight files. GGUF and empty directories still print a summary. |
 
 ### Keys
@@ -146,8 +152,11 @@ tab is bracketed. The Scan tab badge follows the overall result.
    **This is not a malware or behavior scan.** The disclaimer says so.
    Checks: shard headers parse; files present (including a shard the index
    does not name); offsets and sizes (bounds, dtype×shape, overlap, gaps,
-   trailing bytes); index matches headers; code-executing formats by name
-   only (warn, or fail under `--strict`); code and pickle contents (not
+   trailing bytes); index matches headers; code-executing formats by file
+   name (including `.h5`, `.keras`, `.nemo`, `.dill`, `.mar`, and compound
+   suffixes such as `.bin.gz`) and by top-level `auto_map` read from
+   config files (warn, or fail under `--strict`; a config file that exists
+   but cannot be read or parsed warns instead of passing as none); code and pickle contents (not
    run); hashes vs revision (planned); config vs tensor shapes (planned).
    Skip and planned do not turn a pass into a failure. An empty directory
    or GGUF-only directory is not reported as a pass.

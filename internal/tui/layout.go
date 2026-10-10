@@ -38,7 +38,11 @@ func fitLine(s string, width int) string {
 	case w == width:
 		return s
 	case w < width:
-		return s + strings.Repeat(" ", width-w)
+		n := width - w
+		if n < 0 {
+			n = 0
+		}
+		return s + strings.Repeat(" ", n)
 	default:
 		return truncWidth(s, width)
 	}
@@ -165,5 +169,9 @@ func padLabel(label string, n int) string {
 	if lipgloss.Width(label) >= n {
 		return truncWidth(label, n)
 	}
-	return label + strings.Repeat(" ", n-lipgloss.Width(label))
+	pad := n - lipgloss.Width(label)
+	if pad < 0 {
+		pad = 0
+	}
+	return label + strings.Repeat(" ", pad)
 }

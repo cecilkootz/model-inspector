@@ -69,6 +69,32 @@ func TestResolveTargetMissingLocalDoesNotBecomeRepo(t *testing.T) {
 	}
 }
 
+func TestResolveTargetRefUsesRepoIDDirectory(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.MkdirAll(filepath.Join("org", "name"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ResolveTarget("org/name@main", t.TempDir(), TargetAuto)
+	if !errors.Is(err, ErrAmbiguousTarget) {
+		t.Fatalf("org/name@main = %v", err)
+	}
+}
+
+func TestResolveTargetBrokenSymlinkIsAmbiguous(t *testing.T) {
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	if err := os.MkdirAll(filepath.Join(cwd, "dang"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/nonexistent/zz", filepath.Join(cwd, "dang", "ling")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ResolveTarget("dang/ling", t.TempDir(), TargetAuto)
+	if !errors.Is(err, ErrAmbiguousTarget) {
+		t.Fatalf("broken symlink = %v", err)
+	}
+}
+
 func TestResolveTargetBareRepoWithoutDirectory(t *testing.T) {
 	hub := t.TempDir()
 	const (

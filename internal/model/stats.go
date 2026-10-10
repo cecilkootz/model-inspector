@@ -26,6 +26,8 @@ type StorageClass struct {
 // StorageBreakdown groups tensor bytes by storage class.
 // Classes are q{N}_packed, q_scales_biases, plain_{dtype}, and other.
 // The result is sorted by class name so callers can render a stable bar.
+// A sum that does not fit in int64 is not accumulated and marks the
+// inspection partial, so a wrapped negative size cannot reach the bar.
 func (m *Model) StorageBreakdown() []StorageClass {
 	if m == nil {
 		return nil
@@ -37,25 +39,25 @@ func (m *Model) StorageBreakdown() []StorageClass {
 		switch t.Role {
 		case RoleQuantWeight:
 			if t.Bits > 0 {
-				acc[fmt.Sprintf("q%d_packed", t.Bits)] += n
+				m.addClass(acc, fmt.Sprintf("q%d_packed", t.Bits), n)
 			} else {
-				other += n
+				addInto(m, &other, n)
 			}
 		case RoleQuantScales, RoleQuantBiases:
-			acc["q_scales_biases"] += n
+			m.addClass(acc, "q_scales_biases", n)
 		case RolePlain:
 			dt := strings.ToLower(t.DType)
 			if dt == "" {
-				other += n
+				addInto(m, &other, n)
 			} else {
-				acc["plain_"+dt] += n
+				m.addClass(acc, "plain_"+dt, n)
 			}
 		default:
-			other += n
+			addInto(m, &other, n)
 		}
 	}
 	if other > 0 {
-		acc["other"] += other
+		m.addClass(acc, "other", other)
 	}
 	keys := make([]string, 0, len(acc))
 	for k := range acc {
@@ -71,7 +73,9 @@ func (m *Model) StorageBreakdown() []StorageClass {
 
 // MergeStorage caps a breakdown at max segments. The smallest leftover
 // classes fold into "other". max < 1 returns the input.
-func MergeStorage(classes []StorageClass, max int) []StorageClass {
+// m may be nil. When it is set, a sum that overflows int64 marks the
+// inspection partial and is not accumulated.
+func MergeStorage(m *Model, classes []StorageClass, max int) []StorageClass {
 	if max < 1 || len(classes) <= max {
 		return classes
 	}
@@ -99,14 +103,14 @@ func MergeStorage(classes []StorageClass, max int) []StorageClass {
 		tail = sorted[keep-1:]
 	}
 	for _, c := range tail {
-		rest += c.Bytes
+		addInto(m, &rest, c.Bytes)
 	}
 	out := append([]StorageClass(nil), head...)
 	if rest > 0 {
 		found := false
 		for i := range out {
 			if out[i].Class == "other" {
-				out[i].Bytes += rest
+				addInto(m, &out[i].Bytes, rest)
 				found = true
 			}
 		}
@@ -116,7 +120,7 @@ func MergeStorage(classes []StorageClass, max int) []StorageClass {
 	}
 	total := int64(0)
 	for _, c := range out {
-		total += c.Bytes
+		addInto(m, &total, c.Bytes)
 	}
 	for i := range out {
 		out[i].Pct = pct(out[i].Bytes, total)
@@ -156,17 +160,16 @@ func (m *Model) MemoryEstimate() MemoryEstimate {
 	var sawSide bool
 	for _, g := range m.Groups {
 		if g.Kind == KindVision || g.Kind == KindMTP {
-			side += g.Bytes
+			addInto(m, &side, g.Bytes)
 			sawSide = true
 		}
 	}
 	est.TextOnlyKnown = sawSide
-	est.TextOnlyBytes = m.TensorBytes - side
-	if est.TextOnlyBytes < 0 {
-		est.TextOnlyBytes = 0
+	if m.TensorBytes >= side {
+		est.TextOnlyBytes = m.TensorBytes - side
 	}
 	for _, t := range m.HostCapable() {
-		est.HostCapableBytes += t.Bytes
+		addInto(m, &est.HostCapableBytes, t.Bytes)
 	}
 	est.AcceleratorMinBytes = est.WeightsBytes - est.HostCapableBytes
 	if est.AcceleratorMinBytes < 0 {
@@ -222,16 +225,17 @@ func (m *Model) HostCapable() []HostTensor {
 			continue
 		}
 		ht := HostTensor{
-			Name: t.Name, Group: t.Group, Bytes: t.ByteLen(),
+			Name: t.Name, Group: t.Group,
 			ParamsEst: t.LogicalParams, Rule: RuleLookupTable,
 		}
+		addInto(m, &ht.Bytes, t.ByteLen())
 		base := strings.TrimSuffix(t.Name, ".weight")
 		if base != t.Name {
 			if s := byName[base+".scales"]; s != nil {
-				ht.Bytes += s.ByteLen()
+				addInto(m, &ht.Bytes, s.ByteLen())
 			}
 			if s := byName[base+".biases"]; s != nil {
-				ht.Bytes += s.ByteLen()
+				addInto(m, &ht.Bytes, s.ByteLen())
 			}
 		}
 		out = append(out, ht)
@@ -287,7 +291,7 @@ func (m *Model) Outliers() []Callout {
 	var hostBytes int64
 	var maxShare float64
 	for _, h := range host {
-		hostBytes += h.Bytes
+		addInto(m, &hostBytes, h.Bytes)
 		if m.TensorBytes > 0 {
 			if s := float64(h.Bytes) / float64(m.TensorBytes); s > maxShare {
 				maxShare = s
@@ -317,7 +321,7 @@ func (m *Model) Outliers() []Callout {
 	quantBytes := int64(0)
 	for _, t := range m.Tensors {
 		if t.Role == RoleQuantWeight {
-			quantBytes += t.ByteLen()
+			addInto(m, &quantBytes, t.ByteLen())
 		}
 	}
 	mostlyQuant := m.TensorBytes > 0 && quantBytes*2 >= m.TensorBytes
@@ -422,8 +426,10 @@ func (g *Group) StorageLabel() string {
 				bitsSet[t.Bits] = struct{}{}
 			}
 		case RolePlain:
-			plainBytes += t.ByteLen()
-			plainBy[t.DType] += t.ByteLen()
+			addInto(nil, &plainBytes, t.ByteLen())
+			v := plainBy[t.DType]
+			addInto(nil, &v, t.ByteLen())
+			plainBy[t.DType] = v
 		}
 	}
 	plainDT := ""
@@ -612,8 +618,10 @@ func dominantPlain(g *Group) (string, int64) {
 		if t.Role != RolePlain {
 			continue
 		}
-		by[t.DType] += t.ByteLen()
-		n += t.ByteLen()
+		v := by[t.DType]
+		addInto(nil, &v, t.ByteLen())
+		by[t.DType] = v
+		addInto(nil, &n, t.ByteLen())
 	}
 	var best string
 	var b int64 = -1
@@ -711,10 +719,43 @@ func exceeds3x(v, med int64) bool {
 }
 
 func pct(part, total int64) float64 {
-	if total <= 0 {
+	if total <= 0 || part < 0 {
 		return 0
 	}
 	return math.Round(float64(part)/float64(total)*1000) / 10
+}
+
+// satAdd adds n to *dst when the sum fits in a non-negative int64.
+// A negative operand or an overflow leaves *dst unchanged.
+func satAdd(dst *int64, n int64) bool {
+	if dst == nil || n < 0 || *dst < 0 || *dst > math.MaxInt64-n {
+		return false
+	}
+	*dst += n
+	return true
+}
+
+// addInto is satAdd, and marks m partial when the sum does not fit.
+// m may be nil when the caller has no inspection to mark.
+func addInto(m *Model, dst *int64, n int64) {
+	if satAdd(dst, n) {
+		return
+	}
+	if m != nil {
+		m.noteOverflow()
+	}
+}
+
+func (m *Model) addClass(acc map[string]int64, key string, n int64) {
+	v, ok := acc[key]
+	if !satAdd(&v, n) {
+		m.noteOverflow()
+		if ok {
+			acc[key] = v
+		}
+		return
+	}
+	acc[key] = v
 }
 
 // DisplayDType renders a dtype the way the header and group labels do.
