@@ -5,6 +5,9 @@
 # must match [A-Za-z0-9._/+-] (no quotes, '$', backticks, or glob characters).
 # Recipes never interpolate the path: they use the exported "$$MI_ROOT".
 override space := $(subst ,, )
+ifneq ($(words $(value MAKEFILE_LIST)),1)
+$(error refusing Makefile path)
+endif
 override MI_MAKEFILE := $(realpath $(value MAKEFILE_LIST))
 ifneq ($(words $(MI_MAKEFILE)),1)
 $(error refusing Makefile path)
@@ -565,6 +568,25 @@ check-overrides:
 	    /tmp/PWNED_BY_PATH "$$MI_ROOT/PWNED_BY_PATH"; do \
 	  if [ -e "$$pwn" ]; then echo "hostile path created $$pwn" >&2; exit 1; fi; \
 	done; \
+	mkdir -p "$$scratch/p6z/nope b" "$$scratch/p6zcwd/b/bin"; \
+	printf KEEP > "$$scratch/p6zcwd/b/bin/model-inspector"; \
+	printf KEEP > "$$scratch/p6zcwd/b/coverage.out"; \
+	cp "$$MI_ROOT/Makefile" "$$scratch/p6z/nope b/Makefile"; \
+	cp "$$MI_ROOT/Makefile" "$$scratch/p6zcwd/b/Makefile"; \
+	if env -u BIN -u VERSION -u COMMIT -u FUZZTIME \
+	    -u VERSION_RAW -u COMMIT_RAW -u FUZZTIME_RAW -u BIN_RAW \
+	    -u MI_LDFLAGS -u LDFLAGS \
+	    MAKEFLAGS= MAKEOVERRIDES= \
+	    $(MAKE) -C "$$scratch/p6zcwd" -f "$$scratch/p6z/nope b/Makefile" -s --no-print-directory clean >"$$tmp.out" 2>&1; then \
+	  echo "nope b path was accepted" >&2; cat "$$tmp.out" >&2; exit 1; \
+	fi; \
+	if ! grep -q 'refusing Makefile path' "$$tmp.out"; then \
+	  echo "nope b path was not a clean refusal" >&2; cat "$$tmp.out" >&2; exit 1; \
+	fi; \
+	if [ "$$(cat "$$scratch/p6zcwd/b/bin/model-inspector")" != KEEP ] \
+	    || [ "$$(cat "$$scratch/p6zcwd/b/coverage.out")" != KEEP ]; then \
+	  echo "nope b path removed the caller b/ artifacts" >&2; exit 1; \
+	fi; \
 	assert_real_untouched "hostile path"; \
 	if ! command -v git >/dev/null 2>&1; then \
 	  echo "skipping clean self-test: git is not available" >&2; \
