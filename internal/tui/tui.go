@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
@@ -68,7 +67,13 @@ type Model struct {
 
 	groupTable  table.Model
 	tensorTable table.Model
-	detail      *model.Group
+	// groupY and tensorY are the bubbles viewport offsets. The table keeps
+	// start and YOffset unexported, and reading them with reflection panics
+	// if a bubbles upgrade renames the fields. start is a function of the
+	// cursor and the viewport height; only the offset has to be remembered.
+	groupY  int
+	tensorY int
+	detail  *model.Group
 
 	mouse          bool
 	noClipboard    bool
@@ -189,6 +194,7 @@ func (t *Model) resize() {
 	t.groupTable.SetColumns(groupColumns(t.width))
 	t.groupTable.SetWidth(t.width)
 	t.groupTable.SetHeight(h)
+	t.groupY = clampTableY(t.groupTable, t.groupY)
 	t.tensorTable.SetColumns(tensorColumns(t.width))
 	t.tensorTable.SetWidth(t.width)
 	th := h - 1
@@ -196,6 +202,7 @@ func (t *Model) resize() {
 		th = 1
 	}
 	t.tensorTable.SetHeight(th)
+	t.tensorY = clampTableY(t.tensorTable, t.tensorY)
 }
 
 func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -405,7 +412,9 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if i := t.groupTable.Cursor(); i >= 0 && i < len(t.m.Groups) {
 						t.detail = t.m.Groups[i]
 						t.tensorTable.SetRows(tensorRows(t.detail))
+						t.tensorY = clampTableY(t.tensorTable, t.tensorY)
 						t.tensorTable.SetCursor(0)
+						t.tensorY = clampTableY(t.tensorTable, t.tensorY)
 					}
 				}
 				return t, nil
@@ -424,8 +433,10 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, nil
 	case tabLayers:
 		if t.detail != nil {
+			t.tensorY = stepTableY(t.tensorTable, t.tensorY, msg)
 			t.tensorTable, cmd = t.tensorTable.Update(msg)
 		} else {
+			t.groupY = stepTableY(t.groupTable, t.groupY, msg)
 			t.groupTable, cmd = t.groupTable.Update(msg)
 		}
 	}
@@ -507,9 +518,9 @@ func (t Model) layersBody() string {
 	}
 	if t.detail != nil {
 		head := sanitize.From(t.detail.Key).String() + fmt.Sprintf(" · %d tensors · %s", len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))
-		return head + "\n" + markTableCursor(t.tensorTable.View(), t.tensorTable)
+		return head + "\n" + markTableCursor(t.tensorTable.View(), t.tensorTable, t.tensorY)
 	}
-	return markTableCursor(t.groupTable.View(), t.groupTable)
+	return markTableCursor(t.groupTable.View(), t.groupTable, t.groupY)
 }
 
 // markTableCursor puts a ">" on the selected row when colour is off.
@@ -517,14 +528,14 @@ func (t Model) layersBody() string {
 // so a NO_COLOR frame would otherwise hide the cursor. The marker follows
 // the row index: the first cell is truncated with an ellipsis, so the
 // rendered text is not the full name.
-func markTableCursor(view string, tbl table.Model) string {
+func markTableCursor(view string, tbl table.Model, yoff int) string {
 	cursor := tbl.Cursor()
 	rows := tbl.Rows()
 	if !ui.ColorOff() || cursor < 0 || cursor >= len(rows) || len(rows[cursor]) == 0 {
 		return view
 	}
 	lines := strings.Split(view, "\n")
-	idx := tableCursorLine(tbl)
+	idx := tableCursorLine(tbl, yoff)
 	if idx < 1 || idx >= len(lines) {
 		return view
 	}
@@ -533,12 +544,11 @@ func markTableCursor(view string, tbl table.Model) string {
 }
 
 // tableCursorLine is the view line of the selected row. Line 0 is the
-// header. bubbles keeps the rendered window start and the viewport scroll
-// unexported; the visible row is cursor-start-YOffset.
-func tableCursorLine(tbl table.Model) int {
-	v := reflect.ValueOf(tbl)
-	start := int(v.FieldByName("start").Int())
-	yoff := int(v.FieldByName("viewport").FieldByName("YOffset").Int())
+// header. The rendered window starts at cursor-height, and yoff is the
+// viewport scroll tracked beside the table.
+func tableCursorLine(tbl table.Model, yoff int) int {
+	start, end := tableWindow(tbl.Cursor(), tbl.Height(), len(tbl.Rows()))
+	yoff = clampContentY(yoff, start, end, tbl.Height())
 	return 1 + tbl.Cursor() - start - yoff
 }
 
