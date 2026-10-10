@@ -32,15 +32,19 @@ It never writes into the Hugging Face cache. Inspecting a ~106 GiB model takes
 
 ## Install
 
+Clone the repo, then install from that checkout:
+
 ```sh
-go env -w GOPRIVATE=origin.cursor.com
-go install origin.cursor.com/cecilkootz/model-inspector/cmd/model-inspector@latest
+git clone git@origin.cursor.com:cecilkootz/model-inspector.git
+cd model-inspector
+go install ./cmd/model-inspector
 ```
 
-`go install` from `origin.cursor.com` needs `GOPRIVATE=origin.cursor.com` and
-git credentials for that host. An SSH remote works
-(`git@origin.cursor.com:cecilkootz/model-inspector.git`). The module path
-stays `origin.cursor.com/cecilkootz/model-inspector`.
+`go install origin.cursor.com/cecilkootz/model-inspector/cmd/model-inspector@latest`
+fails even with `GOPRIVATE=origin.cursor.com`. Origin does not answer Go's
+import-path discovery (`?go-get=1`), so the toolchain 404s before it can
+fetch the module. The module path stays
+`origin.cursor.com/cecilkootz/model-inspector`.
 
 ## Build
 

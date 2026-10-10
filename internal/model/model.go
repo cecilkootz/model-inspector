@@ -130,8 +130,12 @@ type Model struct {
 	// files). Index stays nil so shard discovery can still see the
 	// .safetensors files.
 	IndexErr error `json:"-"`
-	// Partial is set when a safety cap stopped the walk or the warning
-	// list. A partial inspection must not produce an overall pass.
+	// Partial is set when the inspection did not finish, or a value it
+	// needed could not be used: a walk cap, a per-entry walk error, an
+	// unreadable or dangling config.json, an index directory that could
+	// not be listed, a display counter that overflowed, or an index
+	// metadata.total_size that is not a non-negative int64. A partial
+	// inspection must not produce an overall pass.
 	Partial bool `json:"-"`
 
 	Shards  []*Shard
@@ -297,7 +301,16 @@ func (m *Model) loadConfig() {
 	p := filepath.Join(m.Dir, "config.json")
 	raw, err := safeopen.ReadAll(p, maxSmallJSON, m.allowedRoots()...)
 	if err != nil {
+		// A missing name is "no config". A directory entry that cannot be
+		// read, including a dangling symlink, is an incomplete inspection:
+		// Stat of a broken symlink is ENOENT, which would otherwise look
+		// like the file was never there.
 		if os.IsNotExist(err) {
+			if _, lerr := os.Lstat(p); lerr != nil {
+				return
+			}
+			m.Partial = true
+			m.warnf("config.json: broken symlink: %v", err)
 			return
 		}
 		// The file is there but cannot be read safely (device, FIFO, escape).
@@ -390,6 +403,9 @@ func (m *Model) loadIndex() {
 		return
 	}
 	if idx.badTotalSize {
+		// Zero would look like "no total_size", and the mismatch check
+		// skips that. The declaration cannot be verified, so this is partial.
+		m.Partial = true
 		m.warnf("%s: metadata.total_size is not a non-negative int64", idx.File)
 	}
 	m.Index = idx

@@ -511,3 +511,33 @@ func TestNoFlaggedCodeContentSkipsQuietly(t *testing.T) {
 		t.Fatalf("overall %s", res.Overall)
 	}
 }
+
+func TestPartialSaysIncompleteNotSafetyCap(t *testing.T) {
+	good, _ := mustShard(t, []fixture.Tensor{ten("w", "F32", 1)})
+	d := t.TempDir()
+	if err := os.WriteFile(filepath.Join(d, "a.safetensors"), good, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("missing-config.json", filepath.Join(d, "config.json")); err != nil {
+		t.Fatal(err)
+	}
+	m, err := model.Load(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.Partial {
+		t.Fatal("dangling config.json was not partial")
+	}
+	res := Run(m)
+	if res.Overall == StatusPass {
+		t.Fatal("dangling config.json overall pass")
+	}
+	c := findCheck(t, res, CheckFiles)
+	blob := c.Summary + "\n" + strings.Join(c.Details, "\n")
+	if !strings.Contains(blob, incompleteInspection) {
+		t.Fatalf("file-presence = %s", blob)
+	}
+	if strings.Contains(blob, "safety cap") {
+		t.Fatalf("partial wording still says safety cap: %s", blob)
+	}
+}

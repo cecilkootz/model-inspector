@@ -46,6 +46,46 @@ func TestTotalSizeOutOfRangeIsNotWrapped(t *testing.T) {
 	if !strings.Contains(strings.Join(m.Warnings, "\n"), "total_size") {
 		t.Fatalf("warnings = %v", m.Warnings)
 	}
+	if !m.Partial {
+		t.Fatal("unusable total_size did not mark the inspection partial")
+	}
+}
+
+func TestDanglingConfigSymlinkIsPartial(t *testing.T) {
+	d := t.TempDir()
+	if err := os.Symlink("missing-config.json", filepath.Join(d, "config.json")); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Config != nil || len(m.ConfigRaw) != 0 {
+		t.Fatalf("dangling config parsed: raw %d config %v", len(m.ConfigRaw), m.Config != nil)
+	}
+	if !m.Partial {
+		t.Fatal("dangling config.json was treated as no config")
+	}
+	if !strings.Contains(strings.Join(m.Warnings, "\n"), "config.json") {
+		t.Fatalf("warnings = %v", m.Warnings)
+	}
+}
+
+func TestMissingConfigIsNotPartial(t *testing.T) {
+	d := t.TempDir()
+	if err := os.WriteFile(filepath.Join(d, "readme.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Partial {
+		t.Fatalf("missing config.json marked partial: %v", m.Warnings)
+	}
+	if m.Config != nil {
+		t.Fatal("missing config parsed")
+	}
 }
 
 func TestDisplayTotalsDoNotWrap(t *testing.T) {

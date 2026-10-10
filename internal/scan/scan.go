@@ -175,6 +175,11 @@ func rollup(checks []Check, inspected bool) Status {
 
 const maxDetails = 25
 
+// incompleteInspection is the file-presence line for Partial. Partial now
+// covers walk caps, unreadable entries, a dangling config, counter overflow,
+// and an unusable index total_size, so the text does not say "safety cap".
+const incompleteInspection = "inspection is incomplete (see warnings)"
+
 func headerParse(m *model.Model) Check {
 	c := Check{ID: CheckHeader, Name: "Shard headers parse"}
 	var problems []string
@@ -209,7 +214,7 @@ func filePresence(m *model.Model) Check {
 	c := Check{ID: CheckFiles, Name: "Files present"}
 	var problems, warnings []string
 	if m.Partial {
-		problems = append(problems, "inspection hit a safety cap and is incomplete")
+		problems = append(problems, incompleteInspection)
 	}
 	files := filesByName(m)
 	indexed := map[string]struct{}{}
@@ -254,7 +259,7 @@ func filePresence(m *model.Model) Check {
 	case len(problems) > 0:
 		c.Status = StatusFail
 		if m.Partial && missing == 0 && broken == 0 && escapes == 0 {
-			c.Summary = "inspection hit a safety cap and is incomplete"
+			c.Summary = incompleteInspection
 		} else {
 			c.Summary = fmt.Sprintf("%d missing, %d broken, %d path escapes", missing, broken, escapes)
 		}

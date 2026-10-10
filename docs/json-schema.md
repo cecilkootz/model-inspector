@@ -148,7 +148,7 @@ Check ids, in order:
 | id | What it uses |
 | --- | --- |
 | `header-parse` | Safetensors headers that were actually read. |
-| `file-presence` | Missing, unreadable, or non-local shards, the safety cap, and `.safetensors` files the index does not name. |
+| `file-presence` | Missing, unreadable, or non-local shards, an incomplete inspection (`Partial`), and `.safetensors` files the index does not name. |
 | `offsets-bounds` | `safetensors.CheckLayout`: bounds, dtype×shape, overlap, gaps, trailing bytes. |
 | `index-shard-consistency` | Index against shard headers. |
 | `code-exec-formats` | Names only (`.bin`, `.pt`, `.pth`, `.ckpt`, `.pkl`, `.pickle`, `.joblib`, `.npy`, `.pyc`, `.py`, and top-level `auto_map`). Warns. `--strict` makes that a failure. Contents are not read. |
