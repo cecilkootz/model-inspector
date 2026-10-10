@@ -9,6 +9,10 @@ import (
 // stepTableY applies the same offset change bubbles' table.Update applies
 // for msg. The table itself is updated by the caller; this only tracks the
 // unexported viewport offset. Keys that the table ignores leave y unchanged.
+//
+// layers.80x24.colorless.down5 is the tripwire for this mirror of bubbles'
+// scroll internals. That golden puts ">" on the truncated hyper_connection
+// row, so a drift in MoveUp, MoveDown, or the SetContent clamp fails it.
 func stepTableY(tbl table.Model, y int, msg tea.Msg) int {
 	if !tbl.Focused() {
 		return y

@@ -53,7 +53,7 @@ func TestNotefSanitizesEveryUntrustedArg(t *testing.T) {
 	check(t, Notef("%v", formatInt(1)).Error(), "<U+001B>")
 	check(t, Notef("%v", stringerBool(true)).Error(), "<U+001B>")
 	check(t, Notef("%v", (*nilStringer)(nil)).Error(), "<U+001B>")
-	if got := Notef("%v", (*panicStringer)(nil)).Error(); got != "<nil>" {
+	if got := Notef("%v", (*panicStringer)(nil)).Error(); got != "<U+003C>nil>" {
 		t.Fatalf("panicking nil stringer: %q", got)
 	}
 	if got := Notef("%d", plainInt(3)).Error(); got != "3" {
@@ -75,6 +75,12 @@ func TestNotefSanitizesEveryUntrustedArg(t *testing.T) {
 	already := From("e\x1b")
 	if got := Notef("%s", already).Error(); got != "e<U+001B>" || strings.Contains(got, "U+003C") {
 		t.Fatalf("Text twice: %q", got)
+	}
+	if got := Notef("%s", &already).Error(); got != "e<U+001B>" || strings.Contains(got, "U+003C") {
+		t.Fatalf("*Text twice: %q", got)
+	}
+	if got := Notef("%v", []Text{already, Program("<commit>")}).Error(); strings.Contains(got, "U+003C") || !strings.Contains(got, "e<U+001B>") || !strings.Contains(got, "<commit>") {
+		t.Fatalf("[]Text twice: %q", got)
 	}
 	if got := Notef("%s", Program("<commit>")).Error(); got != "<commit>" || strings.Contains(got, "U+003C") {
 		t.Fatalf("Program twice: %q", got)
@@ -102,6 +108,21 @@ func TestNotefSanitizesEveryUntrustedArg(t *testing.T) {
 	var m map[string]string
 	if got := Notef("%v", m).Error(); got != "map[]" || strings.Contains(got, "U+003C") {
 		t.Fatalf("nil map: %q", got)
+	}
+}
+
+func TestNotefNilIsTheValue(t *testing.T) {
+	if got := Notef("repo %s has", "\r<nil>").Error(); got != "repo <U+000D><U+003C>nil> has" {
+		t.Fatalf("CR: %q", got)
+	}
+	if got := Notef("%s", "\f<nil>\v").Error(); got != "<U+000C><U+003C>nil><U+000B>" {
+		t.Fatalf("FF/VT: %q", got)
+	}
+	if got := Notef("%s", "\u0085<nil>\u2028").Error(); got != "<U+0085><U+003C>nil><U+2028>" {
+		t.Fatalf("NEL/LS: %q", got)
+	}
+	if got := Notef("%v", nil).Error(); got != "<nil>" {
+		t.Fatalf("nil: %q", got)
 	}
 }
 
@@ -145,6 +166,7 @@ func (s stringer) String() string { return s.s }
 
 func TestNotefFormatsAreLiterals(t *testing.T) {
 	root := moduleRoot(t)
+	pkg := sanitizeImportPath(t)
 	fset := gotoken.NewFileSet()
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -160,12 +182,19 @@ func TestNotefFormatsAreLiterals(t *testing.T) {
 		if !strings.HasSuffix(path, ".go") {
 			return nil
 		}
-		file, err := parser.ParseFile(fset, path, nil, 0)
+		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
 			return err
 		}
 		for _, msg := range notefProblems(fset, file) {
 			t.Error(msg)
+		}
+		for _, c := range file.Comments {
+			for _, line := range c.List {
+				if target, ok := linknameTarget(line.Text); ok && target == pkg {
+					t.Errorf("%s: //go:linkname targets %s", fset.Position(line.Pos()), pkg)
+				}
+			}
 		}
 		return nil
 	})
@@ -337,6 +366,92 @@ func callOfNotef(n ast.Node, stack []ast.Node) (*ast.CallExpr, bool) {
 		}
 	}
 	return nil, false
+}
+
+func TestLinknameToSanitizeIsFlagged(t *testing.T) {
+	pkg := sanitizeImportPath(t)
+	if !fileLinksSanitize(t, "package p\n//go:linkname evil "+pkg+".Notef\nfunc evil(format string, args ...any)\n", pkg) {
+		t.Fatal("linkname to Notef was not flagged")
+	}
+	if !fileLinksSanitize(t, "package p\n//go:linkname evil "+pkg+".(*Text).String\nfunc evil()\n", pkg) {
+		t.Fatal("linkname to a method was not flagged")
+	}
+	if fileLinksSanitize(t, "package p\n//go:linkname evil runtime.fastrand\nfunc evil() uint32\n", pkg) {
+		t.Fatal("runtime linkname was flagged")
+	}
+	if fileLinksSanitize(t, "package p\n// go:linkname is not a directive\nfunc f() {}\n", pkg) {
+		t.Fatal("prose was flagged")
+	}
+}
+
+func fileLinksSanitize(t *testing.T, src, pkg string) bool {
+	t.Helper()
+	fset := gotoken.NewFileSet()
+	file, err := parser.ParseFile(fset, "link.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range file.Comments {
+		for _, line := range c.List {
+			if target, ok := linknameTarget(line.Text); ok && target == pkg {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// linknameTarget returns the package path of a //go:linkname directive.
+// The directive is recognized only at the start of a line, which is where
+// the compiler honors it.
+func linknameTarget(comment string) (string, bool) {
+	for _, line := range strings.Split(comment, "\n") {
+		line = strings.TrimSpace(line)
+		line = strings.TrimSuffix(strings.TrimPrefix(line, "/*"), "*/")
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "//go:linkname") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		if pkg, ok := linknamePackage(fields[2]); ok {
+			return pkg, true
+		}
+	}
+	return "", false
+}
+
+// linknamePackage splits an importpath.name or importpath.(*T).Method target.
+// The package path ends at the first dot after the last slash, so a dotted
+// module path stays intact.
+func linknamePackage(target string) (string, bool) {
+	rest := target
+	prefix := ""
+	if slash := strings.LastIndex(target, "/"); slash >= 0 {
+		prefix = target[:slash+1]
+		rest = target[slash+1:]
+	}
+	dot := strings.Index(rest, ".")
+	if dot <= 0 {
+		return "", false
+	}
+	return prefix + rest[:dot], true
+}
+
+func sanitizeImportPath(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(moduleRoot(t), "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, _, _ := strings.Cut(string(b), "\n")
+	mod, ok := strings.CutPrefix(strings.TrimSpace(line), "module ")
+	if !ok || mod == "" {
+		t.Fatalf("go.mod module line: %q", line)
+	}
+	return mod + "/internal/sanitize"
 }
 
 func moduleRoot(t *testing.T) string {

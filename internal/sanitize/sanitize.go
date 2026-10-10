@@ -47,6 +47,12 @@ func (n Note) Error() string { return n.msg }
 // constant. A string variable does not convert to formatLit, which keeps a
 // non-constant format from compiling. Inside this package an explicit
 // conversion still compiles; the AST test rejects that.
+//
+// go:linkname, a generic call-through, reflect, and unsafe can reach Notef
+// without converting to formatLit. The AST test catches a generic
+// call-through, reflect, and unsafe, because each names Notef as a value.
+// It does not see a go:linkname directive, so the same test fails if one
+// targets this package.
 type formatLit string
 
 // Notef formats a program sentence. The format string is trusted and must be
@@ -56,8 +62,9 @@ type formatLit string
 // text. Other numbers and bools stay raw so verbs such as %d keep working.
 // %c is untrusted even for a number: the character is sanitized. A width or
 // precision star stays a raw integer, which is what fmt requires.
-// Text, including Program, is already safe and is not passed through From
-// again. A nil argument is left for fmt, which prints "<nil>".
+// Text, *Text, and []Text, including Program, are already safe and are not
+// passed through From again. A nil argument is left for fmt, which prints
+// "<nil>". Nil is decided from the value, never from the formatted text.
 func Notef(format formatLit, args ...any) error {
 	spec := string(format)
 	roles := scanFormat(spec)
@@ -86,8 +93,12 @@ func safeArg(a any, star, char bool) any {
 }
 
 func isText(a any) bool {
-	_, ok := a.(Text)
-	return ok
+	switch a.(type) {
+	case Text, *Text, []Text:
+		return true
+	default:
+		return false
+	}
 }
 
 // formatsItself is true when fmt will print a method's text instead of the
@@ -101,9 +112,10 @@ func formatsItself(a any) bool {
 	}
 }
 
-// isNilLike reports values fmt prints as "<nil>", "[]", or "map[]" with no
-// user bytes. A typed nil that implements Stringer or error is handled
-// earlier, so its method text is still sanitized.
+// isNilLike reports a nil value: the interface itself, or a nil pointer,
+// interface, map, slice, chan, or func. The formatted text is irrelevant.
+// A typed nil that implements Stringer or error is handled earlier, so its
+// method text is still sanitized.
 func isNilLike(a any) bool {
 	if a == nil {
 		return true
@@ -118,15 +130,10 @@ func isNilLike(a any) bool {
 }
 
 // sanitized prints v with the verb fmt selected, then tokenizes that text.
-// fmt's own "<nil>" (a nil pointer whose method panics) is left as written.
 type sanitized struct{ v any }
 
 func (s sanitized) Format(f fmt.State, verb rune) {
 	formatted := fmt.Sprintf(fmt.FormatString(f, verb), s.v)
-	if strings.TrimSpace(formatted) == "<nil>" {
-		_, _ = io.WriteString(f, formatted)
-		return
-	}
 	_, _ = io.WriteString(f, From(formatted).String())
 }
 
