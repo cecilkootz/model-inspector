@@ -93,6 +93,21 @@ endef
 test: check-overrides
 	@$(enter_root); go vet ./...
 	@$(enter_root); go test -race -count=1 ./...
+	@$(enter_root); \
+	stamp="$${TMPDIR:-/tmp}/model-inspector.artifacts.$(subst /,-,$(MI_ROOT))"; \
+	if [ ! -f "$$stamp" ]; then echo "make test: missing artifact stamp" >&2; exit 1; fi; \
+	{ IFS= read -r bin_state; IFS= read -r bin_sum; IFS= read -r bin_id; IFS= read -r bin_x; IFS= read -r cov_state; IFS= read -r cov_sum; IFS= read -r cov_id; } < "$$stamp"; \
+	rm -f "$$stamp"; \
+	real_bin=bin/model-inspector; real_cov=coverage.out; \
+	classify() { if [ -L "$$1" ]; then printf symlink; elif [ -d "$$1" ]; then printf dir; elif [ -f "$$1" ]; then printf file; elif [ -e "$$1" ]; then printf other; else printf absent; fi; }; \
+	now=$$(classify "$$real_bin"); \
+	if [ "$$now" != "$$bin_state" ]; then echo "make test changed bin/model-inspector (was $$bin_state, now $$now)" >&2; exit 1; fi; \
+	if [ "$$bin_state" != absent ]; then id=$$(ls -id "$$real_bin" | awk '{print $$1}'); if [ "$$id" != "$$bin_id" ]; then echo "make test replaced bin/model-inspector" >&2; exit 1; fi; fi; \
+	if [ "$$bin_state" = file ]; then sum=$$(cksum < "$$real_bin"); if [ "$$sum" != "$$bin_sum" ]; then echo "make test modified bin/model-inspector" >&2; exit 1; fi; if [ "$$bin_x" = 1 ] && [ ! -x "$$real_bin" ]; then echo "make test cleared the executable bit on bin/model-inspector" >&2; exit 1; fi; fi; \
+	now=$$(classify "$$real_cov"); \
+	if [ "$$now" != "$$cov_state" ]; then echo "make test changed coverage.out (was $$cov_state, now $$now)" >&2; exit 1; fi; \
+	if [ "$$cov_state" != absent ]; then id=$$(ls -id "$$real_cov" | awk '{print $$1}'); if [ "$$id" != "$$cov_id" ]; then echo "make test replaced coverage.out" >&2; exit 1; fi; fi; \
+	if [ "$$cov_state" = file ]; then sum=$$(cksum < "$$real_cov"); if [ "$$sum" != "$$cov_sum" ]; then echo "make test modified coverage.out" >&2; exit 1; fi; fi
 
 build:
 	@set -eu; \
@@ -176,12 +191,7 @@ check-overrides:
 	spaced=; \
 	wtparent=; \
 	scratch=; \
-	seeded_internal=; \
 	restore() { \
-	  if [ -n "$$seeded_internal" ]; then \
-	    rm -rf "$$MI_ROOT/internal/bin"; \
-	    rm -f "$$MI_ROOT/internal/coverage.out"; \
-	  fi; \
 	  if [ -n "$$spaced" ]; then rm -rf "$$spaced"; fi; \
 	  if [ -n "$$scratch" ]; then rm -rf "$$scratch"; fi; \
 	  if [ -n "$$wtparent" ]; then \
@@ -283,20 +293,92 @@ check-overrides:
 	  *"MI_LDFLAGS :="|*"MI_LDFLAGS := ") ;; \
 	  *) echo "internal ldflags followed a command-line override: [$$out]" >&2; exit 1 ;; \
 	esac; \
+	real_bin=$$MI_ROOT/bin/model-inspector; \
+	real_cov=$$MI_ROOT/coverage.out; \
+	classify() { \
+	  if [ -L "$$1" ]; then printf symlink; \
+	  elif [ -d "$$1" ]; then printf dir; \
+	  elif [ -f "$$1" ]; then printf file; \
+	  elif [ -e "$$1" ]; then printf other; \
+	  else printf absent; \
+	  fi; \
+	}; \
+	bin_state=$$(classify "$$real_bin"); \
+	cov_state=$$(classify "$$real_cov"); \
+	bin_sum=; bin_id=; bin_x=; \
+	cov_sum=; cov_id=; \
+	if [ "$$bin_state" != absent ]; then \
+	  bin_id=$$(ls -id "$$real_bin" | awk '{print $$1}'); \
+	fi; \
+	if [ "$$bin_state" = file ]; then \
+	  bin_sum=$$(cksum < "$$real_bin"); \
+	  if [ -x "$$real_bin" ]; then bin_x=1; else bin_x=0; fi; \
+	fi; \
+	if [ "$$cov_state" != absent ]; then \
+	  cov_id=$$(ls -id "$$real_cov" | awk '{print $$1}'); \
+	fi; \
+	if [ "$$cov_state" = file ]; then \
+	  cov_sum=$$(cksum < "$$real_cov"); \
+	fi; \
+	assert_real_untouched() { \
+	  label=$$1; \
+	  now=$$(classify "$$real_bin"); \
+	  if [ "$$now" != "$$bin_state" ]; then \
+	    echo "clean changed bin/model-inspector ($$label): was $$bin_state now $$now" >&2; exit 1; \
+	  fi; \
+	  if [ "$$bin_state" != absent ]; then \
+	    id=$$(ls -id "$$real_bin" | awk '{print $$1}'); \
+	    if [ "$$id" != "$$bin_id" ]; then \
+	      echo "clean replaced bin/model-inspector ($$label)" >&2; exit 1; \
+	    fi; \
+	  fi; \
+	  if [ "$$bin_state" = file ]; then \
+	    sum=$$(cksum < "$$real_bin"); \
+	    if [ "$$sum" != "$$bin_sum" ]; then \
+	      echo "clean modified bin/model-inspector ($$label)" >&2; exit 1; \
+	    fi; \
+	    if [ "$$bin_x" = 1 ] && [ ! -x "$$real_bin" ]; then \
+	      echo "clean cleared the executable bit on bin/model-inspector ($$label)" >&2; exit 1; \
+	    fi; \
+	  fi; \
+	  now=$$(classify "$$real_cov"); \
+	  if [ "$$now" != "$$cov_state" ]; then \
+	    echo "clean changed coverage.out ($$label): was $$cov_state now $$now" >&2; exit 1; \
+	  fi; \
+	  if [ "$$cov_state" != absent ]; then \
+	    id=$$(ls -id "$$real_cov" | awk '{print $$1}'); \
+	    if [ "$$id" != "$$cov_id" ]; then \
+	      echo "clean replaced coverage.out ($$label)" >&2; exit 1; \
+	    fi; \
+	  fi; \
+	  if [ "$$cov_state" = file ]; then \
+	    sum=$$(cksum < "$$real_cov"); \
+	    if [ "$$sum" != "$$cov_sum" ]; then \
+	      echo "clean modified coverage.out ($$label)" >&2; exit 1; \
+	    fi; \
+	  fi; \
+	}; \
 	scratch=$$(mktemp -d "$${TMPDIR:-/tmp}/model-inspector.XXXXXX"); \
-	mkdir -p "$$scratch/caller/bin" "$$scratch/caller/sub/bin"; \
+	mkdir -p "$$scratch/caller/bin" "$$scratch/caller/sub/bin" "$$scratch/tree/internal/bin" "$$scratch/cov/bin" "$$scratch/cov/coverage.out"; \
+	cp "$$MI_ROOT/Makefile" "$$scratch/tree/Makefile"; \
+	cp "$$MI_ROOT/Makefile" "$$scratch/cov/Makefile"; \
 	printf keep > "$$scratch/caller/bin/model-inspector"; \
 	printf keep > "$$scratch/caller/coverage.out"; \
 	printf keep > "$$scratch/caller/sub/bin/model-inspector"; \
 	printf keep > "$$scratch/caller/sub/coverage.out"; \
-	seed_repo() { \
-	  mkdir -p "$$MI_ROOT/bin"; \
-	  printf x > "$$MI_ROOT/bin/model-inspector"; \
-	  printf x > "$$MI_ROOT/coverage.out"; \
+	printf keep > "$$scratch/tree/internal/bin/model-inspector"; \
+	printf keep > "$$scratch/tree/internal/coverage.out"; \
+	printf x > "$$scratch/cov/bin/keep"; \
+	seed_tree() { \
+	  rm -rf "$$scratch/tree/bin"; \
+	  rm -f "$$scratch/tree/coverage.out"; \
+	  mkdir -p "$$scratch/tree/bin"; \
+	  printf repo > "$$scratch/tree/bin/model-inspector"; \
+	  printf repo > "$$scratch/tree/coverage.out"; \
 	}; \
-	assert_repo_cleaned() { \
-	  if [ -e "$$MI_ROOT/bin" ] || [ -L "$$MI_ROOT/bin" ] || [ -e "$$MI_ROOT/coverage.out" ] || [ -L "$$MI_ROOT/coverage.out" ]; then \
-	    echo "clean left the makefile tree's bin/ or coverage.out ($$1)" >&2; exit 1; \
+	assert_tree_cleaned() { \
+	  if [ -e "$$scratch/tree/bin" ] || [ -L "$$scratch/tree/bin" ] || [ -e "$$scratch/tree/coverage.out" ] || [ -L "$$scratch/tree/coverage.out" ]; then \
+	    echo "clean left the scratch makefile tree's bin/ or coverage.out ($$1)" >&2; exit 1; \
 	  fi; \
 	}; \
 	assert_survives() { \
@@ -314,67 +396,59 @@ check-overrides:
 	    -u VERSION_RAW -u COMMIT_RAW -u FUZZTIME_RAW -u BIN_RAW \
 	    -u MI_LDFLAGS -u LDFLAGS \
 	    MAKEFLAGS= MAKEOVERRIDES= \
-	    $(MAKE) -C "$$dir" -f "$$MI_ROOT/Makefile" -s --no-print-directory clean "$$@" >"$$tmp.out" 2>&1; \
+	    $(MAKE) -C "$$dir" -f "$$scratch/tree/Makefile" -s --no-print-directory clean "$$@" >"$$tmp.out" 2>&1; \
 	}; \
-	seed_repo; \
+	seed_tree; \
 	if ! run_clean_from "$$scratch/caller" BIN=.git; then \
 	  echo "clean from a scratch directory failed" >&2; cat "$$tmp.out" >&2; exit 1; \
 	fi; \
 	assert_survives "scratch directory" "$$scratch/caller"; \
-	assert_repo_cleaned "scratch directory"; \
-	seed_repo; \
+	assert_tree_cleaned "scratch directory"; \
+	assert_real_untouched "scratch directory"; \
+	seed_tree; \
 	if ! run_clean_from "$$scratch/caller/sub" BIN=bin/.; then \
 	  echo "clean from a subdirectory failed" >&2; cat "$$tmp.out" >&2; exit 1; \
 	fi; \
 	assert_survives "scratch subdirectory" "$$scratch/caller/sub"; \
 	assert_survives "scratch directory" "$$scratch/caller"; \
-	assert_repo_cleaned "scratch subdirectory"; \
-	if [ -e "$$MI_ROOT/internal/bin" ] || [ -e "$$MI_ROOT/internal/coverage.out" ]; then \
-	  echo "internal/bin or internal/coverage.out already exists" >&2; exit 1; \
-	fi; \
-	seeded_internal=1; \
-	mkdir -p "$$MI_ROOT/internal/bin"; \
-	printf keep > "$$MI_ROOT/internal/bin/model-inspector"; \
-	printf keep > "$$MI_ROOT/internal/coverage.out"; \
-	seed_repo; \
-	if ! ( cd "$$MI_ROOT/internal" && env -u BIN -u VERSION -u COMMIT -u FUZZTIME \
+	assert_tree_cleaned "scratch subdirectory"; \
+	assert_real_untouched "scratch subdirectory"; \
+	seed_tree; \
+	if ! ( cd "$$scratch/tree/internal" && env -u BIN -u VERSION -u COMMIT -u FUZZTIME \
 	    -u VERSION_RAW -u COMMIT_RAW -u FUZZTIME_RAW -u BIN_RAW \
 	    -u MI_LDFLAGS -u LDFLAGS \
 	    MAKEFLAGS= MAKEOVERRIDES= \
 	    $(MAKE) -f ../Makefile -s --no-print-directory clean ) >"$$tmp.out" 2>&1; then \
-	  echo "clean from internal/ failed" >&2; cat "$$tmp.out" >&2; exit 1; \
+	  echo "clean from a scratch subdirectory failed" >&2; cat "$$tmp.out" >&2; exit 1; \
 	fi; \
-	assert_survives "repo subdirectory" "$$MI_ROOT/internal"; \
-	assert_repo_cleaned "repo subdirectory"; \
-	rm -rf "$$MI_ROOT/internal/bin"; \
-	rm -f "$$MI_ROOT/internal/coverage.out"; \
-	seeded_internal=; \
-	seed_repo; \
+	assert_survives "scratch makefile subdirectory" "$$scratch/tree/internal"; \
+	assert_tree_cleaned "scratch makefile subdirectory"; \
+	assert_real_untouched "scratch makefile subdirectory"; \
+	seed_tree; \
 	if ! run_clean_from "$$scratch/caller" MI_ROOT="$$scratch/caller"; then \
 	  echo "clean with MI_ROOT override failed" >&2; cat "$$tmp.out" >&2; exit 1; \
 	fi; \
 	assert_survives "MI_ROOT override" "$$scratch/caller"; \
-	assert_repo_cleaned "MI_ROOT override"; \
-	mkdir -p "$$scratch/tree/bin" "$$scratch/tree/coverage.out"; \
-	cp "$$MI_ROOT/Makefile" "$$scratch/tree/Makefile"; \
-	printf x > "$$scratch/tree/bin/keep"; \
+	assert_tree_cleaned "MI_ROOT override"; \
+	assert_real_untouched "MI_ROOT override"; \
 	if env -u BIN -u VERSION -u COMMIT -u FUZZTIME \
 	    -u VERSION_RAW -u COMMIT_RAW -u FUZZTIME_RAW -u BIN_RAW \
 	    -u MI_LDFLAGS -u LDFLAGS \
 	    MAKEFLAGS= MAKEOVERRIDES= \
-	    $(MAKE) -C "$$scratch/caller" -f "$$scratch/tree/Makefile" -s --no-print-directory clean >"$$tmp.out" 2>&1; then \
+	    $(MAKE) -C "$$scratch/caller" -f "$$scratch/cov/Makefile" -s --no-print-directory clean >"$$tmp.out" 2>&1; then \
 	  echo "directory coverage.out was not refused" >&2; cat "$$tmp.out" >&2; exit 1; \
 	fi; \
-	if [ -e "$$scratch/tree/bin" ] || [ -L "$$scratch/tree/bin" ]; then \
+	if [ -e "$$scratch/cov/bin" ] || [ -L "$$scratch/cov/bin" ]; then \
 	  echo "directory coverage.out stopped bin/ removal" >&2; exit 1; \
 	fi; \
-	if [ ! -d "$$scratch/tree/coverage.out" ] || [ -L "$$scratch/tree/coverage.out" ]; then \
+	if [ ! -d "$$scratch/cov/coverage.out" ] || [ -L "$$scratch/cov/coverage.out" ]; then \
 	  echo "directory coverage.out was removed" >&2; exit 1; \
 	fi; \
 	if ! grep -q 'coverage.out is a directory' "$$tmp.out"; then \
 	  echo "directory coverage.out produced no warning" >&2; cat "$$tmp.out" >&2; exit 1; \
 	fi; \
 	assert_survives "caller during directory coverage.out" "$$scratch/caller"; \
+	assert_real_untouched "directory coverage.out"; \
 	if ! command -v git >/dev/null 2>&1; then \
 	  echo "skipping clean self-test: git is not available" >&2; \
 	elif [ ! -e .git ] || ! git rev-parse --verify --quiet HEAD >/dev/null 2>&1; then \
@@ -402,6 +476,7 @@ check-overrides:
 	if [ ! -f "$$wtparent/outside/keep" ] || [ -e "$$wt/bin" ] || [ -L "$$wt/bin" ]; then \
 	  echo "clean followed a symlinked bin/" >&2; exit 1; \
 	fi; \
+	assert_real_untouched "symlinked bin"; \
 	seed_clean_targets() { \
 	  mkdir -p "$$wt/bin"; \
 	  printf x > "$$wt/bin/model-inspector"; \
@@ -425,6 +500,7 @@ check-overrides:
 	  if [ "$$status" != "$$base_status" ]; then \
 	    echo "tracked tree changed for $$label" >&2; printf '%s\n' "$$status" >&2; exit 1; \
 	  fi; \
+	  assert_real_untouched "$$label"; \
 	}; \
 	seed_clean_targets; \
 	if ! env -u VERSION -u COMMIT -u FUZZTIME \
@@ -442,4 +518,7 @@ check-overrides:
 	  fi; \
 	  assert_clean_safe "BIN=$$b"; \
 	done; \
-	fi
+	fi; \
+	assert_real_untouched "end of clean self-test"; \
+	stamp="$${TMPDIR:-/tmp}/model-inspector.artifacts.$(subst /,-,$(MI_ROOT))"; \
+	printf '%s\n' "$$bin_state" "$$bin_sum" "$$bin_id" "$$bin_x" "$$cov_state" "$$cov_sum" "$$cov_id" > "$$stamp"

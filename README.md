@@ -87,10 +87,11 @@ written under `bin/`, including a custom name, is removed with the
 directory. `rm -rf` runs only after `bin` resolves to this repository's
 `bin` directory; a symlinked `bin` is unlinked and not followed. A
 directory named `coverage.out` is left in place with a warning, `bin/` is
-still removed, and `clean` exits non-zero. The override check includes
-that `clean`, so `make test` removes this checkout's `bin/` and
-`coverage.out`. `bin/` is gitignored. Recipes call `go` on `PATH` and
-honor `GOTOOLCHAIN=local` (no toolchain download).
+still removed, and `clean` exits non-zero. The override check runs that
+`clean` only against a scratch copy of the Makefile, so `make test` leaves
+this checkout's `bin/` and `coverage.out` in place. `bin/` is gitignored.
+Recipes call `go` on `PATH` and honor `GOTOOLCHAIN=local` (no toolchain
+download).
 
 `go install origin.cursor.com/cecilkootz/model-inspector/cmd/model-inspector@latest`
 fails even with `GOPRIVATE=origin.cursor.com`. Origin does not answer Go's
