@@ -40,6 +40,25 @@ cd model-inspector
 go install ./cmd/model-inspector
 ```
 
+GNU make targets (on macOS, `gmake` when `/usr/bin/make` is BSD make):
+
+```sh
+make build   # bin/model-inspector; injects version and commit
+make test    # go vet ./... && go test -race -count=1 ./...
+make clean   # remove bin/
+make fuzz    # every fuzz target, for FUZZTIME (default 10s)
+```
+
+Bare `make` runs `test` (vet and race tests). That is the historical
+default, and it stays the default.
+
+`make build` links `internal/version.Version` (the `0.1.0` string in that
+package, or `VERSION=` on the command line) and `internal/version.Commit`
+(`git rev-parse --short HEAD`, or `unknown` when git cannot name a commit).
+`go install` does not set the commit, so `--version` then prints `unknown`.
+`bin/` is gitignored. Recipes call `go` on `PATH` and honor
+`GOTOOLCHAIN=local` (no toolchain download).
+
 `go install origin.cursor.com/cecilkootz/model-inspector/cmd/model-inspector@latest`
 fails even with `GOPRIVATE=origin.cursor.com`. Origin does not answer Go's
 import-path discovery (`?go-get=1`), so the toolchain 404s before it can
@@ -56,8 +75,11 @@ export PATH="$HOME/go-sdk/go/bin:$HOME/src/model-inspector/bin:$PATH"
 
 ```sh
 cd ~/src/model-inspector
-make test   # go vet ./... && go test -race -count=1 ./...
-go build -o bin/model-inspector ./cmd/model-inspector
+make          # same as make test
+make build    # bin/model-inspector
+make test
+make clean
+make fuzz     # FUZZTIME=10s by default; make fuzz FUZZTIME=30s
 ```
 
 `make test` builds tiny safetensors fixtures in a temp directory (real
