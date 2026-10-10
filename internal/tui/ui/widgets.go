@@ -30,6 +30,25 @@ func paint(s string, fg, bg lipgloss.TerminalColor, bold bool) string {
 // Paint colours s. Empty colours leave that channel alone.
 func Paint(s, fg, bg string, bold bool) string { return paintHex(s, fg, bg, bold) }
 
+// PaintToken colours s with semantic tokens. A nil background leaves the
+// channel alone. ANSI-16 keeps the foreground and drops the fill.
+func PaintToken(s string, fg Token, bg *Token, bold bool) string {
+	if ColorOff() || s == "" {
+		return s
+	}
+	if Profile() == "ansi16" {
+		if fg.ANSI == "" {
+			return s
+		}
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(fg.ANSI)).Bold(bold).Render(s)
+	}
+	st := lipgloss.NewStyle().Bold(bold).Foreground(fg.Color())
+	if bg != nil {
+		st = st.Background(bg.Color())
+	}
+	return st.Render(s)
+}
+
 func paintHex(s, fg, bg string, bold bool) string {
 	if ColorOff() || Profile() == "ansi16" {
 		if Profile() == "ansi16" && fg != "" {

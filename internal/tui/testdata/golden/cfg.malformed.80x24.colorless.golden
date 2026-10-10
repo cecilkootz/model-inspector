@@ -1,0 +1,24 @@
+model-inspector  1 Identity [2 Config] 3 Layers 4 Scan ✗2             m mouse on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [ CONFIG.JSON ]                                                               
+                                                                                
+  [PARSE ERROR]                                                                 
+                                                                                
+  config.json did not parse. invalid character ',' looking for beginning of     
+  value at line 2, col 9                                                        
+                                                                                
+      1 {                                                                       
+      2   "a": 1,                                                               
+        ▲ here                                                                  
+      3 }                                                                       
+      4                                                                         
+                                                                                
+  Key fields and the tree need a parsed config.                                 
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+CONFIG │ /model         78 B (incomplete) │ bf16 │ ! incomplete │ – headers-only

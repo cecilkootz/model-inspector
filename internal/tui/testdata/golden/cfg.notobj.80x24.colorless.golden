@@ -1,0 +1,24 @@
+model-inspector  1 Identity [2 Config] 3 Layers 4 Scan ✗2             m mouse on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [ KEY FIELDS ]  0 groups · ⏎ opens the tree                                   
+  – config.json is not a JSON object; Key fields unavailable                    
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+ ▸ Browse config.json (4 nodes)                                    ⏎ on any row 
+CONFIG │ /model         74 B (incomplete) │ bf16 │ ! incomplete │ – headers-only

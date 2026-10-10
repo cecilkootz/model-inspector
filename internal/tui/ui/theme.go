@@ -89,6 +89,14 @@ var (
 	DTypeF32  = Token{DarkHex: "#FF9E64", LightHex: "#FF9E64", ANSI256: "209", ANSI: "3"}
 	DTypeInt  = Token{DarkHex: "#8A90A6", LightHex: "#8A90A6", ANSI256: "245", ANSI: "8"}
 
+	// JSON tree colours. Light values are darker so they stay readable on
+	// both the card and the selection fill.
+	JSONKey    = Token{DarkHex: "#89B4FA", LightHex: "#1B4F9C", ANSI256: "111", ANSI: "12"}
+	JSONString = Token{DarkHex: "#A6E3A1", LightHex: "#0B5C32", ANSI256: "150", ANSI: "10"}
+	JSONNumber = Token{DarkHex: "#FAB387", LightHex: "#7A3E00", ANSI256: "216", ANSI: "11"}
+	JSONBool   = Token{DarkHex: "#CBA6F7", LightHex: "#5B3A9E", ANSI256: "183", ANSI: "13"}
+	JSONNull   = Token{DarkHex: "#9AA0B8", LightHex: "#454B63", ANSI256: "247", ANSI: "8"}
+
 	TermBG = "#11131A"
 	InkHex = "#0E0F16"
 	White  = "#FFFFFF"

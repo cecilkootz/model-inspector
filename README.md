@@ -177,6 +177,13 @@ The CLI does not use it for user input; it uses `hfcache.ResolveTarget`.
 
 `tab` / `shift+tab` or `1`-`4` switch screens. In a tree, `←` / `→` and
 `h` / `l` fold a row; on every other screen they switch tabs.
+On Config, `space` toggles the selected node, `p` jumps to its parent,
+`e` expands (stopping at 100,000 visible rows and leaving arrays over
+1,000 closed), `E` collapses back to the default, and `+` / `-` open or
+close one depth. `/` searches keys and values (`k:` or `v:` to limit
+which), `tab` inside that input switches to filter, and `n` / `N` step
+through matches. `y` copies the jq path and `Y` copies the value, both
+through OSC 52. `r` toggles the sanitized raw text.
 `↑` / `↓` scroll or select. On Layers, `enter` opens a group and `esc` or
 backspace goes back. `esc` never quits: it closes help, the command palette,
 or a disclosure, then leaves a drill-down. `?` opens the key list. `q`
@@ -216,9 +223,13 @@ follows the overall result.
    Params line sums those pieces before deciding whether one table is at
    least 10% of the estimate. An incomplete inspection marks the memory
    line and the n-gram callout as incomplete. This is not a load of the weights.
-2. **Config**: key architecture, attention, MoE, and MTP fields (root or
-   `text_config`) plus the sanitized `config.json`. A missing file, an
-   unreadable file, and a file that did not parse each get their own line.
+2. **Config**: key architecture, attention, MoE, quant, vision, and MTP
+   fields (root, then `text_config`, `llm_config`, or `language_config`;
+   vision only from `vision_config`) beside an ordered `config.json` tree.
+   Enter on a field jumps to that node. The tree keeps file order and
+   number literals, pages large arrays, and can show the sanitized raw
+   text. A missing file, an unreadable file, a file over 64 MiB, a file
+   that did not parse, and a tree over 250,000 nodes each get their own card.
 3. **Layers**: tensors grouped by decoder layer (`...layers.N.`) plus
    embeddings, ngram (the PLE n-gram table, even when stored under
    `layers.N.ple.ple_embedding`), norms, hyper_connection (the model-level
