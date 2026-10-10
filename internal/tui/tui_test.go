@@ -31,21 +31,23 @@ func TestLayersViewKeepsHyperConnectionTogether(t *testing.T) {
 	sized, _ := ui.Update(tea.WindowSizeMsg{Width: 180, Height: 40})
 	layers, _ := sized.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 	view := layers.(Model).View()
-	if !strings.Contains(view, "hyper_connection") || !strings.Contains(view, "ngram") {
-		t.Fatalf("group table missing hyper_connection or ngram:\n%s", view)
+	if !strings.Contains(view, "hyper_connection") || !strings.Contains(view, "n-gram") {
+		t.Fatalf("layers tree missing hyper_connection or n-gram:\n%s", view)
 	}
-	rows := groupRows(m)
 	var sawHyper bool
-	for _, row := range rows {
-		if row[0] == "other" || row[1] == model.KindOther {
-			t.Fatalf("layers table has an other group row: %v", row)
+	for _, g := range m.Groups {
+		if g == nil {
+			continue
 		}
-		if row[0] == "hyper_connection" && row[1] == model.KindHyper {
+		if g.Key == "other" || g.Kind == model.KindOther {
+			t.Fatalf("layers has an other group: %s %s", g.Key, g.Kind)
+		}
+		if g.Key == "hyper_connection" && g.Kind == model.KindHyper {
 			sawHyper = true
 		}
 	}
 	if !sawHyper {
-		t.Fatalf("layers table rows = %v", rows)
+		t.Fatal("hyper_connection group missing")
 	}
 
 	hyper := drill(t, layers.(Model), m, "hyper_connection")
@@ -78,7 +80,23 @@ func drill(t *testing.T, ui Model, m *model.Model, key string) string {
 	if idx < 0 {
 		t.Fatalf("no group %s", key)
 	}
-	ui.groupTable.SetCursor(idx)
+	if ui.lay == nil {
+		t.Fatal("layers state missing")
+	}
+	ui.layersCollapseAll()
+	ui.lay.ensure(m)
+	found := false
+	for i, row := range ui.lay.rows {
+		if row.kind == rowGroup && row.path == "g:"+key {
+			ui.lay.row = i
+			ui.lay.cursorPath = row.path
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("no tree row for %s", key)
+	}
 	drilled, _ := ui.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	return drilled.(Model).View()
 }

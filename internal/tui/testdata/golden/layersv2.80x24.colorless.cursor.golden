@@ -1,0 +1,24 @@
+model-inspector  1 Identity 2 Config [3 Layers] 4 Scan ✗1             m mouse on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [ LAYERS ]  7 groups                                                  s sort  
+   ▸ embeddings                                                     q4 · 576 B  
+   ▸ n-gram table (PLE)                                 q4 · ⌂ ×3 · 300.00 KiB  
+  >▸ layer 0                             lin · 4 exp · q2+q4+q8 · ◆ · 1.61 KiB  
+   ▸ layer 1                                         full · 2 exp · q4 · 432 B  
+   ▸ norms                                                         bf16 · 16 B  
+   ▸ hyper_connection                                              bf16 · 32 B  
+   ▸ lm_head                                                      bf16 · 128 B  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+LAYERS │ /model                 5.00 KiB │ q4 g32 +1 │ ✗ 1 fail │ – headers-only

@@ -1,9 +1,13 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 // stepTableY applies the same offset change bubbles' table.Update applies
@@ -132,4 +136,41 @@ func setTableY(y, nlines, height int) int {
 
 func clampInt(v, low, high int) int {
 	return min(max(v, low), high)
+}
+
+// markTableCursor puts a ">" on the selected row when colour is off.
+// The table's selection is a background fill, which the ASCII profile drops,
+// so a NO_COLOR frame would otherwise hide the cursor. The marker follows
+// the row index: the first cell is truncated with an ellipsis, so the
+// rendered text is not the full name.
+func markTableCursor(view string, tbl table.Model, yoff int) string {
+	cursor := tbl.Cursor()
+	rows := tbl.Rows()
+	if !ui.ColorOff() || cursor < 0 || cursor >= len(rows) || len(rows[cursor]) == 0 {
+		return view
+	}
+	lines := strings.Split(view, "\n")
+	idx := tableCursorLine(tbl, yoff)
+	if idx < 1 || idx >= len(lines) {
+		return view
+	}
+	lines[idx] = markGreater(lines[idx])
+	return strings.Join(lines, "\n")
+}
+
+// tableCursorLine is the view line of the selected row. Line 0 is the
+// header. The rendered window starts at cursor-height, and yoff is the
+// viewport scroll tracked beside the table.
+func tableCursorLine(tbl table.Model, yoff int) int {
+	start, end := tableWindow(tbl.Cursor(), tbl.Height(), len(tbl.Rows()))
+	yoff = clampContentY(yoff, start, end, tbl.Height())
+	return 1 + tbl.Cursor() - start - yoff
+}
+
+func markGreater(line string) string {
+	// The first cell's left pad becomes the marker so the columns stay put.
+	if strings.HasPrefix(line, " ") {
+		return ">" + line[1:]
+	}
+	return line
 }

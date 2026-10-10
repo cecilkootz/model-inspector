@@ -109,8 +109,37 @@ var ConfigTree = Context{
 // consume it while the input is focused; it is not registered here.
 var ConfigSearch = Context{Name: "config.search"}
 
+// LayersTree is the layers tree. It may shadow only left, right, h, and l.
+var LayersTree = Context{
+	Name:    "layers.tree",
+	Tree:    true,
+	Shadows: []string{"left", "right", "h", "l"},
+	Bindings: []Bind{
+		{Keys: []string{"right", "l"}, HelpKey: "→/l", Help: "expand", Hint: "←→ fold"},
+		{Keys: []string{"left", "h"}, HelpKey: "←/h", Help: "collapse"},
+		{Keys: []string{"space"}, HelpKey: "space", Help: "toggle", Hint: "␣ toggle"},
+		{Keys: []string{"p"}, HelpKey: "p", Help: "parent"},
+		{Keys: []string{"e"}, HelpKey: "e", Help: "expand all"},
+		{Keys: []string{"E"}, HelpKey: "E", Help: "collapse all"},
+		{Keys: []string{"+"}, HelpKey: "+", Help: "fold level"},
+		{Keys: []string{"-"}, HelpKey: "-", Help: "fold level"},
+		{Keys: []string{"/"}, HelpKey: "/", Help: "search", Hint: "/ search"},
+		{Keys: []string{"n"}, HelpKey: "n", Help: "next match"},
+		{Keys: []string{"N"}, HelpKey: "N", Help: "prev match"},
+		{Keys: []string{"y"}, HelpKey: "y", Help: "copy path", Hint: "y/Y copy"},
+		{Keys: []string{"Y"}, HelpKey: "Y", Help: "copy value"},
+		{Keys: []string{"s"}, HelpKey: "s", Help: "sort"},
+		{Keys: []string{"b", "u"}, HelpKey: "b/u", Help: "page up"},
+		{Keys: []string{"f", "d"}, HelpKey: "f/d", Help: "page down"},
+	},
+}
+
+// LayersSearch is the layers search input. Tab stays global so the handler
+// can consume it while the input is focused; it is not registered here.
+var LayersSearch = Context{Name: "layers.search"}
+
 // Contexts is every context the conflict test walks.
-var Contexts = []Context{Identity, TreeDummy, ConfigFields, ConfigTree, ConfigSearch}
+var Contexts = []Context{Identity, TreeDummy, ConfigFields, ConfigTree, ConfigSearch, LayersTree, LayersSearch}
 
 // HintLine is the status-bar hint for a context. Tree contexts say fold.
 func HintLine(tree bool) string {

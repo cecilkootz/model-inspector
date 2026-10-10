@@ -186,8 +186,10 @@ which), `tab` inside that input switches to filter, and `n` / `N` step
 through matches. `y` copies the jq path and `Y` copies the value, both
 through OSC 52. `--no-clipboard` or `MODEL_INSPECTOR_NO_OSC52=1` turns
 those sequences off. `r` toggles the sanitized raw text.
-`↑` / `↓` scroll or select. On Layers, `enter` opens a group and `esc` or
-backspace goes back. `esc` never quits: it closes help, the command palette,
+`↑` / `↓` scroll or select. On Layers the same fold keys apply: `enter` or
+`space` opens a group, `←` / `h` collapses or jumps to the parent, `/`
+searches, `s` cycles sort, and `y` / `Y` copy the name or the value.
+`esc` never quits: it closes help, the command palette,
 or a disclosure, then leaves a drill-down. `?` opens the key list. `q`
 closes help when help is open, and otherwise quits. `ctrl+c` always quits.
 `:` or `ctrl+k` opens the command palette. `w` moves focus between panes,

@@ -134,8 +134,10 @@ func (t Model) tabLine(width int) string {
 	var parts []string
 	for i, n := range tabNames {
 		label := n
-		if tab(i) == tabLayers && t.detail != nil {
-			label = "3 Layers › " + sanitize.From(t.detail.Key).String()
+		if tab(i) == tabLayers {
+			if key := t.selectedLayerKey(); key != "" {
+				label = "3 Layers > " + key
+			}
 		}
 		if tab(i) == tabScan {
 			label += " " + scanBadge(t.scan)
@@ -227,9 +229,6 @@ func (t Model) footerKeys() string {
 	case tabScan:
 		return "↑↓ select  ⏎ details  c code  ? help  q quit"
 	case tabLayers:
-		if t.detail != nil {
-			return "↑↓ select  esc back  ? help  q quit"
-		}
 		return "↑↓ select  ⏎ open  ? help  q quit"
 	default:
 		return "↑↓ scroll  ? help  q quit"
@@ -252,8 +251,8 @@ func (t Model) footerStatus() string {
 	case tabScan:
 		return fmt.Sprintf("%d checks", len(t.scan.Checks))
 	case tabLayers:
-		if t.detail != nil {
-			return fmt.Sprintf("%d tensors", len(t.detail.Tensors))
+		if t.m == nil {
+			return "0 groups"
 		}
 		return fmt.Sprintf("%d groups", len(t.m.Groups))
 	case tabIdentity:
