@@ -151,7 +151,7 @@ func (t Model) pickedFrom(id int32) picked {
 			}
 		}
 		if !p.isInt {
-			if v, err := strconv.ParseFloat(n.Lit, 64); err == nil {
+			if v, ok := jsonx.NumberFits(n.Lit); ok {
 				p.f = v
 			} else {
 				p.bad = true
@@ -380,8 +380,8 @@ func (t Model) ropeScale() (float64, string, bool) {
 	if f < 0 || ty < 0 {
 		return 0, "", false
 	}
-	fn, err := strconv.ParseFloat(t.cfg.tree.Nodes[f].Lit, 64)
-	if err != nil || t.cfg.tree.Nodes[ty].Kind != jsonx.KindString {
+	fn, ok := jsonx.NumberFits(t.cfg.tree.Nodes[f].Lit)
+	if !ok || t.cfg.tree.Nodes[ty].Kind != jsonx.KindString {
 		return 0, "", false
 	}
 	return fn, t.cfg.tree.Nodes[ty].Lit, true

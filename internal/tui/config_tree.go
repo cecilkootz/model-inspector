@@ -1005,8 +1005,8 @@ func (c *configState) numSpan(id int32) (string, bool) {
 		if kn.Kind != jsonx.KindNumber {
 			return "", false
 		}
-		f, err := strconv.ParseFloat(kn.Lit, 64)
-		if err != nil {
+		f, ok := jsonx.NumberFits(kn.Lit)
+		if !ok {
 			return "", false
 		}
 		if !seen {

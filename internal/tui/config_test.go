@@ -136,6 +136,61 @@ func TestConfigDerivedVariants(t *testing.T) {
 	}
 }
 
+func TestUnderflowFieldMark(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("LC_ALL", "C.UTF-8")
+	raw := []byte(`{"model_type":"qwen4_exp","num_hidden_layers":1e-400,"vocab_size":-1e-400,"hidden_size":0e-400}`)
+	m := loadCfg(t, raw)
+	warn := strings.Join(m.Warnings, "\n")
+	for _, want := range []string{
+		"num_hidden_layers is out of range: 1e-400",
+		"vocab_size is out of range: -1e-400",
+	} {
+		if !strings.Contains(warn, want) {
+			t.Fatalf("warnings missing %q\n%s", want, warn)
+		}
+	}
+	if strings.Contains(warn, "0e-400") || strings.Contains(warn, "hidden_size is out of range") {
+		t.Fatalf("warnings flagged a real zero\n%s", warn)
+	}
+	ui := bootConfig(t, m, 140, 40)
+	rows := map[string]fieldLine{}
+	for _, ln := range ui.fieldLines() {
+		if ln.kind == fieldRow {
+			rows[ln.label] = ln
+		}
+	}
+	if rows["layers"].value != "1e-400 ! out of range" || !rows["layers"].bad {
+		t.Fatalf("layers %+v", rows["layers"])
+	}
+	if rows["vocab_size"].value != "-1e-400 ! out of range" || !rows["vocab_size"].bad {
+		t.Fatalf("vocab %+v", rows["vocab_size"])
+	}
+	if rows["hidden_size"].value != "0e-400" || rows["hidden_size"].bad {
+		t.Fatalf("hidden %+v", rows["hidden_size"])
+	}
+	lits := map[string]string{}
+	for c := ui.cfg.tree.Nodes[0].First; c >= 0; c = ui.cfg.tree.Nodes[c].Next {
+		n := ui.cfg.tree.Nodes[c]
+		if n.Kind == jsonx.KindNumber {
+			lits[n.Key] = n.Lit
+		}
+	}
+	if lits["num_hidden_layers"] != "1e-400" || lits["vocab_size"] != "-1e-400" || lits["hidden_size"] != "0e-400" {
+		t.Fatalf("tree lits %#v", lits)
+	}
+	view := ui.View()
+	if !strings.Contains(view, "1e-400") || !strings.Contains(view, "-1e-400") || !strings.Contains(view, "0e-400") {
+		t.Fatal("tree view dropped a literal")
+	}
+	if !strings.Contains(view, "1e-400 ! out of range") || !strings.Contains(view, "-1e-400 ! out of range") {
+		t.Fatal("tree view did not flag underflow")
+	}
+	if strings.Contains(view, "0e-400 !") {
+		t.Fatal("tree view flagged 0e-400")
+	}
+}
+
 func TestConfigSearchCapAndCursor(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("LC_ALL", "C.UTF-8")

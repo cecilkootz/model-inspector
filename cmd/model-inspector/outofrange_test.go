@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,6 +96,101 @@ func TestOutOfRangeAgrees(t *testing.T) {
 	}
 	if strings.Contains(flat, digits) {
 		t.Fatal("text printed the full 100k-digit literal")
+	}
+}
+
+// 1e-400 and -1e-400 underflow to float 0 with no strconv error. They are
+// out of range, the same as overflow. 0e-400 is a real zero.
+func TestUnderflowAgrees(t *testing.T) {
+	raw := []byte(`{"model_type":"qwen4_exp","num_hidden_layers":1e-400,"vocab_size":-1e-400,"hidden_size":0e-400}`)
+	v, e1 := jsonx.Unmarshal(raw)
+	tree, e2 := jsonx.ParseTree(raw, jsonx.Limits{})
+	if e1 != nil || e2 != nil {
+		t.Fatalf("parse u=%v t=%v", e1, e2)
+	}
+	if !jsonxExportedSame(v, tree) {
+		t.Fatal("tree and unmarshal disagree")
+	}
+	obj, ok := v.(map[string]any)
+	if !ok {
+		t.Fatalf("%T", v)
+	}
+	if n, ok := obj["num_hidden_layers"].(json.Number); !ok || n.String() != "1e-400" {
+		t.Fatalf("layers %#v", obj["num_hidden_layers"])
+	}
+	if n, ok := obj["vocab_size"].(json.Number); !ok || n.String() != "-1e-400" {
+		t.Fatalf("vocab %#v", obj["vocab_size"])
+	}
+	if f, ok := obj["hidden_size"].(float64); !ok || f != 0 {
+		t.Fatalf("hidden %#v", obj["hidden_size"])
+	}
+	got := map[string]string{}
+	for c := tree.Nodes[0].First; c >= 0; c = tree.Nodes[c].Next {
+		n := tree.Nodes[c]
+		if n.Kind == jsonx.KindNumber {
+			got[n.Key] = n.Lit
+		}
+	}
+	if got["num_hidden_layers"] != "1e-400" || got["vocab_size"] != "-1e-400" || got["hidden_size"] != "0e-400" {
+		t.Fatalf("tree lits %#v", got)
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	shard, _, err := fixture.WriteHeaderOnly("", []fixture.Tensor{{Name: "w", DType: "BF16", Shape: []int64{2}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "model.safetensors"), shard, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	text, stderr, code := capture(t, func() int {
+		return run([]string{"inspect", "--path", dir})
+	})
+	if code != 0 && code != 1 {
+		t.Fatalf("text exit %d\n%s", code, stderr)
+	}
+	js, stderr, code := capture(t, func() int {
+		return run([]string{"inspect", "--json", "--path", dir})
+	})
+	if code != 0 && code != 1 {
+		t.Fatalf("json exit %d\n%s", code, stderr)
+	}
+	for _, name := range []string{"text", "json"} {
+		body := text
+		if name == "json" {
+			body = js
+		}
+		if strings.Contains(body, "parsing config.json") || strings.Contains(body, "ParseFloat") {
+			t.Fatalf("%s rejected the document:\n%s", name, body[:min(500, len(body))])
+		}
+		// The text summary wraps at 80 columns, which can split a warning
+		// on a space. Compare the warnings with that space removed.
+		flat := strings.Map(func(r rune) rune {
+			if r == ' ' || r == '\n' || r == '\t' {
+				return -1
+			}
+			return r
+		}, body)
+		for _, want := range []string{
+			"num_hidden_layersisoutofrange:1e-400",
+			"vocab_sizeisoutofrange:-1e-400",
+		} {
+			if !strings.Contains(flat, want) {
+				t.Fatalf("%s missing %q\n%s", name, want, body[:min(1200, len(body))])
+			}
+		}
+		if strings.Contains(flat, "hidden_sizeisoutofrange") || strings.Contains(body, "0e-400") {
+			t.Fatalf("%s flagged a real zero\n%s", name, body[:min(1200, len(body))])
+		}
+	}
+	if !strings.Contains(js, `"present": true`) {
+		t.Fatalf("json config not present:\n%s", js[:min(800, len(js))])
+	}
+	if strings.Contains(js, `"partial": true`) {
+		t.Fatalf("json marked the inspection partial:\n%s", js[:min(800, len(js))])
 	}
 }
 

@@ -18,8 +18,10 @@ const MaxDepth = 32
 // Unmarshal decodes one JSON value. Objects become map[string]any, arrays
 // []any, and numbers float64 when they fit. A number whose literal does not
 // fit in float64 is kept as json.Number so the document still parses; callers
-// that need a float must treat that as out of range. A second occurrence of
-// an object key is an error.
+// that need a float must treat that as out of range. That includes overflow
+// and a non-zero literal that underflows to 0 (1e-400). A literal whose
+// significand is all zeros (0, -0, 0e-400) is a real zero. A second
+// occurrence of an object key is an error.
 func Unmarshal(data []byte) (any, error) {
 	v, err := unmarshal(data)
 	return v, fileerr.Error(err)
@@ -63,8 +65,8 @@ func readValue(dec *json.Decoder, depth int) (any, error) {
 	case nil, string, bool:
 		return t, nil
 	case json.Number:
-		f, err := t.Float64()
-		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+		f, ok := fitNumber(t)
+		if !ok {
 			// Keep the literal. Rejecting it dropped the rest of the config
 			// while the tree still showed the number.
 			return t, nil
@@ -131,8 +133,9 @@ func readArray(dec *json.Decoder, depth int) ([]any, error) {
 }
 
 // FitFloat reports whether v is a finite float64. json.Number is accepted
-// only when Float64 succeeds and the result is finite. A failure means the
-// literal is out of range and must not be used as a magnitude.
+// only when it is finite and the literal is that value. Overflow, and a
+// non-zero literal that underflows to 0, are out of range and must not be
+// used as a magnitude. 0e-400 is a real zero.
 func FitFloat(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:
@@ -141,11 +144,7 @@ func FitFloat(v any) (float64, bool) {
 		}
 		return n, true
 	case json.Number:
-		f, err := n.Float64()
-		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
-			return 0, false
-		}
-		return f, true
+		return fitNumber(n)
 	case int:
 		return float64(n), true
 	case int64:
@@ -153,4 +152,55 @@ func FitFloat(v any) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// NumberFits reports whether lit is a finite float64 equal to the literal.
+// A non-zero literal that underflows to 0 does not fit.
+func NumberFits(lit string) (float64, bool) {
+	return fitNumber(json.Number(lit))
+}
+
+// fitNumber accepts a JSON number when Float64 is finite and the literal
+// really is that value. 1e-400 becomes 0 with no error; that is underflow,
+// same as 1e400 overflowing to +Inf.
+func fitNumber(n json.Number) (float64, bool) {
+	f, err := n.Float64()
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, false
+	}
+	if f == 0 && !literalIsZero(n.String()) {
+		return 0, false
+	}
+	return f, true
+}
+
+// literalIsZero reports whether a JSON number literal has an all-zero
+// significand. The exponent is ignored: 0e-400 is zero, 1e-400 is not.
+func literalIsZero(lit string) bool {
+	if lit == "" {
+		return false
+	}
+	i := 0
+	if lit[0] == '-' {
+		i++
+	}
+	sawDigit := false
+	sawDot := false
+	for ; i < len(lit); i++ {
+		c := lit[i]
+		switch c {
+		case '0':
+			sawDigit = true
+		case '.':
+			if sawDot {
+				return false
+			}
+			sawDot = true
+		case 'e', 'E':
+			return sawDigit
+		default:
+			return false
+		}
+	}
+	return sawDigit
 }

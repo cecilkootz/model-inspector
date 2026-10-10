@@ -167,6 +167,9 @@ func FuzzParseTree(f *testing.F) {
 	f.Add([]byte(`1e400`))
 	f.Add([]byte(`1e700`))
 	f.Add([]byte(`{"huge":1e400,"tiny":1e-400}`))
+	f.Add([]byte(`1e-400`))
+	f.Add([]byte(`-1e-400`))
+	f.Add([]byte(`0e-400`))
 	// A few hundred digits still overflow float64. The 100k-digit case is a
 	// unit test; keeping it in the corpus makes every mutation parse it.
 	f.Add([]byte(strings.Repeat("9", 400)))
