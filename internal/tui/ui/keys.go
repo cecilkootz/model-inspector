@@ -109,8 +109,55 @@ var ConfigTree = Context{
 // consume it while the input is focused; it is not registered here.
 var ConfigSearch = Context{Name: "config.search"}
 
+// LayersTree is the layers tree. It may shadow only left, right, h, and l.
+var LayersTree = Context{
+	Name:    "layers.tree",
+	Tree:    true,
+	Shadows: []string{"left", "right", "h", "l"},
+	Bindings: []Bind{
+		{Keys: []string{"right", "l"}, HelpKey: "→/l", Help: "expand", Hint: "←→ fold"},
+		{Keys: []string{"left", "h"}, HelpKey: "←/h", Help: "collapse"},
+		{Keys: []string{"space"}, HelpKey: "space", Help: "toggle", Hint: "␣ toggle"},
+		{Keys: []string{"p"}, HelpKey: "p", Help: "parent"},
+		{Keys: []string{"e"}, HelpKey: "e", Help: "expand all"},
+		{Keys: []string{"E"}, HelpKey: "E", Help: "collapse all"},
+		{Keys: []string{"+"}, HelpKey: "+", Help: "fold level"},
+		{Keys: []string{"-"}, HelpKey: "-", Help: "fold level"},
+		{Keys: []string{"/"}, HelpKey: "/", Help: "search", Hint: "/ search"},
+		{Keys: []string{"n"}, HelpKey: "n", Help: "next match"},
+		{Keys: []string{"N"}, HelpKey: "N", Help: "prev match"},
+		{Keys: []string{"y"}, HelpKey: "y", Help: "copy path", Hint: "y/Y copy"},
+		{Keys: []string{"Y"}, HelpKey: "Y", Help: "copy value"},
+		{Keys: []string{"s"}, HelpKey: "s", Help: "sort", Hint: "s sort"},
+		{Keys: []string{"S"}, HelpKey: "S", Help: "reverse sort"},
+		{Keys: []string{"o"}, HelpKey: "o", Help: "outliers", Hint: "o outliers"},
+		{Keys: []string{"t"}, HelpKey: "t", Help: "attention", Hint: "t attn"},
+		{Keys: []string{"x"}, HelpKey: "x", Help: "parts mode"},
+		{Keys: []string{"#"}, HelpKey: "#", Help: "jump"},
+		{Keys: []string{"b", "u"}, HelpKey: "b/u", Help: "page up"},
+		{Keys: []string{"f", "d"}, HelpKey: "f/d", Help: "page down"},
+	},
+}
+
+// LayersSearch is the layers search input. Tab stays global so the handler
+// can consume it while the input is focused; it is not registered here.
+var LayersSearch = Context{Name: "layers.search"}
+
+// LayersDetail is the detail pane. It is not a tree, so arrows stay global.
+var LayersDetail = Context{
+	Name: "layers.detail",
+	Bindings: []Bind{
+		{Keys: []string{"y"}, HelpKey: "y", Help: "copy name"},
+		{Keys: []string{"Y"}, HelpKey: "Y", Help: "copy range"},
+	},
+}
+
+// LayersJump is the layer prompt. Digits, enter, and esc stay with the
+// handler while it is focused, the same way search consumes tab.
+var LayersJump = Context{Name: "layers.jump"}
+
 // Contexts is every context the conflict test walks.
-var Contexts = []Context{Identity, TreeDummy, ConfigFields, ConfigTree, ConfigSearch}
+var Contexts = []Context{Identity, TreeDummy, ConfigFields, ConfigTree, ConfigSearch, LayersTree, LayersSearch, LayersDetail, LayersJump}
 
 // HintLine is the status-bar hint for a context. Tree contexts say fold.
 func HintLine(tree bool) string {

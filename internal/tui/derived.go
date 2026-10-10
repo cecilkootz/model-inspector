@@ -131,7 +131,7 @@ func buildHeat(m *model.Model) ui.HeatGrid {
 			mtpAny[ri] = true
 		}
 	}
-	out := ui.HeatGrid{Rows: make([]ui.HeatRow, len(rows))}
+	out := ui.HeatGrid{Rows: make([]ui.HeatRow, len(rows)), Layers: layers}
 	for i, r := range rows {
 		out.Rows[i] = ui.HeatRow{Label: ui.S(r.label), Cells: cells[i], MTP: mtp[i], HasMTP: mtpAny[i]}
 	}

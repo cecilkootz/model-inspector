@@ -186,8 +186,14 @@ which), `tab` inside that input switches to filter, and `n` / `N` step
 through matches. `y` copies the jq path and `Y` copies the value, both
 through OSC 52. `--no-clipboard` or `MODEL_INSPECTOR_NO_OSC52=1` turns
 those sequences off. `r` toggles the sanitized raw text.
-`↑` / `↓` scroll or select. On Layers, `enter` opens a group and `esc` or
-backspace goes back. `esc` never quits: it closes help, the command palette,
+`↑` / `↓` scroll or select. On Layers the same fold keys apply, plus
+`space` toggles a node, `e` / `E` expand or collapse, `+` / `-` open or
+close one depth, and `p` jumps to the parent. `s` cycles natural, bytes,
+params, and name; `S` reverses that order. `o` keeps outliers, `t` cycles
+the attention filter, `x` lists stored parts, and `#` jumps to a layer.
+`/` searches, `n` / `N` step matches, and `y` / `Y` copy the name or the
+value.
+`esc` never quits: it closes help, the command palette,
 or a disclosure, then leaves a drill-down. `?` opens the key list. `q`
 closes help when help is open, and otherwise quits. `ctrl+c` always quits.
 `:` or `ctrl+k` opens the command palette. `w` moves focus between panes,
@@ -239,7 +245,9 @@ follows the overall result.
    `layers.N.ple.ple_embedding`), norms, hyper_connection (the model-level
    mixer, including `hc_norm`), lm_head, mtp, vision, and other. Enter
    shows each tensor's name, dtype, shape, bytes, and role (`q4`, `qscales`,
-   `qbiases`). The Layers column layout itself is unchanged in this version.
+   `qbiases`). The tree sits under a layer-by-component bytes heatmap on
+   one shared log2 scale. Rows show a dtype pill, an attention or expert
+   type, a sibling bar, bytes, and percent of weights.
 4. **Scan**: structural checks, with a one-line reason on expand.
    **This is not a malware or behavior scan.** The disclaimer says so.
    Checks: shard headers parse; files present (including a shard the index

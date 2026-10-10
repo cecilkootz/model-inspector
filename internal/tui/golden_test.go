@@ -82,8 +82,8 @@ func TestGolden(t *testing.T) {
 	}
 	cases = append(cases,
 		spec{name: "layers.80x24.truecolor.down2", m: tiny, w: 80, h: 24, profile: "truecolor", keys: []string{"3", "j", "j"}, want: []string{"3 Layers"}},
-		spec{name: "layers.80x24.colorless.down2", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"3", "j", "j"}, want: []string{"3 Layers", ">layer 0"}},
-		spec{name: "layers.80x24.colorless.down5", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"3", "j", "j", "j", "j", "j"}, want: []string{"3 Layers", ">hyper_connec"}},
+		spec{name: "layers.80x24.colorless.down2", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"3", "j", "j"}, want: []string{"3 Layers", ">▾ decoder"}},
+		spec{name: "layers.80x24.colorless.down5", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"3", "j", "j", "j", "j", "j"}, want: []string{"3 Layers", ">▸ norms"}},
 		spec{name: "code.80x24.colorless", m: code, w: 80, h: 24, profile: "colorless", want: []string{"!"}},
 		spec{name: "toosmall.59x15.colorless", m: tiny, w: 59, h: 15, profile: "colorless", want: []string{"needs at least 60×16", "59×15"}},
 		spec{name: "config.80x24.colorless", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"2"}, want: []string{"model_type", "KEY FIELDS"}},

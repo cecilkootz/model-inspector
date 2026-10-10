@@ -22,8 +22,15 @@ type HeatRow struct {
 type HeatGrid struct {
 	Rows    []HeatRow
 	Full    []bool // full attention per decoder column
+	Layers  []int  // decoder layer number for each column
 	Caption Safe
 	Note    Safe // shown beside the legend, for example an estimate marker
+	// Dim, when non-nil, draws those columns as empty dots. Their bytes
+	// stay in the shared scale.
+	Dim []bool
+	// MarkOn draws a cursor under decoder column Mark.
+	MarkOn bool
+	Mark   int
 }
 
 // Prepare caches each row's spread so a frame does not sort the cells again.
@@ -89,7 +96,7 @@ func Heatmap(h HeatGrid, width int, large bool) []string {
 		lines = append(lines, Fit("2 layers/cell", width))
 	}
 	// Column ticks and attention-type header.
-	ticks := heatHeader(n, cols, pool, cw, labelW, h.Full, gl)
+	ticks := heatHeader(n, cols, pool, cw, labelW, h.Full, h.Dim, gl)
 	lines = append(lines, Fit(ticks, width))
 	show := h.Rows
 	if !large {
@@ -105,9 +112,13 @@ func Heatmap(h HeatGrid, width int, large bool) []string {
 		}
 	}
 	for _, r := range show {
-		lines = append(lines, Fit(heatRow(r, cols, pool, cw, labelW, spreadW, lo, hi, gl), width))
+		lines = append(lines, Fit(heatRow(r, cols, pool, cw, labelW, spreadW, lo, hi, gl, h.Dim, n), width))
 	}
-	lines = append(lines, Fit(heatLegend(lo, hi, gl, h.Note.String()), width))
+	legend := heatLegend(lo, hi, gl, h.Note.String())
+	if h.MarkOn {
+		legend = markLegend(h.Mark, pool, cw, labelW, legend)
+	}
+	lines = append(lines, Fit(legend, width))
 	if len(folded) > 0 {
 		lines = append(lines, Fit("flat  "+strings.Join(folded, SepWord()), width))
 	}
@@ -199,7 +210,62 @@ func heatDomain(h HeatGrid) (lo, hi int) {
 	return lo, hi
 }
 
-func heatHeader(n, cols, pool, cw, labelW int, full []bool, gl Glyphs) string {
+// HeatGeom is the cell geometry Heatmap uses for width and n columns.
+func HeatGeom(width, n int, large bool) (labelW, cw, pool, cols int) {
+	labelW = 12
+	spreadW := 18
+	if width < 80 {
+		labelW = 8
+		spreadW = 14
+	}
+	if n < 1 {
+		return labelW, 1, 1, 1
+	}
+	cw, pool, cols = fitCells(width-labelW-1-spreadW, n, large)
+	if cols < 1 {
+		cols = 1
+	}
+	return labelW, cw, pool, cols
+}
+
+func colDim(dim []bool, c, pool, n int) bool {
+	if len(dim) == 0 {
+		return false
+	}
+	if pool < 1 {
+		pool = 1
+	}
+	any := false
+	for k := 0; k < pool; k++ {
+		idx := c*pool + k
+		if idx >= n {
+			break
+		}
+		any = true
+		if idx >= len(dim) || !dim[idx] {
+			return false
+		}
+	}
+	return any
+}
+
+func markLegend(mark, pool, cw, labelW int, legend string) string {
+	if pool < 1 {
+		pool = 1
+	}
+	if mark < 0 {
+		mark = 0
+	}
+	col := mark / pool
+	pad := labelW + col*cw
+	arrow := G().Size
+	if arrow == "" {
+		arrow = "^"
+	}
+	return strings.Repeat(" ", pad) + arrow + " " + legend
+}
+
+func heatHeader(n, cols, pool, cw, labelW int, full, dim []bool, gl Glyphs) string {
 	var b strings.Builder
 	b.WriteString(strings.Repeat(" ", labelW))
 	if n < 1 {
@@ -217,6 +283,12 @@ func heatHeader(n, cols, pool, cw, labelW int, full []bool, gl Glyphs) string {
 		if idx < len(full) && full[idx] {
 			mark = gl.Full
 		}
+		if colDim(dim, c, pool, n) {
+			mark = gl.Dot
+			if mark == "" {
+				mark = "."
+			}
+		}
 		cell := mark
 		if cw == 2 {
 			cell = mark + " "
@@ -232,7 +304,7 @@ func heatHeader(n, cols, pool, cw, labelW int, full []bool, gl Glyphs) string {
 	return b.String()
 }
 
-func heatRow(r HeatRow, cols, pool, cw, labelW, spreadW, lo, hi int, gl Glyphs) string {
+func heatRow(r HeatRow, cols, pool, cw, labelW, spreadW, lo, hi int, gl Glyphs, dim []bool, n int) string {
 	var b strings.Builder
 	lab := r.Label.String()
 	if Width(lab) > labelW-1 {
@@ -240,15 +312,15 @@ func heatRow(r HeatRow, cols, pool, cw, labelW, spreadW, lo, hi int, gl Glyphs) 
 	}
 	b.WriteString(PadLabel(lab, labelW))
 	vals := poolCells(r.Cells, cols, pool)
-	for _, v := range vals {
-		b.WriteString(heatCell(v, cw, lo, hi, gl))
+	for c, v := range vals {
+		b.WriteString(heatCell(v, cw, lo, hi, gl, colDim(dim, c, pool, n)))
 	}
 	b.WriteString(" ")
 	mtp := int64(0)
 	if r.HasMTP {
 		mtp = r.MTP
 	}
-	b.WriteString(heatCell(mtp, cw, lo, hi, gl))
+	b.WriteString(heatCell(mtp, cw, lo, hi, gl, false))
 	b.WriteString("  ")
 	sp, _ := r.spreadLine()
 	b.WriteString(Trunc(sp, spreadW, ""))
@@ -273,8 +345,8 @@ func poolCells(cells []int64, cols, pool int) []int64 {
 	return out
 }
 
-func heatCell(v int64, cw, lo, hi int, gl Glyphs) string {
-	if v <= 0 {
+func heatCell(v int64, cw, lo, hi int, gl Glyphs, dim bool) string {
+	if dim || v <= 0 {
 		dot := gl.Dot
 		if dot == "" {
 			dot = "."

@@ -67,7 +67,10 @@ func (t Model) clock() time.Time {
 }
 
 func (t Model) treeFocused() bool {
-	return t.active == tabConfig && t.treePane()
+	if t.active == tabConfig && t.treePane() {
+		return true
+	}
+	return t.layersTreeOn()
 }
 
 func (t Model) identityBody() string {
@@ -95,16 +98,16 @@ func (t Model) frameKey() string {
 		}
 	}
 	sort.Strings(open)
-	detail := ""
-	if t.detail != nil {
-		detail = t.detail.Key
+	lay := ""
+	if t.lay != nil {
+		lay = t.lay.framePart()
 	}
-	return fmt.Sprintf("%d %d %d %v %v %s %d %v %q %v %d %v %v %d %v %v %s %d %d %s %v %d %d %d %d %s",
+	return fmt.Sprintf("%d %d %d %v %v %s %d %v %q %v %d %v %v %d %v %v %d %d %s %v %s %s",
 		t.width, t.height, t.active, t.help, t.palette.open, t.palette.query, t.palette.cursor,
 		t.disclosure, t.notice, t.mouse, t.motionFrame, t.focusSecondary, t.zoom, t.ratio, t.drill,
-		t.blurred, detail, t.scanCursor, t.scanScroll, strings.Join(open, ","),
+		t.blurred, t.scanCursor, t.scanScroll, strings.Join(open, ","),
 		t.identityVP.YOffset+t.configVP.YOffset,
-		t.groupTable.Cursor(), t.tensorTable.Cursor(), t.groupY, t.tensorY, t.cfg.framePart())
+		t.cfg.framePart(), lay)
 }
 
 func (t Model) renderFrame() string {
@@ -313,6 +316,22 @@ func (t Model) commands() []ui.Match {
 			})
 		}
 	}
+	if t.active == tabLayers && t.lay != nil {
+		out = append(out,
+			ui.Match{ID: "lay-expand", Title: ui.S(ui.L("Layers: expand all")), Key: ui.S(ui.L("e")), Where: ui.S(ui.L("in Layers")), Order: len(out), Enable: true},
+			ui.Match{ID: "lay-collapse", Title: ui.S(ui.L("Layers: collapse all")), Key: ui.S(ui.L("E")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 1, Enable: true},
+			ui.Match{ID: "lay-search", Title: ui.S(ui.L("Layers: search")), Key: ui.S(ui.L("/")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 2, Enable: true},
+			ui.Match{ID: "lay-path", Title: ui.S(ui.L("Layers: copy name")), Key: ui.S(ui.L("y")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 3, Enable: true},
+			ui.Match{ID: "lay-value", Title: ui.S(ui.L("Layers: copy value")), Key: ui.S(ui.L("Y")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 4, Enable: true},
+			ui.Match{ID: "lay-sort-params", Title: ui.S(ui.L("Layers: sort by params")), Key: ui.S(ui.L("s")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 5, Enable: true},
+			ui.Match{ID: "lay-sort-name", Title: ui.S(ui.L("Layers: sort by name")), Key: ui.S(ui.L("s")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 6, Enable: true},
+			ui.Match{ID: "lay-sort-natural", Title: ui.S(ui.L("Layers: sort by natural")), Key: ui.S(ui.L("s")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 7, Enable: true},
+			ui.Match{ID: "lay-outliers", Title: ui.S(ui.L("Layers: outliers only")), Key: ui.S(ui.L("o")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 8, Enable: true},
+			ui.Match{ID: "lay-attn", Title: ui.S(ui.L("Layers: attention filter")), Key: ui.S(ui.L("t")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 9, Enable: true},
+			ui.Match{ID: "lay-parts", Title: ui.S(ui.L("Layers: parts mode")), Key: ui.S(ui.L("x")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 10, Enable: true},
+			ui.Match{ID: "lay-jump", Title: ui.S(ui.L("Layers: jump to layer…")), Key: ui.S(ui.L("#")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 11, Enable: true},
+		)
+	}
 	return out
 }
 
@@ -349,9 +368,42 @@ func (t *Model) runCommand(id string) tea.Cmd {
 		t.zoom = !t.zoom
 	case "quit":
 		return tea.Quit
-	case "lsort", "lfilt":
+	case "lsort":
 		t.active = tabLayers
-		t.notice = "that command arrives with the Layers tree"
+		t.layersCycleSort()
+	case "lfilt":
+		t.active = tabLayers
+		t.openLayerSearch()
+	case "lay-expand":
+		t.active = tabLayers
+		t.layersExpandAll()
+	case "lay-collapse":
+		t.active = tabLayers
+		t.layersCollapseAll()
+	case "lay-search":
+		t.active = tabLayers
+		t.openLayerSearch()
+	case "lay-path":
+		t.active = tabLayers
+		t.copyLayers(false)
+	case "lay-value":
+		t.active = tabLayers
+		t.copyLayers(true)
+	case "lay-sort-params", "lay-sort-name", "lay-sort-natural":
+		t.active = tabLayers
+		t.layersCycleSort()
+	case "lay-outliers":
+		t.active = tabLayers
+		t.layersToggleOutliers()
+	case "lay-attn":
+		t.active = tabLayers
+		t.layersCycleAttn()
+	case "lay-parts":
+		t.active = tabLayers
+		t.layersToggleParts()
+	case "lay-jump":
+		t.active = tabLayers
+		t.openLayerJump()
 	case "cfg-expand":
 		t.active = tabConfig
 		t.focusSecondary = true
@@ -539,6 +591,8 @@ func (t Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 	case strings.HasPrefix(z.ID, "cfg:"):
 		return t.configClick(z.ID, double), nil
+	case strings.HasPrefix(z.ID, "lay:"):
+		return t.layersClick(z.ID, double), nil
 	case strings.HasPrefix(z.ID, "palette:row:"):
 		var i int
 		fmt.Sscanf(z.ID, "palette:row:%d", &i)
@@ -567,6 +621,8 @@ func (t Model) scrollAt(x, y, d int) tea.Model {
 			tree = rects.Split && x >= rects.Secondary.X
 		}
 		t.configMove(d, tree)
+	case tabLayers:
+		t.layersMove(d)
 	case tabScan:
 		t.scanCursor += d
 		if t.scanCursor < 0 {
@@ -602,6 +658,9 @@ func (t Model) fillZones() {
 	if t.active == tabConfig {
 		ratio = t.configRatio()
 	}
+	if t.active == tabLayers {
+		ratio = t.layersRatio()
+	}
 	rects := ui.Layout(t.width, t.height, ratio, t.zoom, t.focusSecondary)
 	if br == "M" || br == "L" {
 		t.zones.Add("pane:primary", rects.Primary)
@@ -621,6 +680,11 @@ func (t Model) fillZones() {
 	}
 	if t.active == tabConfig && t.cfg != nil {
 		for _, h := range t.cfg.hits {
+			t.zones.Add(h.id, ui.Rect{X: h.x, Y: h.y, W: h.w, H: h.h})
+		}
+	}
+	if t.active == tabLayers && t.lay != nil {
+		for _, h := range t.lay.hits {
 			t.zones.Add(h.id, ui.Rect{X: h.x, Y: h.y, W: h.w, H: h.h})
 		}
 	}
@@ -817,6 +881,10 @@ func (t Model) statusRow() string {
 		for i, h := range t.configHintSegs() {
 			hintSegs = append(hintSegs, ui.StatusSeg{Text: own(h), Pri: 5 + i, FG: ui.TextSecondary, BG: ui.SurfaceSeg})
 		}
+	} else if t.active == tabLayers {
+		for i, h := range t.layersHintSegs() {
+			hintSegs = append(hintSegs, ui.StatusSeg{Text: ui.S(sanitize.Program(h)), Pri: 5 + i, FG: ui.TextSecondary, BG: ui.SurfaceSeg})
+		}
 	} else {
 		hintSegs = []ui.StatusSeg{{Text: own(hint), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep}}
 	}
@@ -870,7 +938,7 @@ func (t Model) modeName() string {
 	case tabConfig:
 		return t.configMode()
 	case tabLayers:
-		return "LAYERS"
+		return t.layersMode()
 	case tabScan:
 		return "SCAN"
 	default:
