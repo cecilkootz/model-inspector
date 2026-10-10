@@ -1,27 +1,8 @@
 model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✓]                                                    ? keys   : commands   m mouse on
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Scan › Code & pickles  [ names only ]                                                                                                       
                                                                                                                                             
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                  ╭──────────────────────────────────────────────────────────────────────╮                                  
-                                  │ Read file contents?                                                 │                                   
-                                  │                                                                     │                                   
-                                  │ So far only names and sizes were read. Nothing is executed, impo    │                                   
-                                  │                                                                     │                                   
-                                  │                                                                     │                                   
-                                  │ [ c / enter  content reading ships in a later version ]  [ esc  Canc│                                   
-                                  ╰──────────────────────────────────────────────────────────────────────╯                                  
+– Nothing flagged. No code-executing formats or auto_map entries were found by name.                                                        
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
@@ -37,4 +18,23 @@ model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✓]                      
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
-SCAN │ /model │ Code & pickles arrives in a later version             safetensors·mlx │ 6.07 KiB │ q4 g32 │ ✓ structure 5/8 │ – headers-only
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+CODE │ /model │ ↑↓ · ⏎ details · c code                               safetensors·mlx │ 6.07 KiB │ q4 g32 │ ✓ structure 5/8 │ ◇ headers-only

@@ -156,8 +156,56 @@ var LayersDetail = Context{
 // handler while it is focused, the same way search consumes tab.
 var LayersJump = Context{Name: "layers.jump"}
 
+// ScanList is the check timeline. Arrow keys stay global.
+var ScanList = Context{
+	Name: "scan.list",
+	Bindings: []Bind{
+		{Keys: []string{"space"}, HelpKey: "space", Help: "expand", Hint: "space expand"},
+		{Keys: []string{"e"}, HelpKey: "e", Help: "expand all"},
+		{Keys: []string{"E"}, HelpKey: "E", Help: "collapse all"},
+		{Keys: []string{"]"}, HelpKey: "]", Help: "next problem"},
+		{Keys: []string{"["}, HelpKey: "[", Help: "previous problem"},
+		{Keys: []string{"i"}, HelpKey: "i", Help: "not covered", Hint: "i not covered"},
+		{Keys: []string{"c"}, HelpKey: "c", Help: "code & pickles", Hint: "c code"},
+		{Keys: []string{"y"}, HelpKey: "y", Help: "copy check"},
+		{Keys: []string{"Y"}, HelpKey: "Y", Help: "copy scan"},
+		{Keys: []string{"b", "u"}, HelpKey: "b/u", Help: "page up"},
+		{Keys: []string{"f", "d"}, HelpKey: "f/d", Help: "page down"},
+	},
+}
+
+// ScanDetail scrolls the drill. It adds the same scan keys that are not global.
+var ScanDetail = Context{
+	Name: "scan.detail",
+	Bindings: []Bind{
+		{Keys: []string{"]"}, HelpKey: "]", Help: "next problem"},
+		{Keys: []string{"["}, HelpKey: "[", Help: "previous problem"},
+		{Keys: []string{"i"}, HelpKey: "i", Help: "not covered"},
+		{Keys: []string{"c"}, HelpKey: "c", Help: "code & pickles"},
+		{Keys: []string{"y"}, HelpKey: "y", Help: "copy check"},
+		{Keys: []string{"Y"}, HelpKey: "Y", Help: "copy scan"},
+	},
+}
+
+// ScanCode is the names-only list. Enter stays global.
+var ScanCode = Context{
+	Name: "scan.code",
+	Bindings: []Bind{
+		{Keys: []string{"c"}, HelpKey: "c", Help: "open disclosure"},
+	},
+}
+
+// ScanDisclose is the modal. Enter and esc stay global; the handler ignores
+// every other key. c confirms.
+var ScanDisclose = Context{
+	Name: "scan.disclose",
+	Bindings: []Bind{
+		{Keys: []string{"c"}, HelpKey: "c", Help: "confirm"},
+	},
+}
+
 // Contexts is every context the conflict test walks.
-var Contexts = []Context{Identity, TreeDummy, ConfigFields, ConfigTree, ConfigSearch, LayersTree, LayersSearch, LayersDetail, LayersJump}
+var Contexts = []Context{Identity, TreeDummy, ConfigFields, ConfigTree, ConfigSearch, LayersTree, LayersSearch, LayersDetail, LayersJump, ScanList, ScanDetail, ScanCode, ScanDisclose}
 
 // HintLine is the status-bar hint for a context. Tree contexts say fold.
 func HintLine(tree bool) string {

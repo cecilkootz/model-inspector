@@ -202,9 +202,16 @@ the mouse. The mouse is on unless you pass `--no-mouse` or set
 `MODEL_INSPECTOR_MOUSE=0`. Hold Shift to select text while the mouse is on.
 OSC 52 copy is on unless you pass `--no-clipboard` or set
 `MODEL_INSPECTOR_NO_OSC52=1`.
-On Scan, `c` asks before reading file contents. That reader is not in this
-version, and the status line says code and pickle contents arrive in a
-later version. The window must be at least 60×16; below that the screen
+On Scan, `space` expands the selected check, `e` expands every check, and
+`E` collapses them. `]` and `[` jump to the next or previous problem. `i`
+toggles the "not covered" panel. `c` opens the code and pickle name list;
+`y` copies the selected check and `Y` copies the whole scan as text.
+Enter focuses that check's detail (a full-screen drill below 100 columns)
+and, on a code check, opens the name list. Confirming the list asks before
+any contents are read. That reader is not in this version: the confirm
+button stays disabled and says content reading ships in a later version.
+A directory that takes more than a moment shows a progress row while the
+headers are read. The window must be at least 60×16; below that the screen
 says so and only `q` works.
 
 `MODEL_INSPECTOR_THEME` is `dark` or `light`. `MODEL_INSPECTOR_MOTION=0`
@@ -248,7 +255,9 @@ follows the overall result.
    `qbiases`). The tree sits under a layer-by-component bytes heatmap on
    one shared log2 scale. Rows show a dtype pill, an attention or expert
    type, a sibling bar, bytes, and percent of weights.
-4. **Scan**: structural checks, with a one-line reason on expand.
+4. **Scan**: structural checks. The selected check shows its rule, its
+   problems, why it matters, and what it does not prove. `space` expands a
+   short form of that on the card.
    **This is not a malware or behavior scan.** The disclaimer says so.
    Checks: shard headers parse; files present (including a shard the index
    does not name); offsets and sizes (bounds, dtype×shape, overlap, gaps,

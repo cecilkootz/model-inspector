@@ -45,7 +45,17 @@ func TestQA_HostileNamesView(t *testing.T) {
 			t.Errorf("missing %s", want)
 		}
 	}
-	if !strings.Contains(vs[len(vs)-1], "Not a malware or behavior scan") {
+	// Enter on a code card opens the code list, and the next enter opens the
+	// disclosure card, so the last frame is that card. The scan screen itself
+	// still carries the disclaimer.
+	var scanFrame string
+	for _, v := range vs {
+		if strings.Contains(v, "Not a malware or behavior scan") && strings.Contains(v, "CHECKS") {
+			scanFrame = v
+			break
+		}
+	}
+	if scanFrame == "" {
 		t.Fatalf("scan tab missing the disclaimer:\n%s", vs[len(vs)-1])
 	}
 
