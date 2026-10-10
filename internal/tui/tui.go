@@ -4,6 +4,8 @@ package tui
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -17,6 +19,21 @@ import (
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
 )
+
+// termRestore leaves the alternate screen, turns mouse tracking off, and
+// shows the cursor. A panic inside New or View must write this before exit:
+// the runtime will not, and a stack overflow skips Bubble Tea's recover.
+const termRestore = "\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?25h"
+
+// termOut is the stream that receives termRestore. Tests replace it.
+var termOut io.Writer = os.Stdout
+
+func restoreTerminal() {
+	if termOut == nil {
+		return
+	}
+	_, _ = io.WriteString(termOut, termRestore)
+}
 
 type tab int
 
@@ -91,7 +108,13 @@ type Options struct {
 }
 
 // Run starts the TUI in the alternate screen.
-func Run(m *model.Model, res scan.Result, opt ...Options) error {
+func Run(m *model.Model, res scan.Result, opt ...Options) (err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			restoreTerminal()
+			err = fmt.Errorf("tui panic: %v", rec)
+		}
+	}()
 	t := New(m, res)
 	if len(opt) > 0 {
 		t.apply(opt[0])
@@ -100,7 +123,10 @@ func Run(m *model.Model, res scan.Result, opt ...Options) error {
 	if t.mouse {
 		opts = append(opts, tea.WithMouseCellMotion())
 	}
-	_, err := tea.NewProgram(t, opts...).Run()
+	_, err = tea.NewProgram(t, opts...).Run()
+	if err != nil && strings.Contains(err.Error(), "panic") {
+		restoreTerminal()
+	}
 	return err
 }
 
@@ -404,6 +430,12 @@ func (t Model) updateScan(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (t Model) View() string {
+	defer func() {
+		if rec := recover(); rec != nil {
+			restoreTerminal()
+			panic(rec)
+		}
+	}()
 	configure()
 	if !t.ready {
 		return fitLine("model-inspector   1 Identity   2 Config   3 Layers   4 Scan", 80)

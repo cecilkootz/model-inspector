@@ -2,25 +2,22 @@
 [94m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
 [1;97;45m model-inspector [0m  /model                                                                                                                   
   [1;97;45m model-inspector [0m  revision: — · qwen3_5 · safetensors·mlx · q4 g32                                                                       
-    [1;97;45m model-inspector [0m  [92m/model[0m                                                                                                               
+    [1;97;45m model-inspector [0m                                                                                                                       
       [1;97;45m model-inspector [0m                                                                                                                     
         [1;97;45m model-inspector [0m  [1;37;40m – headers-only [0m  [1;30;43m ▲ 5 callouts [0m                                                                                 
                                                                                                                                             
 ▌                      ▌                      ▌                      ▌                      ▌                      ▌                        
 ▌SIZE ON DISK          ▌PARAMETERS            ▌QUANT                 ▌LAYERS                ▌EXPERTS               ▌WEIGHTS                 
 ▌6.07 KiB              ▌~86                   ▌q4 g32                ▌2                     ▌4 · 2/tok             ▌≥ 152 B                 
-▌4 files|2 shards      ▌25 tensors            ▌affine                ▌○1 lin · ●1 full      ▌routed                ▌weights only            
+▌4 files · 2 shards    ▌25 tensors            ▌affine                ▌○1 lin · ●1 full      ▌routed                ▌weights only            
 ▌                      ▌                      ▌                      ▌                      ▌                      ▌                        
                                                                                                                                             
 [1;97;45m STORAGE [0m 6.07 KiB                                          [1;97mCALLOUTS[0m  [90m5 notable[0m                                                             
 [91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[94m▒[0m[94m▒[0m[94m▒[0m[94m▒[0m[94m▒[0m[95m▒[0m[95m░[0m      [1;30;43m ▲ [0m [1;97mlanguage_model.model.embed_tokens.weight is 16 B, 10.5% of weights[0m          
 [91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[94m▒[0m[94m▒[0m[94m▒[0m[94m▒[0m[94m▒[0m[95m▒[0m[95m░[0m      [1;30;43m ▲ [0m [1;97mple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% of weights[0m             
 █ plain bf16 65.8%   ▓ plain i64 21.1%   ▒ q4 packed 10.5%  [1;30;43m ▲ [0m [1;97mple.ple_embedding.ngram_heads_vocab_sizes is 16 B, 10.5% of weights[0m         
-Memory  weights ≥ 152 B (0.0 GB)                            [1;97;45m MTP [0m [1;97mMTP layer present (16 B): used only for speculative decoding[0m              
-  text-only ≥ 128 B                                         [1;97;45m MTP [0m [1;97mvision tower present (8 B)[0m                                                
-  unified memory (MLX): CPU and GPU share RAM, total is un                                                                                  
-  weights only: no KV cache, activations or runtime overhe                                                                                  
-  weights only; excludes KV cache, activations, runtime ov                                                                                  
+                                                            [1;97;45m MTP [0m [1;97mMTP layer present (16 B): used only for speculative decoding[0m              
+                                                            [1;97;45m MTP [0m [1;97mvision tower present (8 B)[0m                                                
                                                                                                                                             
 BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2× · per-layer totals differ by 400.0%                        
             ○ ●  ●                                                                                                                          
@@ -36,5 +33,8 @@ Memory  weights ≥ 152 B (0.0 GB)
   unified memory (MLX): CPU and GPU share RAM, total is unchanged                                                                           
   weights only: no KV cache, activations or runtime overhead                                                                                
   weights only; excludes KV cache, activations, runtime overhead                                                                            
-language_model.model.embed_tokens.weight is 16 B, 10.5% of weights                                                                          
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
 [1;30m IDENTITY [0m[97m /model [0m[37m ↑↓ scroll · ←→ tabs · ? keys [0m                        [37m safetensors·mlx [0m[97m 6.07 KiB [0m[1;97m q4 g32 [0m[1;30m ✓ structure 5/8 [0m[37m – headers-only [0m

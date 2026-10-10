@@ -13,6 +13,7 @@ func TestSublayer(t *testing.T) {
 		{"model.layers.0.mlp_hyper_connection.hc_norm.weight", "hyper", "hc_norm"},
 		{"model.layers.1.ple.ple_embedding.ngram_embedding.shard_0.weight", "ple", "shard_0"},
 		{"model.embed_tokens.weight", "other", "embed_tokens"},
+		{"model.layers.0.downsample.weight", "other", "downsample"},
 		{"vision_tower.blocks.0.attn.qkv.weight", "attn", "qkv"},
 	}
 	for _, tc := range cases {

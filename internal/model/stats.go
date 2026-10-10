@@ -697,6 +697,7 @@ func (m *Model) LayerTypes() []string {
 	if n == 0 {
 		n = m.configInt("num_hidden_layers")
 	}
+	n = m.clampLayerSlots(n)
 	if interval := m.configInt("full_attention_interval"); interval > 0 && n > 0 {
 		out := make([]string, n)
 		for i := 0; i < n; i++ {
@@ -809,6 +810,10 @@ func (m *Model) layerTypeList() []string {
 		if !ok || len(lt) == 0 {
 			continue
 		}
+		if len(lt) > MaxLayerIndex+1 {
+			m.Partial = true
+			lt = lt[:MaxLayerIndex+1]
+		}
 		out := make([]string, 0, len(lt))
 		for _, v := range lt {
 			out = append(out, strOf(v))
@@ -816,6 +821,19 @@ func (m *Model) layerTypeList() []string {
 		return out
 	}
 	return nil
+}
+
+// clampLayerSlots bounds a count taken from a config integer or a group
+// tally so a hostile num_hidden_layers cannot allocate a giant slice.
+func (m *Model) clampLayerSlots(n int) int {
+	if n < 0 {
+		return 0
+	}
+	if n > MaxLayerIndex+1 {
+		m.Partial = true
+		return MaxLayerIndex + 1
+	}
+	return n
 }
 
 func (m *Model) configInt(key string) int {

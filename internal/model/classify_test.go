@@ -2,6 +2,7 @@ package model
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -37,12 +38,21 @@ func TestClassify(t *testing.T) {
 		// PLE projections that are not the table stay with the decoder layer.
 		{"language_model.model.layers.1.ple.key_proj.weight", "layer 1", KindLayer, 1},
 		{"some.other.tensor.weight", "other", KindOther, -1},
+		{"model.layers.99999999.self_attn.q_proj.weight", "layer 99999999", KindLayer, 99999999},
 	}
 	for _, c := range cases {
 		key, kind, layer := Classify(c.name)
 		if key != c.key || kind != c.kind || layer != c.layer {
 			t.Errorf("Classify(%q) = (%q,%q,%d), want (%q,%q,%d)", c.name, key, kind, layer, c.key, c.kind, c.layer)
 		}
+	}
+}
+
+func TestClassifyOverflowIndex(t *testing.T) {
+	name := "model.layers." + strings.Repeat("9", 40) + ".self_attn.q_proj.weight"
+	key, kind, layer := Classify(name)
+	if key != "layer overflow" || kind != KindLayer || layer != MaxLayerIndex+1 {
+		t.Fatalf("Classify overflow = (%q,%q,%d)", key, kind, layer)
 	}
 }
 

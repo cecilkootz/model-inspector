@@ -3,9 +3,11 @@ package tui
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
@@ -25,6 +27,10 @@ func derive(m *model.Model) derived {
 	if m == nil {
 		return derived{}
 	}
+	// An absurd layer index has to be partial before the memory estimate,
+	// so the accelerator line is omitted for the same reason as any other
+	// incomplete host figure.
+	m.NoteAbsurdLayers()
 	d := derived{
 		mem:      m.MemoryEstimate(),
 		storage:  model.MergeStorage(m, m.StorageBreakdown(), 4),
@@ -44,24 +50,39 @@ func derive(m *model.Model) derived {
 }
 
 func buildHeat(m *model.Model) ui.HeatGrid {
-	n, _ := m.LayerCount()
-	maxL := -1
+	// Columns follow the distinct in-range layer indices, not the largest
+	// index. model.layers.99999999 must not allocate a multi-gigabyte row.
+	seen := map[int]struct{}{}
+	var skipped int
 	for _, t := range m.Tensors {
-		if t != nil && t.Kind == model.KindLayer && t.Layer > maxL {
-			maxL = t.Layer
+		if t == nil || t.Kind != model.KindLayer || t.Layer < 0 {
+			continue
 		}
+		if t.Layer > model.MaxLayerIndex {
+			skipped++
+			continue
+		}
+		seen[t.Layer] = struct{}{}
 	}
-	if maxL+1 > n {
-		n = maxL + 1
+	layers := make([]int, 0, len(seen))
+	for layer := range seen {
+		layers = append(layers, layer)
+	}
+	sort.Ints(layers)
+	n := len(layers)
+	col := make(map[int]int, n)
+	for i, layer := range layers {
+		col[layer] = i
 	}
 	rows := []struct {
-		sub, label string
+		sub   string
+		label sanitize.Text
 	}{
-		{"attn", "attention"},
-		{"router", "router"},
-		{"shared", "shared exp"},
-		{"experts", "routed exp"},
-		{"norms", "norms"},
+		{"attn", ui.L("attention")},
+		{"router", ui.L("router")},
+		{"shared", ui.L("shared exp")},
+		{"experts", ui.L("routed exp")},
+		{"norms", ui.L("norms")},
 	}
 	cells := make([][]int64, len(rows))
 	for i := range cells {
@@ -102,8 +123,8 @@ func buildHeat(m *model.Model) ui.HeatGrid {
 		}
 		switch t.Kind {
 		case model.KindLayer:
-			if t.Layer >= 0 && t.Layer < n {
-				addBytes(&cells[ri][t.Layer], nbytes)
+			if c, ok := col[t.Layer]; ok {
+				addBytes(&cells[ri][c], nbytes)
 			}
 		case model.KindMTP:
 			addBytes(&mtp[ri], nbytes)
@@ -112,14 +133,16 @@ func buildHeat(m *model.Model) ui.HeatGrid {
 	}
 	out := ui.HeatGrid{Rows: make([]ui.HeatRow, len(rows))}
 	for i, r := range rows {
-		out.Rows[i] = ui.HeatRow{Label: r.label, Cells: cells[i], MTP: mtp[i], HasMTP: mtpAny[i]}
+		out.Rows[i] = ui.HeatRow{Label: ui.S(r.label), Cells: cells[i], MTP: mtp[i], HasMTP: mtpAny[i]}
 	}
 	types := m.LayerTypes()
 	out.Full = make([]bool, n)
-	for i := 0; i < n && i < len(types); i++ {
-		out.Full[i] = types[i] == "full_attention"
+	for i, layer := range layers {
+		if layer >= 0 && layer < len(types) && types[layer] == "full_attention" {
+			out.Full[i] = true
+		}
 	}
-	out.Note = totalsNote(cells)
+	out.Note = ui.S(sanitize.From(totalsNote(cells)))
 	var caps []string
 	if ple > 0 {
 		caps = append(caps, "excludes ple "+model.HumanBytes(ple))
@@ -130,7 +153,11 @@ func buildHeat(m *model.Model) ui.HeatGrid {
 	if other > 0 {
 		caps = append(caps, "other "+model.HumanBytes(other)+" not in the grid")
 	}
-	out.Caption = strings.Join(caps, ui.SepWord())
+	if skipped > 0 {
+		caps = append(caps, fmt.Sprintf("%d layer indices above %d left out", skipped, model.MaxLayerIndex))
+	}
+	out.Caption = ui.S(sanitize.From(strings.Join(caps, ui.SepWord())))
+	out.Prepare()
 	return out
 }
 

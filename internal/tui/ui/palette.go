@@ -8,9 +8,9 @@ import (
 // Match is one palette hit. Marks are rune indexes in Title to emphasise.
 type Match struct {
 	ID     string
-	Title  string
-	Key    string
-	Where  string
+	Title  Safe
+	Key    Safe
+	Where  Safe
 	Score  int
 	Marks  []int
 	Order  int
@@ -70,7 +70,7 @@ func wordStart(t []rune, i int) bool {
 func Rank(query string, items []Match) []Match {
 	var out []Match
 	for _, it := range items {
-		s, marks, ok := ScoreMatch(query, it.Title)
+		s, marks, ok := ScoreMatch(query, it.Title.String())
 		if !ok {
 			continue
 		}

@@ -12,7 +12,7 @@ func Sublayer(name string) (sub, part string) {
 	switch {
 	case strings.Contains(lower, "hyper_connection") || strings.Contains(lower, "hyper_conn"):
 		return "hyper", part
-	case strings.Contains(lower, "ple") || strings.Contains(lower, "ngram"):
+	case segmentIs(lower, "ple") || strings.Contains(lower, "ngram"):
 		return "ple", part
 	case strings.Contains(lower, "shared_expert"):
 		return "shared", part
@@ -28,6 +28,15 @@ func Sublayer(name string) (sub, part string) {
 	default:
 		return "other", part
 	}
+}
+
+func segmentIs(name, want string) bool {
+	for _, s := range strings.Split(name, ".") {
+		if s == want {
+			return true
+		}
+	}
+	return false
 }
 
 func sublayerPart(name string) string {

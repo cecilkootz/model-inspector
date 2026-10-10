@@ -4,13 +4,13 @@ model-inspector  [1 Identity] 2 Config 3 Layers 4 Scan ✓
                                                             
 SIZE ON DISK   PARAMETERS     QUANT          LAYERS         
 6.07 KiB       ~86            q4 g32         2              
-4 files|2 shar 25 tensors     affine         ○1 lin · ●1 ful
+4 files · 2 sh 25 tensors     affine         ○1 lin · ●1 ful
                                                             
 STORAGE  6.07 KiB on disk                                   
 █████████████████████████████████████▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▒▒▒░    
 █ plain bf16 65.8%   ▓ plain i64 21.1%   ▒ q4 packed 10.5%  
-Memory  weights ≥ 152 B (0.0 GB)                            
-  text-only ≥ 128 B                                         
-  unified memory (MLX): CPU and GPU share RAM, total is unch
-  weights only: no KV cache, activations or runtime overhead
+                                                            
+CALLOUTS  5 notable                                         
+[▲] language_model.model.embed_tokens.weight is 16 B, 10.…  
+[▲] ple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% …  
 IDENTITY │ 6.07 KiB │ q4 g32 │ ✓ structure 5/8 │ – headers-o

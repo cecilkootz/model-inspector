@@ -85,11 +85,12 @@ func (t Model) frameKey() string {
 	if t.detail != nil {
 		detail = t.detail.Key
 	}
-	return fmt.Sprintf("%d %d %d %v %v %s %d %v %q %v %d %v %v %d %v %v %s %d %d %s %v",
+	return fmt.Sprintf("%d %d %d %v %v %s %d %v %q %v %d %v %v %d %v %v %s %d %d %s %v %d %d",
 		t.width, t.height, t.active, t.help, t.palette.open, t.palette.query, t.palette.cursor,
 		t.disclosure, t.notice, t.mouse, t.motionFrame, t.focusSecondary, t.zoom, t.ratio, t.drill,
 		t.blurred, detail, t.scanCursor, t.scanScroll, strings.Join(open, ","),
-		t.identityVP.YOffset+t.configVP.YOffset)
+		t.identityVP.YOffset+t.configVP.YOffset,
+		t.groupTable.Cursor(), t.tensorTable.Cursor())
 }
 
 func (t Model) renderFrame() string {
@@ -133,14 +134,14 @@ func (t Model) overlay(body string) string {
 	switch {
 	case t.help:
 		return ui.Modal(ui.ModalSpec{
-			Title: "KEYS  " + t.modeName(),
-			Body:  t.helpBody(),
+			Title: ui.Chrome("KEYS  " + t.modeName()),
+			Body:  ui.Chrome(t.helpBody()),
 			Width: min(w-4, 76),
 		}, w, h)
 	case t.palette.open:
 		return ui.Modal(ui.ModalSpec{
-			Title: "COMMANDS",
-			Body:  t.paletteBody(),
+			Title: ui.S(ui.L("COMMANDS")),
+			Body:  ui.Chrome(t.paletteBody()),
 			Width: min(w-8, 72),
 		}, w, h)
 	default:
@@ -220,13 +221,13 @@ func (t Model) paletteBody() string {
 			}
 			mark += " "
 		}
-		where := it.Where
-		line := mark + it.Title
+		where := it.Where.String()
+		line := mark + it.Title.String()
 		if where != "" {
 			line += "  " + where
 		}
-		if it.Key != "" {
-			line += "  " + it.Key
+		if !it.Key.Empty() {
+			line += "  " + it.Key.String()
 		}
 		if !it.Enable {
 			line += "  unavailable"
@@ -262,7 +263,10 @@ func (t Model) commands() []ui.Match {
 	}
 	out := make([]ui.Match, len(list))
 	for i, c := range list {
-		out[i] = ui.Match{ID: c.id, Title: c.title, Key: c.key, Where: c.where, Order: i, Enable: c.enable}
+		out[i] = ui.Match{
+			ID: c.id, Title: ui.S(sanitize.From(c.title)), Key: ui.S(sanitize.From(c.key)),
+			Where: ui.S(sanitize.From(c.where)), Order: i, Enable: c.enable,
+		}
 	}
 	return out
 }
@@ -355,10 +359,11 @@ func (t Model) updatePalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return t, nil
 	default:
 		if msg.Type == tea.KeyRunes {
-			r := []rune(t.palette.query)
-			if len(r) < 64 {
-				t.palette.query += string(msg.Runes)
+			r := append([]rune(t.palette.query), msg.Runes...)
+			if len(r) > 64 {
+				r = r[:64]
 			}
+			t.palette.query = string(r)
 			t.palette.cursor = 0
 		}
 		return t, nil
@@ -366,12 +371,12 @@ func (t Model) updatePalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (t Model) disclosureSpec() ui.ModalSpec {
-	primary := ui.Button("c / enter", "content reading ships in a later version", true, false)
-	secondary := ui.Button("esc", "Cancel", false, true)
+	primary := ui.Button(ui.S(ui.L("c / enter")), ui.S(ui.L("content reading ships in a later version")), true, false)
+	secondary := ui.Button(ui.S(ui.L("esc")), ui.S(ui.L("Cancel")), false, true)
 	return ui.ModalSpec{
-		Title:   "Read file contents?",
-		Body:    "So far only names and sizes were read. Nothing is executed, imported or unpickled.",
-		Buttons: primary + "  " + secondary,
+		Title:   ui.S(ui.L("Read file contents?")),
+		Body:    ui.S(ui.L("So far only names and sizes were read. Nothing is executed, imported or unpickled.")),
+		Buttons: ui.Chrome(primary + "  " + secondary),
 		Width:   min(t.width-4, 72),
 	}
 }
@@ -518,6 +523,33 @@ func (t Model) fillZones() {
 			t.zones.Add(fmt.Sprintf("row:scan:%d", t.scanScroll+i), ui.Rect{X: 0, Y: 2 + i, W: t.width, H: 1})
 		}
 	}
+	if t.palette.open {
+		t.addPaletteZones()
+	}
+}
+
+// addPaletteZones registers one zone per visible command row. The body
+// starts on screen row 2 (wordmark, rule). Inside the card the rows follow
+// the title, a blank line, and the three palette header lines.
+func (t Model) addPaletteZones() {
+	body := t.paletteBody()
+	items := ui.Rank(t.palette.query, t.commands())
+	n := len(items)
+	if n > 8 {
+		n = 8
+	}
+	spec := ui.ModalSpec{
+		Title: ui.S(ui.L("COMMANDS")),
+		Body:  ui.Chrome(body),
+		Width: min(t.width-8, 72),
+	}
+	lay := ui.ModalLayoutOf(spec, t.width, t.bodyHeight())
+	// title, blank, "N of M", query, blank, then the rows.
+	const rowsAfterContent = 5
+	for i := 0; i < n; i++ {
+		y := 2 + lay.Y + lay.ContentTop + rowsAfterContent + i
+		t.zones.Add(fmt.Sprintf("palette:row:%d", i), ui.Rect{X: lay.X, Y: y, W: lay.W, H: 1})
+	}
 }
 
 func (t Model) topRow() string {
@@ -528,10 +560,10 @@ func (t Model) topRow() string {
 		if ui.ColorOff() {
 			b.WriteString("model-inspector  ")
 		} else if ui.Profile() == "ansi16" {
-			b.WriteString(ui.GradText("model-inspector", ui.GradBrand, true))
+			b.WriteString(ui.GradText(ui.S(ui.L("model-inspector")), ui.GradBrand, true))
 			b.WriteString("  ")
 		} else {
-			b.WriteString(ui.GradText("model-inspector", ui.GradBrand, true))
+			b.WriteString(ui.GradText(ui.S(ui.L("model-inspector")), ui.GradBrand, true))
 			b.WriteString("  ")
 		}
 	}
@@ -614,7 +646,6 @@ func (t Model) statusRow() string {
 		if name == "" {
 			name = t.m.Dir
 		}
-		name = sanitize.From(name).String()
 	}
 	hint := ui.HintLine(t.treeFocused())
 	hintKeep := false
@@ -638,17 +669,18 @@ func (t Model) statusRow() string {
 	verdict, vKind := t.verdictSeg()
 	content := ui.G().NR + " headers-only"
 	cKind := ui.FillKindNR
+	seg := func(s string) ui.Safe { return ui.S(sanitize.From(s)) }
 	left := []ui.StatusSeg{
-		{Text: mode, Pri: 1, FG: ui.TextInk, BG: ui.FillPink, Bold: true, Keep: true},
-		{Text: name, Pri: 3, FG: ui.TextPrimary, BG: ui.SurfaceSeg2, Min: 16, Shrink: true},
-		{Text: hint, Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep},
+		{Text: seg(mode), Pri: 1, FG: ui.TextInk, BG: ui.FillPink, Bold: true, Keep: true},
+		{Text: seg(name), Pri: 3, FG: ui.TextPrimary, BG: ui.SurfaceSeg2, Min: 16, Shrink: true},
+		{Text: seg(hint), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep},
 	}
 	right := []ui.StatusSeg{
-		{Text: format, Pri: 4, FG: ui.TextSecondary, BG: ui.SurfaceSeg},
-		{Text: size, Pri: 2, FG: ui.TextPrimary, BG: ui.SurfaceSeg2},
-		{Text: quant, Pri: 2, FG: ui.TextOnFill, BG: ui.FillViolet, Bold: true},
-		{Text: verdict, Pri: 1, FG: fgFor(vKind), BG: bgFor(vKind), Bold: true, Keep: true},
-		{Text: content, Pri: 1, FG: fgFor(cKind), BG: bgFor(cKind), Keep: true},
+		{Text: seg(format), Pri: 4, FG: ui.TextSecondary, BG: ui.SurfaceSeg},
+		{Text: seg(size), Pri: 2, FG: ui.TextPrimary, BG: ui.SurfaceSeg2},
+		{Text: seg(quant), Pri: 2, FG: ui.TextOnFill, BG: ui.FillViolet, Bold: true},
+		{Text: seg(verdict), Pri: 1, FG: fgFor(vKind), BG: bgFor(vKind), Bold: true, Keep: true},
+		{Text: seg(content), Pri: 1, FG: fgFor(cKind), BG: bgFor(cKind), Keep: true},
 	}
 	return ui.Segments(left, right, t.width)
 }

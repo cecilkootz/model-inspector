@@ -43,7 +43,7 @@ func renderIdentityView(m *model.Model, d derived, width, height int, st idState
 		add("")
 	}
 	if st.drill && br == "S" {
-		add(ui.Title("IDENTITY", "detail", width))
+		add(ui.Title(ui.S(ui.L("IDENTITY")), ui.S(ui.L("detail")), width))
 		lines = append(lines, heatLines(d, width, false)...)
 		lines = append(lines, legacyMemory(m, d.mem, width)...)
 		return strings.Join(fitAll(lines, width), "\n")
@@ -78,13 +78,18 @@ func renderIdentityView(m *model.Model, d derived, width, height int, st idState
 	}
 	add("")
 	lines = append(lines, heatLines(d, width, br == "L")...)
-	// The sentences below are the same facts the text summary prints.
-	// They stay in the scrollback so a partial load still says incomplete.
-	// Callout messages are repeated at the full width: the pane column
-	// truncates them, and tests look for the whole sentence.
+	// Memory is printed once, at the full width. The storage pane used to
+	// include the same paragraph, so the large layout showed it twice.
 	lines = append(lines, legacyMemory(m, d.mem, width)...)
+	// A callout that the pane column clipped is repeated here in full.
+	// One that already fits is left where the pane drew it.
+	joined := strings.Join(lines, "\n")
 	for _, c := range d.callouts {
-		add(sanitize.From(c.Message).String())
+		msg := sanitize.From(c.Message).String()
+		if msg != "" && !strings.Contains(joined, msg) {
+			add(msg)
+			joined += "\n" + msg
+		}
 	}
 	if m.Partial {
 		add("incomplete")
@@ -167,16 +172,18 @@ func heroLines(m *model.Model, d derived, width int) []string {
 		case 1:
 			rest = "  " + subtitle(m, d)
 		case 2:
-			rest = "  " + sanitize.From(m.Dir).String()
+			// The title already falls back to the directory when there is
+			// no repo id, so the path row would repeat it.
+			if m.RepoID != "" {
+				path := sanitize.From(m.Dir).String()
+				if ui.ColorOff() {
+					rest = "  " + path
+				} else {
+					rest = "  " + paintFG(path, ui.TextLink)
+				}
+			}
 		case 4:
 			rest = "  " + heroPills(m, d)
-		}
-		if ui.ColorOff() && k == 2 {
-			rest = "  " + sanitize.From(m.Dir).String()
-		}
-		if !ui.ColorOff() && k == 2 {
-			path := sanitize.From(m.Dir).String()
-			rest = "  " + paintFG(path, ui.TextLink)
 		}
 		line := indent + pill + rest
 		_ = gl
@@ -217,7 +224,7 @@ func tileSpecs(m *model.Model, d derived) []ui.TileSpec {
 	layers, _ := m.LayerCount()
 	files := fmt.Sprintf("%s files", model.Comma(int64(len(m.Files))))
 	if len(m.Shards) > 0 {
-		files += "|" + fmt.Sprintf("%d shards", len(m.Shards))
+		files += ui.SepWord() + fmt.Sprintf("%d shards", len(m.Shards))
 	}
 	params := "~" + model.HumanCount(m.TotalLogicalParams)
 	quant := quantHeader(m)
@@ -291,7 +298,7 @@ func intOf(v any) int {
 
 func storageBlock(m *model.Model, d derived, width int, frac float64, tall bool) []string {
 	var lines []string
-	lines = append(lines, ui.Title("STORAGE", model.HumanBytes(m.TotalSize)+" on disk", width))
+	lines = append(lines, ui.Title(ui.S(ui.L("STORAGE")), ui.S(sanitize.From(model.HumanBytes(m.TotalSize)+" on disk")), width))
 	h := 1
 	if tall {
 		h = 2
@@ -311,7 +318,6 @@ func storageBlock(m *model.Model, d derived, width int, frac float64, tall bool)
 		lines = append(lines, ui.Fit(r, width))
 	}
 	lines = append(lines, ui.Fit(legend, width))
-	lines = append(lines, legacyMemory(m, d.mem, width)...)
 	return lines
 }
 
@@ -322,7 +328,7 @@ func storageSegs(d derived, frac float64) []ui.Seg {
 		if f < 0 {
 			f = 0
 		}
-		s := ui.Seg{Label: classLabel(c.Class), Frac: f}
+		s := ui.Seg{Label: ui.S(classLabel(c.Class)), Frac: f}
 		switch {
 		case strings.Contains(c.Class, "packed"):
 			s.Grad = ui.GradQ
@@ -334,12 +340,12 @@ func storageSegs(d derived, frac float64) []ui.Seg {
 		segs = append(segs, s)
 	}
 	if len(segs) == 0 {
-		segs = append(segs, ui.Seg{Label: "empty", Frac: 1, Flat: ui.SurfaceSeg.Hex()})
+		segs = append(segs, ui.Seg{Label: ui.S(ui.L("empty")), Frac: 1, Flat: ui.SurfaceSeg.Hex()})
 	}
 	return segs
 }
 
-func classLabel(class string) string {
+func classLabel(class string) sanitize.Text {
 	var s string
 	switch {
 	case class == "q_scales_biases":
@@ -351,12 +357,12 @@ func classLabel(class string) string {
 	default:
 		s = class
 	}
-	return sanitize.From(s).String()
+	return sanitize.From(s)
 }
 
 func calloutBlock(m *model.Model, d derived, width int) []string {
 	var lines []string
-	lines = append(lines, ui.Title("CALLOUTS", fmt.Sprintf("%d notable", len(d.callouts)), width))
+	lines = append(lines, ui.Title(ui.S(ui.L("CALLOUTS")), ui.S(sanitize.From(fmt.Sprintf("%d notable", len(d.callouts)))), width))
 	if len(d.callouts) == 0 {
 		lines = append(lines, ui.Fit("none", width))
 		return lines
