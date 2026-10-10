@@ -510,14 +510,26 @@ func (t Model) fillRow(text string, width int, color, selected, focused bool) st
 	return ui.PaintToken(text, ui.TextSecondary, bg, false)
 }
 
+func (t Model) dtypeOnce(raw string) sanitize.Text {
+	if raw == "" {
+		return sanitize.Program("")
+	}
+	if t.lay != nil {
+		return t.lay.once(raw)
+	}
+	return sanitize.From(raw)
+}
+
 func (t Model) dtypeCell(dtype string, width int, color bool, bg *ui.Token) string {
 	if dtype == "" {
 		return t.fillRow("", width, color, bg == &ui.SurfaceSel, bg == &ui.SurfaceSel)
 	}
+	safe := t.dtypeOnce(dtype)
+	shown := safe.String()
 	if !color || ui.ColorOff() {
-		return padPlain(clipCells("["+dtype+"]", width), width)
+		return padPlain(clipCells("["+shown+"]", width), width)
 	}
-	pill := ui.Pill(dtypeKind(dtype), t.lay.once(dtype))
+	pill := ui.Pill(dtypeKind(shown), safe)
 	if ui.Width(pill) > width {
 		return clipANSI(pill, width)
 	}
@@ -1171,7 +1183,7 @@ func (t Model) layerSummaryText() string {
 	}
 	parts = append(parts, bytes)
 	if dtype != "" {
-		parts = append(parts, "["+dtype+"]")
+		parts = append(parts, "["+t.dtypeOnce(dtype).String()+"]")
 	}
 	return strings.Join(parts, " "+gl.Dot+" ")
 }
@@ -1311,10 +1323,10 @@ func (t Model) tensorDetail(row lrow, width int) []string {
 	if t.m.Quant != nil && t.m.Quant.Mode != "" && strings.HasPrefix(lt.Role, "q") && lt.Role != "qscal" && lt.Role != "qbias" {
 		mode = " " + t.lay.once(t.m.Quant.Mode).String()
 	}
-	lines = append(lines, ui.Title(ui.S(ui.L("ROLE")), ui.S(sanitize.Program(role+mode)), width))
+	lines = append(lines, ui.Title(ui.S(ui.L("ROLE")), ui.Chrome(t.dtypeOnce(role).String()+mode), width))
 	lines = append(lines, ui.Title(ui.S(ui.L("LOGICAL")), ui.S(sanitize.Program(shapeLimited(lt.Shape)+"  "+humanCount(lt.Params)+" params")), width))
-	packed := strings.ToUpper(lt.DType) + " " + shapeLimited(lt.Shape)
-	lines = append(lines, ui.Title(ui.S(ui.L("PACKED")), ui.S(sanitize.Program(packed)), width))
+	packed := t.dtypeOnce(strings.ToUpper(lt.DType)).String() + " " + shapeLimited(lt.Shape)
+	lines = append(lines, ui.Title(ui.S(ui.L("PACKED")), ui.Chrome(packed), width))
 	if g != nil && g.ExpertStacked() {
 		if n, ok := g.ExpertCount(); ok && n > 0 && lt.Params > 0 {
 			each := lt.Params / int64(n)
@@ -1346,7 +1358,7 @@ func (t Model) tensorDetail(row lrow, width int) []string {
 			if i := strings.LastIndex(name, "."); i >= 0 {
 				name = name[i:]
 			}
-			lines = append(lines, clipANSI(t.lay.once(name).String()+"  "+strings.ToUpper(p.DType)+"  "+bar+"  "+model.HumanBytes(n), width))
+			lines = append(lines, clipANSI(t.lay.once(name).String()+"  "+t.dtypeOnce(strings.ToUpper(p.DType)).String()+"  "+bar+"  "+model.HumanBytes(n), width))
 		}
 	}
 	if lt.Shard != "" || lt.AbsOK {

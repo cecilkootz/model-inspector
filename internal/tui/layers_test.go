@@ -137,6 +137,69 @@ func TestLayersShardedNgramMark(t *testing.T) {
 	}
 }
 
+func TestLayersHostileDtype(t *testing.T) {
+	dtype := "BF16\x1b\u0085\r\u202e"
+	name := "model.layers.0.self_attn.q_proj.weight"
+	m := &model.Model{
+		Format: "safetensors", Dir: "/model",
+		Groups: []*model.Group{{
+			Key: "model.layers.0", Kind: model.KindLayer, Layer: 0,
+			Tensors: []*model.Tensor{{
+				TensorInfo: safetensors.TensorInfo{Name: name, DType: dtype, Shape: []int64{4}},
+				Kind:       model.KindLayer, Layer: 0, Group: "model.layers.0", Role: model.RolePlain,
+			}},
+		}},
+	}
+	m.Tensors = m.Groups[0].Tensors
+	ui := openLayers(t, m, 200, 50)
+	ui.lay.setOpen("dec", true)
+	ui.lay.setOpen("g:model.layers.0", true)
+	ui.lay.ensure(m)
+	found := false
+	for i, row := range ui.lay.rows {
+		if row.kind == rowTensor {
+			ui.lay.row = i
+			ui.lay.cursorPath = row.path
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("tensor row missing")
+	}
+	tokens := []string{"<U+001B>", "<U+0085>", "<U+000D>", "<U+202E>"}
+	check := func(color bool) {
+		t.Helper()
+		if ui.cache != nil {
+			ui.cache.key = ""
+		}
+		if color {
+			t.Setenv("NO_COLOR", "")
+			SetNoColor(false)
+			lipgloss.SetColorProfile(termenv.TrueColor)
+		} else {
+			t.Setenv("NO_COLOR", "1")
+			SetNoColor(true)
+		}
+		view := ui.View()
+		for _, raw := range []string{"\u0085", "\r", "\u202e"} {
+			if strings.Contains(view, raw) {
+				t.Fatalf("raw dtype leaked color=%v", color)
+			}
+		}
+		if !color && strings.Contains(view, "\x1b") {
+			t.Fatal("raw ESC in colorless view")
+		}
+		for _, tok := range tokens {
+			if !strings.Contains(view, tok) {
+				t.Fatalf("missing %s color=%v\n%s", tok, color, view)
+			}
+		}
+	}
+	check(true)
+	check(false)
+}
+
 func TestLayersHostileName(t *testing.T) {
 	name := "model.layers.0.self_attn.q_proj.weight\x1b\u202e"
 	m := &model.Model{

@@ -1546,7 +1546,7 @@ func (t *Model) runLayerSearch() {
 			}
 			for i, row := range p.rows {
 				tn := t.layerTensorLabel(g, row).String()
-				td := t.lay.once(tensorBadge(row)).String()
+				td := tensorBadge(row)
 				if layerHit(mode, sub, tn, td) || layerHit(mode, sub, row.FullName, model.ShapeText(row.Shape)) {
 					s.noteMatch(parent + "/t:" + strconv.Itoa(i))
 				}
@@ -1945,7 +1945,7 @@ func (t Model) layerPayload(value bool) (string, string) {
 		if !ok {
 			return "", ""
 		}
-		return tensorBadge(lt) + " " + shapeLimited(lt.Shape) + " " + model.HumanBytes(lt.Bytes), "value"
+		return rawTensorBadge(lt) + " " + shapeLimited(lt.Shape) + " " + model.HumanBytes(lt.Bytes), "value"
 	default:
 		g := t.layersGroup()
 		if g == nil {
@@ -2225,6 +2225,17 @@ func tailName(name string) string {
 }
 
 func tensorBadge(row model.LogicalTensor) string {
+	if row.Role != "" && row.Role != "plain" {
+		return row.Role
+	}
+	if row.DType == "" {
+		return ""
+	}
+	return sanitize.From(strings.ToLower(row.DType)).String()
+}
+
+// rawTensorBadge is the copy payload. The notice is sanitized once later.
+func rawTensorBadge(row model.LogicalTensor) string {
 	if row.Role != "" && row.Role != "plain" {
 		return row.Role
 	}
