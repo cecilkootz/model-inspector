@@ -7,8 +7,8 @@ import (
 
 	"github.com/rivo/uniseg"
 
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 // Text is the 80-column inspect summary. Every file-derived string is sanitized.
@@ -329,7 +329,7 @@ func tokenLen(s string) int {
 	return i + 1
 }
 
-func san(s string) string { return sanitize.From(s).String() }
+func san(s string) string { return fileerr.Present(s) }
 
 func trunc(s string, n int) string {
 	r := []rune(s)

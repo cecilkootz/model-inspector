@@ -3,6 +3,9 @@ package jsonx
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
+
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 )
 
 func TestUnmarshalValues(t *testing.T) {
@@ -46,5 +49,24 @@ func TestUnmarshalRejectsTrailingDataAndDepth(t *testing.T) {
 	ok := strings.Repeat("[", MaxDepth) + "1" + strings.Repeat("]", MaxDepth)
 	if _, err := Unmarshal([]byte(ok)); err != nil {
 		t.Fatalf("depth %d rejected: %v", MaxDepth, err)
+	}
+}
+
+func TestUnmarshalTruncatesHugeNumber(t *testing.T) {
+	const tail = "9876543210"
+	digits := strings.Repeat("1", 8000) + tail
+	_, err := Unmarshal([]byte(digits))
+	if err == nil {
+		t.Fatal("accepted")
+	}
+	msg := err.Error()
+	if utf8.RuneCountInString(msg) > fileerr.MaxRunes {
+		t.Fatalf("runes %d", utf8.RuneCountInString(msg))
+	}
+	if strings.Contains(msg, tail) {
+		t.Fatalf("literal survived: %q", msg)
+	}
+	if !strings.Contains(msg, "… (") || !strings.HasSuffix(msg, " runes)") {
+		t.Fatal(msg)
 	}
 }

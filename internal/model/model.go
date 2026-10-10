@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
@@ -209,11 +210,11 @@ func (m *Model) warnf(format string, a ...any) {
 		if !m.warningsTrunc {
 			m.warningsTrunc = true
 			m.Partial = true
-			m.Warnings = append(m.Warnings, fmt.Sprintf("too many warnings; truncated at %d", maxWarnings))
+			m.Warnings = append(m.Warnings, fileerr.String(fmt.Sprintf("too many warnings; truncated at %d", maxWarnings)))
 		}
 		return
 	}
-	m.Warnings = append(m.Warnings, fmt.Sprintf(format, a...))
+	m.Warnings = append(m.Warnings, fileerr.String(fmt.Sprintf(format, a...)))
 }
 
 func (m *Model) scanFiles() error {
@@ -323,7 +324,7 @@ func (m *Model) loadConfig() {
 		// read, including a dangling symlink, is an incomplete inspection:
 		// Stat of a broken symlink is ENOENT, which would otherwise look
 		// like the file was never there.
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			if _, lerr := os.Lstat(p); lerr != nil {
 				return
 			}

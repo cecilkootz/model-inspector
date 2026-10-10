@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 )
 
 // MaxDepth is the deepest array/object nesting Unmarshal accepts.
@@ -15,6 +17,11 @@ const MaxDepth = 32
 // Unmarshal decodes one JSON value. Objects become map[string]any, arrays
 // []any, and numbers float64. A second occurrence of an object key is an error.
 func Unmarshal(data []byte) (any, error) {
+	v, err := unmarshal(data)
+	return v, fileerr.Error(err)
+}
+
+func unmarshal(data []byte) (any, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	v, err := readValue(dec, 0)

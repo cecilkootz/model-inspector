@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestResolveRepoID(t *testing.T) {
@@ -38,6 +39,39 @@ func TestResolveRepoID(t *testing.T) {
 	}
 	if _, err := Resolve("Org/Missing", hub); err == nil {
 		t.Error("expected error for missing repo")
+	}
+}
+
+func TestLongPathMissingRef(t *testing.T) {
+	hub := t.TempDir()
+	const want = 220
+	for len(hub) < want {
+		room := want - len(hub) - 1
+		if room > 180 {
+			room = 180
+		}
+		if room < 1 {
+			t.Fatalf("hub path stuck at %d", len(hub))
+		}
+		hub = filepath.Join(hub, strings.Repeat("h", room))
+	}
+	if err := os.MkdirAll(hub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if len(hub) != want {
+		t.Fatalf("hub length %d, want %d", len(hub), want)
+	}
+	repo := filepath.Join(hub, "models--Org--Name")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ref := filepath.Join(repo, "refs", "main")
+	if utf8.RuneCountInString(ref) < 240 {
+		t.Fatalf("ref path is only %d runes (%s); the not-exist check would not be clipped", utf8.RuneCountInString(ref), ref)
+	}
+	_, err := Resolve("Org/Name", hub)
+	if err == nil || !strings.Contains(err.Error(), "no refs/main") {
+		t.Fatalf("long missing ref: %v", err)
 	}
 }
 

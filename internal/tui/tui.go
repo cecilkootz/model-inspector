@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
@@ -471,7 +472,7 @@ func renderConfig(m *model.Model, width int) string {
 				break
 			}
 			b.WriteByte('\n')
-			b.WriteString(sanitize.From(w).String())
+			b.WriteString(fileerr.Present(w))
 			n++
 		}
 		return cutBlock(b.String(), width)

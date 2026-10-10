@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
+
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 )
 
 func TestParseRejectsNullAndEmpty(t *testing.T) {
@@ -42,6 +45,61 @@ func TestParseRejectsHugeNumberWithoutQuotingIt(t *testing.T) {
 	if delta := after.TotalAlloc - before.TotalAlloc; delta > 1<<20 {
 		t.Fatalf("alloc delta %d", delta)
 	}
+}
+
+func TestParseTruncatesNestedHugeNumber(t *testing.T) {
+	const tail = "2222222222"
+	digits := append(bytes.Repeat([]byte("1"), 1<<18), []byte(tail)...)
+	for _, field := range []string{"shape", "data_offsets"} {
+		var js []byte
+		if field == "shape" {
+			js = append([]byte(`{"x":{"dtype":"U8","shape":[`), digits...)
+			js = append(js, []byte(`],"data_offsets":[0,0]}}`)...)
+		} else {
+			js = append([]byte(`{"x":{"dtype":"U8","shape":[],"data_offsets":[`), digits...)
+			js = append(js, []byte(`,0]}}`)...)
+		}
+		_, err := Parse(js)
+		if err == nil {
+			t.Fatalf("%s: accepted", field)
+		}
+		msg := err.Error()
+		if n := utf8.RuneCountInString(msg); n > fileerr.MaxRunes {
+			t.Fatalf("%s: error is %d runes", field, n)
+		}
+		if strings.Contains(msg, tail) {
+			t.Fatalf("%s: error still quotes the end of the literal: %q", field, msg)
+		}
+		if !strings.Contains(msg, "… (") || !strings.HasSuffix(msg, " runes)") {
+			t.Fatalf("%s: %q", field, msg)
+		}
+		reported := reportedRunes(t, msg)
+		if reported < len(digits) {
+			t.Fatalf("%s: reported length %d, digits %d, msg %q", field, reported, len(digits), msg)
+		}
+	}
+}
+
+func reportedRunes(t *testing.T, msg string) int {
+	t.Helper()
+	const mark = "… ("
+	i := strings.LastIndex(msg, mark)
+	if i < 0 {
+		t.Fatalf("no length in %q", msg)
+	}
+	rest := msg[i+len(mark):]
+	end := strings.Index(rest, " runes)")
+	if end <= 0 {
+		t.Fatalf("bad suffix %q", msg)
+	}
+	n := 0
+	for _, r := range rest[:end] {
+		if r < '0' || r > '9' {
+			t.Fatalf("bad length %q", rest[:end])
+		}
+		n = n*10 + int(r-'0')
+	}
+	return n
 }
 
 func TestParseRejectsDuplicateKeys(t *testing.T) {
