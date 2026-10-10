@@ -198,7 +198,14 @@ func elideLongPaths(s string) string {
 	return b.String()
 }
 
+// minDirHead is the directory prefix kept when the filename uses the rest
+// of the budget. Middle-clipping the filename alone would drop that head.
+const minDirHead = 8
+
 // elidePath keeps a prefix of p and "/filename" inside budget runes.
+// When the filename is too long to keep whole, the directory head stays
+// (at least minDirHead runes when the budget allows) and the filename
+// keeps its suffix.
 func elidePath(p string, budget int) string {
 	if budget < 1 || utf8.RuneCountInString(p) <= budget {
 		return p
@@ -212,11 +219,31 @@ func elidePath(p string, budget int) string {
 		return middle(p, budget)
 	}
 	tailN := utf8.RuneCountInString(tail)
-	if budget <= tailN+1 {
-		return middle(base, budget)
+	if budget > tailN+1 {
+		head := takeAtoms(p, budget-tailN-1)
+		return head + "…" + tail
 	}
-	head := takeAtoms(p, budget-tailN-1)
-	return head + "…" + tail
+	dir := strings.TrimSuffix(p, base)
+	prefixN := utf8.RuneCountInString(dir)
+	if strings.HasSuffix(dir, "/") {
+		prefixN--
+	}
+	if prefixN < 1 {
+		return middle(p, budget)
+	}
+	headN := minDirHead
+	if headN > prefixN {
+		headN = prefixN
+	}
+	// head + ellipsis + slash + at least one filename rune.
+	for headN > 1 && budget < headN+3 {
+		headN--
+	}
+	fileN := budget - headN - 2
+	if fileN < 1 {
+		return middle(p, budget)
+	}
+	return takeAtoms(dir, headN) + "…/" + suffixAtoms(base, fileN)
 }
 
 func middle(s string, budget int) string {

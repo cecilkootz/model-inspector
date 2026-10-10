@@ -24,7 +24,8 @@ bidi overrides, Unicode format characters, and other invisible characters
 become `<U+XXXX>` tokens. A literal `<` is tokenized too, so the characters
 `<U+001B>` in a file cannot impersonate an ESC. The cap is 4096 runes of
 sanitized text (plus one ellipsis rune when the value is truncated), not
-4096 bytes. `--json` keeps parsed values, and encodes C1, bidi, and other
+4096 bytes. Text and TUI output clip any field over 256 runes (tensor names,
+paths). `--json` keeps parsed values, and encodes C1, bidi, and other
 invisible characters in those strings as `\uXXXX` escapes.
 
 It never writes into the Hugging Face cache. Inspecting a ~106 GiB model takes

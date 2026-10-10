@@ -128,6 +128,33 @@ func TestErrorElidesLongPathAndUnwraps(t *testing.T) {
 	}
 }
 
+func TestErrorKeepsDirectoryHeadWhenFilenameDominates(t *testing.T) {
+	dir := "/KEEPHEAD"
+	name := strings.Repeat("n", 300) + ".bin"
+	path := dir + "/" + name
+	orig := &fs.PathError{Op: "lstat", Path: path, Err: fs.ErrNotExist}
+	err := Error(orig)
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("clipped path error is not fs.ErrNotExist")
+	}
+	msg := err.Error()
+	if n := utf8.RuneCountInString(msg); n > MaxRunes {
+		t.Fatalf("visible runes %d: %q", n, msg)
+	}
+	if !strings.Contains(msg, "/KEEPHEA") {
+		t.Fatalf("dropped directory head: %q", msg)
+	}
+	if !strings.Contains(msg, ".bin") {
+		t.Fatalf("dropped filename tail: %q", msg)
+	}
+	if strings.Contains(msg, name) {
+		t.Fatal("full filename survived")
+	}
+	if strings.Contains(msg, dir+"/") {
+		t.Fatal("filename was not elided from the directory")
+	}
+}
+
 func reportedLen(t *testing.T, msg string) int {
 	t.Helper()
 	const mark = "… ("
