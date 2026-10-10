@@ -161,6 +161,10 @@ type Model struct {
 
 	warningsTrunc bool
 	overflowed    bool
+	// hostReady caches gatherHostCapable. The scan runs after that pass, so
+	// a later render cannot append warnings or flip Partial on its own.
+	hostReady bool
+	hostCache []HostTensor
 }
 
 // Load inspects dir. Errors in individual shards are recorded, not fatal.
@@ -193,6 +197,10 @@ func Load(dir string) (*Model, error) {
 	m.buildTensors()
 	m.buildGroups()
 	m.detectFormat()
+	// Host-capable warnings (duplicate shards, mixed pieces, a saturated
+	// sum) settle here, before the caller scans. Rendering must not be the
+	// first pass: that used to flip Partial after the verdict was fixed.
+	m.HostCapable()
 	return m, nil
 }
 

@@ -179,6 +179,16 @@ func read(r io.Reader, size int64) (*Header, error) {
 // dimensions, overflowing shapes, and headers that declare too many tensors
 // or dimensions.
 func Parse(js []byte) (*Header, error) {
+	// A safetensors header is one JSON object. Reject anything else before
+	// encoding/json. A bare number is not an object, and the decoder's error
+	// for one quotes the entire literal: a megabyte of digits becomes a
+	// megabyte error string, and strconv spends a long time on it. The
+	// fuzzer's minimizer is quadratic in that length, so the slow path also
+	// stalls fuzzing.
+	trimmed := bytes.TrimLeft(js, " \t\r\n")
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return nil, fmt.Errorf("parsing header JSON: header must be a JSON object")
+	}
 	dec := json.NewDecoder(bytes.NewReader(js))
 	tok, err := dec.Token()
 	if err != nil {

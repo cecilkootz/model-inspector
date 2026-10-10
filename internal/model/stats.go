@@ -182,11 +182,21 @@ func (m *Model) MemoryEstimate() MemoryEstimate {
 	if m.Partial {
 		est.HostCapablePartial = true
 	}
-	est.AcceleratorMinBytes = est.WeightsBytes - est.HostCapableBytes
-	if est.AcceleratorMinBytes < 0 {
-		// Display floor only. Callers that check host bytes against weight
-		// bytes must use HostCapableBytes, not this clamped result.
+	// weights − host is a lower bound on accelerator bytes only when the
+	// host total is exact. When it is a lower bound, a larger true host
+	// total (still inside the same weight bytes) would make the remainder
+	// smaller, so the subtraction is not a lower bound. The only figure
+	// that stays a lower bound is 0. The identity screen omits the GPU
+	// line in that case rather than printing "≥ 0".
+	if est.HostCapablePartial {
 		est.AcceleratorMinBytes = 0
+	} else {
+		est.AcceleratorMinBytes = est.WeightsBytes - est.HostCapableBytes
+		if est.AcceleratorMinBytes < 0 {
+			// Display floor only. Callers that check host bytes against weight
+			// bytes must use HostCapableBytes, not this clamped result.
+			est.AcceleratorMinBytes = 0
+		}
 	}
 	return est
 }
@@ -210,9 +220,14 @@ type HostTensor struct {
 	Bytes     int64
 	ParamsEst int64
 	Rule      string
-	// sharded is true when Name is the stem of .shard_N pieces rather than
-	// one weight tensor. It is not part of the JSON document.
+	// sharded is true when this entry sums .shard_N pieces rather than one
+	// weight tensor. It is not part of the JSON document.
 	sharded bool
+	// stem is the shared lookup stem of a sharded table. Name stays equal
+	// to stem unless a tensor is itself named that stem; then Name gains a
+	// suffix so the two JSON entries are not the same string. Callers that
+	// match pieces use stem, not Name.
+	stem string
 	// incomplete is true when this table's bytes are a lower bound.
 	// It is not part of the JSON document; callout text carries the marker.
 	incomplete bool
@@ -242,6 +257,35 @@ func (m *Model) HostCapable() []HostTensor {
 	if m == nil {
 		return nil
 	}
+	if !m.hostReady {
+		m.hostCache = m.gatherHostCapable()
+		m.hostReady = true
+	}
+	if !m.Partial {
+		return m.hostCache
+	}
+	// Partial can still flip later (a saturated group total while the
+	// report is built). Stamp the lower-bound marker on a copy so the
+	// cached pass is not recomputed and cannot warn again.
+	already := true
+	for i := range m.hostCache {
+		if !m.hostCache[i].incomplete {
+			already = false
+			break
+		}
+	}
+	if already {
+		return m.hostCache
+	}
+	out := append([]HostTensor(nil), m.hostCache...)
+	for i := range out {
+		out[i].incomplete = true
+	}
+	return out
+}
+
+// gatherHostCapable is the single host-capable pass. HostCapable caches it.
+func (m *Model) gatherHostCapable() []HostTensor {
 	byName := make(map[string]*Tensor, len(m.Tensors))
 	loaded := make(map[string]struct{}, len(m.Tensors))
 	for _, t := range m.Tensors {
@@ -327,7 +371,7 @@ func (m *Model) HostCapable() []HostTensor {
 			m.warnOnce("lookup table %s: pieces differ in dtype or column count and were not merged", stem)
 			continue
 		}
-		ht := HostTensor{Name: stem, Group: a.group, Rule: RuleLookupTable, sharded: true}
+		ht := HostTensor{Name: stem, stem: stem, Group: a.group, Rule: RuleLookupTable, sharded: true}
 		for _, t := range a.pieces {
 			addTableBytes(m, byName, used, &ht, t)
 		}
@@ -341,6 +385,7 @@ func (m *Model) HostCapable() []HostTensor {
 			out[i].incomplete = true
 		}
 	}
+	disambiguateHostNames(out)
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Name != out[j].Name {
 			return out[i].Name < out[j].Name
@@ -348,6 +393,50 @@ func (m *Model) HostCapable() []HostTensor {
 		return !out[i].sharded && out[j].sharded
 	})
 	return out
+}
+
+// shardedNameSuffix marks a summed shard table whose stem is also a tensor
+// name. The suffix is not itself a ".shard_<digits>" tail, so lookupStem
+// does not treat the JSON name as another shard.
+const shardedNameSuffix = " (sharded)"
+
+// disambiguateHostNames keeps every host_capable_tensors name unique.
+// A plain tensor keeps its real name. A sharded table keeps the stem unless
+// that string is already taken, in which case the table is "stem (sharded)".
+func disambiguateHostNames(out []HostTensor) {
+	used := map[string]struct{}{}
+	for i := range out {
+		if out[i].sharded {
+			continue
+		}
+		used[out[i].Name] = struct{}{}
+	}
+	for i := range out {
+		if !out[i].sharded {
+			continue
+		}
+		name := out[i].Name
+		if _, clash := used[name]; clash {
+			name += shardedNameSuffix
+		}
+		for n := 2; ; n++ {
+			if _, ok := used[name]; !ok {
+				break
+			}
+			name = fmt.Sprintf("%s%s %d", out[i].stem, shardedNameSuffix, n)
+		}
+		used[name] = struct{}{}
+		out[i].Name = name
+	}
+}
+
+// hostStem is the name pieces are matched on. Sharded entries keep it even
+// after the JSON name is disambiguated.
+func hostStem(h HostTensor) string {
+	if h.stem != "" {
+		return h.stem
+	}
+	return h.Name
 }
 
 // addTableBytes adds one weight and, once, its .scales and .biases.
@@ -422,12 +511,13 @@ func (m *Model) NotableParams() (name string, params int64, ngram bool) {
 			continue
 		}
 		consider(h.ParamsEst, h.Name)
+		key := hostStem(h)
 		for _, t := range m.Tensors {
 			if t == nil {
 				continue
 			}
 			stem, sharded := lookupStem(t.Name)
-			if sharded && stem == h.Name {
+			if sharded && stem == key {
 				covered[t] = true
 			}
 		}
@@ -490,7 +580,7 @@ func (m *Model) Outliers() []Callout {
 	aggregated := map[string]struct{}{}
 	for _, h := range host {
 		if h.sharded {
-			aggregated[h.Name] = struct{}{}
+			aggregated[hostStem(h)] = struct{}{}
 		}
 		addInto(m, &hostBytes, h.Bytes)
 		if m.TensorBytes > 0 {

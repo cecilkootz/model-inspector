@@ -7,6 +7,7 @@ import (
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
 )
 
@@ -139,4 +140,28 @@ func TestQA5_TUI(t *testing.T) {
 	})
 
 	_ = filepath.Separator
+}
+
+func TestQA5_PartialOmitsGPUFloor(t *testing.T) {
+	SetNoColor(true)
+	n := int64(model.GiB)
+	m := &model.Model{
+		Format:      "safetensors",
+		Partial:     true,
+		TensorBytes: n + 4096,
+		Tensors: []*model.Tensor{{
+			TensorInfo: safetensors.TensorInfo{
+				Name: "model.ngram_embedding.weight", DType: "BF16", Shape: []int64{4096, 8},
+				DataOffsets: [2]int64{0, n},
+			},
+			Role: model.RolePlain, Group: "ngram", Kind: model.KindEmbeddings,
+		}},
+	}
+	view := renderIdentity(m, 160)
+	if strings.Contains(view, "on the GPU/accelerator") {
+		t.Fatalf("partial identity still claims a GPU lower bound:\n%s", view)
+	}
+	if !strings.Contains(view, "incomplete") {
+		t.Fatalf("partial identity omitted incomplete:\n%s", view)
+	}
 }
