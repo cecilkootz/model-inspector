@@ -90,7 +90,7 @@ func TestLayersExpertsAndPLE(t *testing.T) {
 	m := loadLayersV2(t)
 	ui := openLayers(t, m, 140, 40)
 	view := ui.View()
-	for _, want := range []string{"n-gram table (PLE)", "⌂", "×3", "hyper_connection", "4 exp", "2 exp"} {
+	for _, want := range []string{"n-gram table (PLE)", "⌂", "×3", "hyper_connection", "4·2", "2·2"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("missing %q\n%s", want, view)
 		}
@@ -154,6 +154,7 @@ func TestLayersHostileName(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("LC_ALL", "C.UTF-8")
 	lipgloss.SetColorProfile(termenv.Ascii)
+	ui.layersExpand()
 	ui.layersExpand()
 	view := ui.View()
 	if strings.Contains(view, "\x1b") {
@@ -255,6 +256,12 @@ func TestLayersCopyName(t *testing.T) {
 	ui.lay.copyTo = &buf
 	ui.active = tabLayers
 	ui.lay.ensure(m)
+	for i, row := range ui.lay.rows {
+		if row.path == "g:embeddings" {
+			ui.lay.row = i
+			ui.lay.cursorPath = row.path
+		}
+	}
 	key := ui.layersGroup().Key
 	ui.copyLayers(false)
 	if !strings.Contains(ui.notice, key) || !strings.Contains(buf.String(), "\x1b]52;") {

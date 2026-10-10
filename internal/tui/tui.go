@@ -222,6 +222,9 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if t.layersSearching() {
 			return t.updateLayersSearch(msg)
 		}
+		if t.layersJumping() {
+			return t.updateLayersJump(msg)
+		}
 		if t.palette.open {
 			return t.updatePalette(msg)
 		}
@@ -268,7 +271,10 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.touchConfig()
 				return t, nil
 			}
-			if t.active == tabLayers && (t.layersCloseTop() || t.layersTreeOn()) {
+			if t.active == tabLayers && t.layersCloseTop() {
+				return t, nil
+			}
+			if t.active == tabLayers && t.layersTreeOn() {
 				return t.updateLayersKey(msg)
 			}
 			if t.active == tabLayers && t.focusSecondary {

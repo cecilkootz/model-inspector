@@ -24,7 +24,14 @@ const (
 const (
 	layerSortIndex = iota
 	layerSortSize
+	layerSortParams
 	layerSortName
+)
+
+const (
+	attnAll = iota
+	attnLinear
+	attnFull
 )
 
 const layersQueryMax = 128
@@ -50,8 +57,17 @@ type layersState struct {
 	largeWait bool
 	keep      map[string]bool
 
-	sortBy   int
-	sortDesc bool
+	sortBy     int
+	sortDesc   bool
+	outliers   bool
+	attn       int
+	parts      bool
+	packParts  bool
+	jump       bool
+	jumpQ      string
+	drill      bool
+	perTok     int
+	sawDefault bool
 
 	rows  []lrow
 	dirty bool
@@ -60,6 +76,7 @@ type layersState struct {
 	prepped bool
 	info    map[int]model.LayerInfo
 	diamT   map[string]bool
+	big     map[string]bool
 	san     map[string]sanitize.Text
 	pack    map[int][]tensorPack
 
@@ -121,8 +138,9 @@ func (s *layersState) framePart() string {
 	if s == nil {
 		return ""
 	}
-	return fmt.Sprintf("|ly %d %d %d %q %v %v %d %d %d",
-		s.row, s.scroll, s.gen, s.query, s.search, s.filter, s.matchIdx, s.sortBy, boolInt(s.sortDesc))
+	return fmt.Sprintf("|ly %d %d %d %q %v %v %d %d %d %d %d %d %d %d %q",
+		s.row, s.scroll, s.gen, s.query, s.search, s.filter, s.matchIdx, s.sortBy, boolInt(s.sortDesc),
+		boolInt(s.outliers), s.attn, boolInt(s.parts), boolInt(s.drill), boolInt(s.jump), s.jumpQ)
 }
 
 func boolInt(v bool) int {
@@ -222,6 +240,17 @@ func (s *layersState) rebuild(m *model.Model) {
 		return
 	}
 	s.prep(m)
+	if !s.sawDefault {
+		s.sawDefault = true
+		s.expanded["dec"] = true
+		if s.cursorPath == "" {
+			s.cursorPath = "dec"
+		}
+	}
+	if s.packParts != s.parts {
+		s.pack = map[int][]tensorPack{}
+		s.packParts = s.parts
+	}
 	if s.filter && strings.TrimSpace(s.query) != "" {
 		s.keep = map[string]bool{}
 		for p := range s.matches {
@@ -240,31 +269,201 @@ func (s *layersState) rebuild(m *model.Model) {
 	} else {
 		s.keep = nil
 	}
+	s.emitTops(m)
+}
+
+func (s *layersState) emitTops(m *model.Model) {
+	type top struct {
+		dec    bool
+		gidx   int
+		bytes  int64
+		params int64
+		name   string
+	}
+	var layers []int
+	var layerBytes, layerParams int64
+	for i, g := range m.Groups {
+		if g == nil || g.Kind != model.KindLayer {
+			continue
+		}
+		if !s.layerVisible(m, g) {
+			continue
+		}
+		layers = append(layers, i)
+		layerBytes += g.Bytes
+		layerParams += g.LogicalParams
+	}
+	var tops []top
+	decPlaced := false
 	order := s.groupOrder(m)
-	if s.keep != nil {
-		var idxs []int
-		hidden := 0
-		for _, i := range order {
-			g := m.Groups[i]
-			if g != nil && s.keep[groupPath(g)] {
-				idxs = append(idxs, i)
-			} else {
-				hidden++
+	for _, i := range order {
+		g := m.Groups[i]
+		if g == nil {
+			continue
+		}
+		if g.Kind == model.KindLayer {
+			if !decPlaced && len(layers) > 0 {
+				tops = append(tops, top{dec: true, bytes: layerBytes, params: layerParams, name: "decoder"})
+				decPlaced = true
+			}
+			continue
+		}
+		if !s.groupVisible(g) {
+			continue
+		}
+		tops = append(tops, top{gidx: i, bytes: g.Bytes, params: g.LogicalParams, name: g.Key})
+	}
+	if !decPlaced && len(layers) > 0 {
+		tops = append(tops, top{dec: true, bytes: layerBytes, params: layerParams, name: "decoder"})
+	}
+	if s.sortBy != layerSortIndex {
+		sort.SliceStable(tops, func(a, b int) bool {
+			switch s.sortBy {
+			case layerSortSize:
+				if tops[a].bytes != tops[b].bytes {
+					if s.sortDesc {
+						return tops[a].bytes > tops[b].bytes
+					}
+					return tops[a].bytes < tops[b].bytes
+				}
+			case layerSortParams:
+				if tops[a].params != tops[b].params {
+					if s.sortDesc {
+						return tops[a].params > tops[b].params
+					}
+					return tops[a].params < tops[b].params
+				}
+			default:
+				na, nb := strings.ToLower(tops[a].name), strings.ToLower(tops[b].name)
+				if na != nb {
+					if s.sortDesc {
+						return na > nb
+					}
+					return na < nb
+				}
+			}
+			return a < b
+		})
+	}
+	if s.sortBy != layerSortIndex && len(layers) > 1 {
+		sort.SliceStable(layers, func(a, b int) bool {
+			ga, gb := m.Groups[layers[a]], m.Groups[layers[b]]
+			switch s.sortBy {
+			case layerSortSize:
+				if ga.Bytes != gb.Bytes {
+					if s.sortDesc {
+						return ga.Bytes > gb.Bytes
+					}
+					return ga.Bytes < gb.Bytes
+				}
+			case layerSortParams:
+				if ga.LogicalParams != gb.LogicalParams {
+					if s.sortDesc {
+						return ga.LogicalParams > gb.LogicalParams
+					}
+					return ga.LogicalParams < gb.LogicalParams
+				}
+			default:
+				na, nb := strings.ToLower(ga.Key), strings.ToLower(gb.Key)
+				if na != nb {
+					if s.sortDesc {
+						return na > nb
+					}
+					return na < nb
+				}
+			}
+			return layers[a] < layers[b]
+		})
+	}
+	for j, tp := range tops {
+		if len(s.rows) >= visibleMax {
+			return
+		}
+		last := j == len(tops)-1
+		if tp.dec {
+			s.walkDecoder(m, layers, 0, 0, last)
+			continue
+		}
+		s.walkGroup(m, tp.gidx, 0, 0, last, "")
+	}
+}
+
+func (s *layersState) layerVisible(m *model.Model, g *model.Group) bool {
+	if g == nil {
+		return false
+	}
+	if s.keep != nil && !s.keep[groupPath(g)] {
+		// A child match (tensor path) still keeps the group via ancestor trim.
+		return false
+	}
+	if s.attn != attnAll && s.info != nil {
+		info := s.info[g.Layer]
+		switch s.attn {
+		case attnLinear:
+			if info.Short == "full" {
+				return false
+			}
+		case attnFull:
+			if info.Short != "full" {
+				return false
 			}
 		}
-		for j, i := range idxs {
-			if len(s.rows) >= visibleMax {
-				return
-			}
-			s.walkGroup(m, i, 0, 0, j == len(idxs)-1 && hidden == 0)
+	}
+	if s.outliers && !s.groupOutlier(g) {
+		return false
+	}
+	return true
+}
+
+func (s *layersState) groupVisible(g *model.Group) bool {
+	if g == nil {
+		return false
+	}
+	if s.keep != nil && !s.keep[groupPath(g)] {
+		return false
+	}
+	if s.outliers && !s.groupOutlier(g) {
+		return false
+	}
+	return true
+}
+
+func (s *layersState) groupOutlier(g *model.Group) bool {
+	if g == nil {
+		return false
+	}
+	if g.Key == "ngram" {
+		return true
+	}
+	if s.big[g.Key] {
+		return true
+	}
+	for _, tensor := range g.Tensors {
+		if tensor != nil && s.diamT[tensor.Name] {
+			return true
 		}
-		if hidden > 0 && len(s.rows) < visibleMax {
-			s.rows = append(s.rows, lrow{kind: rowMore, hidden: true, hideN: hidden, depth: 0, last: true, path: "/hidden", gidx: -1})
-		}
+	}
+	return false
+}
+
+func (s *layersState) walkDecoder(m *model.Model, layers []int, depth int, anc uint32, last bool) {
+	path := "dec"
+	if len(s.rows) >= visibleMax {
 		return
 	}
-	s.addIndexed(m, "", order, 0, 0, func(i int, depth int, anc uint32, last bool) {
-		s.walkGroup(m, i, depth, anc, last)
+	s.rows = append(s.rows, lrow{
+		kind: rowGroup, path: path, gidx: -1, depth: depth, anc: anc, last: last,
+		match: s.matches[path],
+	})
+	if !s.isOpen(path) {
+		return
+	}
+	nextAnc := anc
+	if depth < 31 && last {
+		nextAnc |= 1 << uint(depth)
+	}
+	s.addIndexed(m, path, layers, depth+1, nextAnc, func(i int, depth int, anc uint32, last bool) {
+		s.walkGroup(m, i, depth, anc, last, path)
 	})
 }
 
@@ -360,7 +559,7 @@ func (s *layersState) span(path string, total, threshold int) (start, count int,
 	return w.start, w.n, true
 }
 
-func (s *layersState) walkGroup(m *model.Model, gidx int, depth int, anc uint32, last bool) {
+func (s *layersState) walkGroup(m *model.Model, gidx int, depth int, anc uint32, last bool, parent string) {
 	if gidx < 0 || gidx >= len(m.Groups) || m.Groups[gidx] == nil {
 		return
 	}
@@ -370,7 +569,7 @@ func (s *layersState) walkGroup(m *model.Model, gidx int, depth int, anc uint32,
 		return
 	}
 	s.rows = append(s.rows, lrow{
-		kind: rowGroup, path: path, gidx: gidx, depth: depth, anc: anc, last: last,
+		kind: rowGroup, path: path, parent: parent, gidx: gidx, depth: depth, anc: anc, last: last,
 		match: s.matches[path],
 	})
 	if !s.isOpen(path) {
@@ -382,7 +581,7 @@ func (s *layersState) walkGroup(m *model.Model, gidx int, depth int, anc uint32,
 	}
 	packs := s.packs(m, gidx)
 	if g.Kind == model.KindLayer && len(packs) > 1 {
-		s.addPacks(m, gidx, path, packs, depth+1, nextAnc)
+		s.addLayerKids(m, gidx, path, packs, depth+1, nextAnc)
 		return
 	}
 	var rows []model.LogicalTensor
@@ -392,6 +591,79 @@ func (s *layersState) walkGroup(m *model.Model, gidx int, depth int, anc uint32,
 		sub = ""
 	}
 	s.addTensors(path, sub, rows, depth+1, nextAnc)
+}
+
+func (s *layersState) addLayerKids(m *model.Model, gidx int, parent string, packs []tensorPack, depth int, anc uint32) {
+	var moe []tensorPack
+	var rest []tensorPack
+	for _, p := range packs {
+		switch p.sub {
+		case "router", "shared", "experts":
+			moe = append(moe, p)
+		default:
+			rest = append(rest, p)
+		}
+	}
+	type kid struct {
+		moe  bool
+		pack *tensorPack
+	}
+	var kids []kid
+	for i := range rest {
+		if rest[i].sub == "attn" {
+			kids = append(kids, kid{pack: &rest[i]})
+		}
+	}
+	if len(moe) > 0 {
+		kids = append(kids, kid{moe: true})
+	}
+	for i := range rest {
+		if rest[i].sub != "attn" {
+			kids = append(kids, kid{pack: &rest[i]})
+		}
+	}
+	for j, k := range kids {
+		if len(s.rows) >= visibleMax {
+			return
+		}
+		last := j == len(kids)-1
+		if k.moe {
+			s.walkMoe(m, gidx, parent, moe, depth, anc, last)
+			continue
+		}
+		s.walkSub(m, gidx, parent, *k.pack, depth, anc, last)
+	}
+}
+
+func (s *layersState) walkMoe(m *model.Model, gidx int, parent string, packs []tensorPack, depth int, anc uint32, last bool) {
+	path := parent + "/s:moe"
+	if s.keep != nil && !s.keep[path] {
+		// Still show moe when a child part matched and the keep set named it.
+		child := false
+		for _, p := range packs {
+			if s.keep[parent+"/s:"+p.sub] || s.keep[path+"/s:"+p.sub] {
+				child = true
+			}
+		}
+		if !child {
+			return
+		}
+	}
+	if len(s.rows) >= visibleMax {
+		return
+	}
+	s.rows = append(s.rows, lrow{
+		kind: rowSub, path: path, parent: parent, gidx: gidx, sub: "moe",
+		depth: depth, anc: anc, last: last, match: s.matches[path],
+	})
+	if !s.isOpen(path) {
+		return
+	}
+	nextAnc := anc
+	if depth < 31 && last {
+		nextAnc |= 1 << uint(depth)
+	}
+	s.addPacks(m, gidx, path, packs, depth+1, nextAnc)
 }
 
 func (s *layersState) addPacks(m *model.Model, gidx int, parent string, packs []tensorPack, depth int, anc uint32) {
@@ -541,6 +813,8 @@ func (s *layersState) packs(m *model.Model, gidx int) []tensorPack {
 	var out []tensorPack
 	if m == nil || gidx < 0 || gidx >= len(m.Groups) || m.Groups[gidx] == nil {
 		out = nil
+	} else if s.parts {
+		out = storedPacks(m.Groups[gidx])
 	} else {
 		g := m.Groups[gidx]
 		logical := g.LogicalTensors(m)
@@ -577,6 +851,71 @@ func (s *layersState) packs(m *model.Model, gidx int) []tensorPack {
 	return out
 }
 
+func storedPacks(g *model.Group) []tensorPack {
+	if g == nil {
+		return nil
+	}
+	if g.Kind != model.KindLayer {
+		var rows []model.LogicalTensor
+		for _, tensor := range g.Tensors {
+			if tensor != nil {
+				rows = append(rows, storedLogical(tensor))
+			}
+		}
+		return []tensorPack{{rows: rows}}
+	}
+	buckets := map[string][]model.LogicalTensor{}
+	var seenOrder []string
+	for _, tensor := range g.Tensors {
+		if tensor == nil {
+			continue
+		}
+		sub, _ := model.Sublayer(tensor.Name)
+		if _, ok := buckets[sub]; !ok {
+			seenOrder = append(seenOrder, sub)
+		}
+		buckets[sub] = append(buckets[sub], storedLogical(tensor))
+	}
+	var out []tensorPack
+	used := map[string]bool{}
+	for _, name := range subOrder {
+		if rows, ok := buckets[name]; ok {
+			out = append(out, tensorPack{sub: name, rows: rows})
+			used[name] = true
+		}
+	}
+	for _, name := range seenOrder {
+		if !used[name] {
+			out = append(out, tensorPack{sub: name, rows: buckets[name]})
+		}
+	}
+	return out
+}
+
+func storedLogical(t *model.Tensor) model.LogicalTensor {
+	role := "plain"
+	switch t.Role {
+	case model.RoleQuantWeight:
+		if t.Bits > 0 {
+			role = fmt.Sprintf("q%d", t.Bits)
+		} else {
+			role = "q"
+		}
+	case model.RoleQuantScales:
+		role = "qscal"
+	case model.RoleQuantBiases:
+		role = "qbias"
+	}
+	n := t.ByteLen()
+	if n < 0 {
+		n = 0
+	}
+	return model.LogicalTensor{
+		Name: t.Name, FullName: t.Name, DType: t.DType, Shape: t.Shape,
+		Shards: 1, Bytes: n, Params: t.LogicalParams, Role: role, Shard: t.Shard,
+	}
+}
+
 func (s *layersState) prep(m *model.Model) {
 	if s.prepped || m == nil {
 		return
@@ -590,6 +929,44 @@ func (s *layersState) prep(m *model.Model) {
 		}
 		if unexpectedPrecision(m, t) {
 			s.diamT[t.Name] = true
+		}
+	}
+	s.perTok = 0
+	for _, kv := range m.KeyConfig() {
+		if kv.Key != "num_experts_per_tok" {
+			continue
+		}
+		switch n := kv.Value.(type) {
+		case int:
+			s.perTok = n
+		case int64:
+			s.perTok = int(n)
+		case float64:
+			s.perTok = int(n)
+		}
+	}
+	s.noteSizeOutliers(m)
+}
+
+func (s *layersState) noteSizeOutliers(m *model.Model) {
+	s.big = map[string]bool{}
+	var vals []int64
+	for _, g := range m.Groups {
+		if g != nil && g.Kind == model.KindLayer && g.Bytes > 0 {
+			vals = append(vals, g.Bytes)
+		}
+	}
+	if len(vals) == 0 {
+		return
+	}
+	sort.Slice(vals, func(a, b int) bool { return vals[a] < vals[b] })
+	med := vals[len(vals)/2]
+	if med <= 0 || med > (1<<62)/3 {
+		return
+	}
+	for _, g := range m.Groups {
+		if g != nil && g.Kind == model.KindLayer && g.Bytes > 3*med {
+			s.big[g.Key] = true
 		}
 	}
 }
@@ -700,10 +1077,20 @@ func (t *Model) layersEnter(all bool) {
 		return
 	}
 	if row.kind == rowTensor {
+		br := ui.Breakpoint(t.width, t.height)
+		if br == "S" || br == "XS" {
+			s.drill = true
+		} else {
+			t.focusSecondary = true
+		}
+		t.touchLayers()
 		return
 	}
 	open := s.isOpen(row.path)
 	s.setOpen(row.path, !open)
+	if !open && row.kind == rowGroup && row.gidx >= 0 {
+		s.expanded[row.path+"/s:moe"] = true
+	}
 	s.ensure(t.m)
 	t.clampLayers()
 	t.touchLayers()
@@ -722,6 +1109,9 @@ func (t *Model) layersExpand() {
 	}
 	if row.kind != rowTensor && !s.isOpen(row.path) && t.layerKids(row) {
 		s.setOpen(row.path, true)
+		if row.kind == rowGroup && row.gidx >= 0 {
+			s.expanded[row.path+"/s:moe"] = true
+		}
 		s.ensure(t.m)
 		t.clampLayers()
 		t.touchLayers()
@@ -785,6 +1175,9 @@ func groupKeyPath(path string) string {
 }
 
 func (t Model) layerKids(row lrow) bool {
+	if row.path == "dec" || row.sub == "moe" {
+		return true
+	}
 	if t.m == nil || row.gidx < 0 || row.gidx >= len(t.m.Groups) {
 		return false
 	}
@@ -823,12 +1216,15 @@ func (t *Model) layersExpandAll() {
 		return
 	}
 	s := t.lay
-	s.ensure(t.m)
+	s.setOpen("dec", true)
 	for _, g := range t.m.Groups {
 		if g == nil || len(g.Tensors) > expandArrMax {
 			continue
 		}
 		s.setOpen(groupPath(g), true)
+		if g.Kind == model.KindLayer {
+			s.setOpen(groupPath(g)+"/s:moe", true)
+		}
 	}
 	s.ensure(t.m)
 	// Open visible subs with a modest child count. A second pass picks up
@@ -942,18 +1338,59 @@ func (t *Model) layersCycleSort() {
 	switch s.sortBy {
 	case layerSortIndex:
 		s.sortBy, s.sortDesc = layerSortSize, true
-		t.notice = "sort: size"
 	case layerSortSize:
+		s.sortBy, s.sortDesc = layerSortParams, true
+	case layerSortParams:
 		s.sortBy, s.sortDesc = layerSortName, false
-		t.notice = "sort: name"
 	default:
 		s.sortBy, s.sortDesc = layerSortIndex, false
-		t.notice = "sort: index"
 	}
+	t.notice = "sort: " + t.sortTitle()
 	s.dirty = true
 	s.ensure(t.m)
 	t.clampLayers()
 	t.touchLayers()
+}
+
+func (t *Model) layersReverseSort() {
+	if t.lay == nil {
+		return
+	}
+	t.lay.sortDesc = !t.lay.sortDesc
+	t.notice = "sort: " + t.sortTitle()
+	t.lay.dirty = true
+	t.lay.ensure(t.m)
+	t.clampLayers()
+	t.touchLayers()
+}
+
+func (t Model) sortTitle() string {
+	if t.lay == nil {
+		return "natural"
+	}
+	name := "natural"
+	switch t.lay.sortBy {
+	case layerSortSize:
+		name = "bytes"
+	case layerSortParams:
+		name = "params"
+	case layerSortName:
+		name = "name"
+	}
+	arrow := ""
+	if t.lay.sortBy != layerSortIndex {
+		arrow = " ↓"
+		if !t.lay.sortDesc {
+			arrow = " ↑"
+		}
+		if !ui.UTF8() {
+			arrow = " v"
+			if !t.lay.sortDesc {
+				arrow = " ^"
+			}
+		}
+	}
+	return name + arrow
 }
 
 func (t Model) updateLayersSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1098,7 +1535,12 @@ func (t *Model) runLayerSearch() {
 			parent := gp
 			if multi {
 				parent = gp + "/s:" + p.sub
-				if layerHit(mode, sub, subLabel(p.sub).String(), "") {
+				switch p.sub {
+				case "router", "shared", "experts":
+					parent = gp + "/s:moe/s:" + p.sub
+					s.noteMatch(gp + "/s:moe")
+				}
+				if layerHit(mode, sub, subLabel(p.sub).String(), "") || layerHit(mode, sub, subLabel("moe").String(), "") {
 					s.noteMatch(parent)
 				}
 			}
@@ -1187,11 +1629,145 @@ func (t Model) layersCloseTop() bool {
 	if s == nil {
 		return false
 	}
+	if s.jump {
+		s.jump = false
+		s.jumpQ = ""
+		t.touchLayers()
+		return true
+	}
+	if s.drill {
+		s.drill = false
+		t.touchLayers()
+		return true
+	}
 	if s.search || s.query != "" || s.filter {
 		t.clearLayerSearch()
 		return true
 	}
 	return false
+}
+
+func (t Model) layersJumping() bool {
+	return t.active == tabLayers && t.lay != nil && t.lay.jump
+}
+
+func (t Model) updateLayersJump(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	s := t.lay
+	switch msg.String() {
+	case "ctrl+c":
+		return t, tea.Quit
+	case "esc":
+		s.jump = false
+		s.jumpQ = ""
+		t.touchLayers()
+		return t, nil
+	case "enter":
+		t.commitLayerJump()
+		return t, nil
+	case "backspace":
+		r := []rune(s.jumpQ)
+		if len(r) > 0 {
+			s.jumpQ = string(r[:len(r)-1])
+		}
+		t.touchLayers()
+		return t, nil
+	default:
+		if msg.Type == tea.KeyRunes {
+			for _, r := range msg.Runes {
+				if r < '0' || r > '9' {
+					continue
+				}
+				if len(s.jumpQ) < 8 {
+					s.jumpQ += string(r)
+				}
+			}
+			t.touchLayers()
+		}
+		return t, nil
+	}
+}
+
+func (t *Model) commitLayerJump() {
+	s := t.lay
+	s.jump = false
+	n, err := strconv.Atoi(s.jumpQ)
+	s.jumpQ = ""
+	if err != nil || t.m == nil {
+		t.touchLayers()
+		return
+	}
+	s.expanded["dec"] = true
+	for _, g := range t.m.Groups {
+		if g != nil && g.Kind == model.KindLayer && g.Layer == n {
+			s.expanded[groupPath(g)] = true
+			s.cursorPath = groupPath(g)
+			break
+		}
+	}
+	s.dirty = true
+	s.ensure(t.m)
+	t.clampLayers()
+	t.touchLayers()
+}
+
+func (t *Model) layersToggleOutliers() {
+	if t.lay == nil {
+		return
+	}
+	t.lay.outliers = !t.lay.outliers
+	t.lay.dirty = true
+	if t.lay.outliers {
+		t.notice = "outliers"
+	} else {
+		t.notice = "all rows"
+	}
+	t.lay.ensure(t.m)
+	t.clampLayers()
+	t.touchLayers()
+}
+
+func (t *Model) layersCycleAttn() {
+	if t.lay == nil {
+		return
+	}
+	t.lay.attn = (t.lay.attn + 1) % 3
+	t.lay.dirty = true
+	switch t.lay.attn {
+	case attnLinear:
+		t.notice = "attention: linear"
+	case attnFull:
+		t.notice = "attention: full"
+	default:
+		t.notice = "attention: all"
+	}
+	t.lay.ensure(t.m)
+	t.clampLayers()
+	t.touchLayers()
+}
+
+func (t *Model) layersToggleParts() {
+	if t.lay == nil {
+		return
+	}
+	t.lay.parts = !t.lay.parts
+	t.lay.dirty = true
+	if t.lay.parts {
+		t.notice = "parts mode"
+	} else {
+		t.notice = "logical tensors"
+	}
+	t.lay.ensure(t.m)
+	t.clampLayers()
+	t.touchLayers()
+}
+
+func (t *Model) openLayerJump() {
+	if t.lay == nil {
+		return
+	}
+	t.lay.jump = true
+	t.lay.jumpQ = ""
+	t.touchLayers()
 }
 
 func (t Model) updateLayersKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1266,6 +1842,26 @@ func (t Model) updateLayersKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "s":
 		if tree {
 			t.layersCycleSort()
+		}
+	case "S":
+		if tree {
+			t.layersReverseSort()
+		}
+	case "o":
+		if tree {
+			t.layersToggleOutliers()
+		}
+	case "t":
+		if tree {
+			t.layersCycleAttn()
+		}
+	case "x":
+		if tree {
+			t.layersToggleParts()
+		}
+	case "#":
+		if tree {
+			t.openLayerJump()
 		}
 	case "esc":
 		if !t.layersCloseTop() && tree {
@@ -1393,8 +1989,14 @@ func (t Model) layersMode() string {
 		return "FILTER"
 	}
 	br := ui.Breakpoint(t.width, t.height)
-	if (br == "M" || br == "L") && !t.zoom && t.focusSecondary {
-		return "LAYERS" + cfgSep() + "DETAIL"
+	if s.jump {
+		return "JUMP"
+	}
+	if s.drill || ((br == "M" || br == "L") && !t.zoom && t.focusSecondary) {
+		return "DETAIL"
+	}
+	if t.layersTreeOn() {
+		return "LAYERS" + cfgSep() + "TREE"
 	}
 	return "LAYERS"
 }
@@ -1409,9 +2011,9 @@ func (t Model) layersHintSegs() []string {
 	}
 	if t.layersTreeOn() {
 		if ui.UTF8() {
-			return []string{"←→ fold", "␣ toggle", "/ search", "y/Y copy"}
+			return []string{"←→ fold", "␣ toggle", "s sort", "o outliers", "t attn"}
 		}
-		return []string{"h/l fold", "space toggle", "/ search", "y/Y copy"}
+		return []string{"h/l fold", "space toggle", "s sort", "o outliers", "t attn"}
 	}
 	if ui.UTF8() {
 		return []string{"↑↓ move", "w tree", "? keys"}
@@ -1423,6 +2025,23 @@ func (t Model) layersClick(id string, double bool) tea.Model {
 	if t.lay == nil {
 		return t
 	}
+	if strings.HasPrefix(id, "lay:strip:") {
+		n, err := strconv.Atoi(strings.TrimPrefix(id, "lay:strip:"))
+		if err != nil {
+			return t
+		}
+		t.lay.jumpQ = strconv.Itoa(n)
+		t.commitLayerJump()
+		return t
+	}
+	if strings.HasPrefix(id, "lay:col:") {
+		t.layersSortColumn(strings.TrimPrefix(id, "lay:col:"))
+		return t
+	}
+	exp := strings.HasPrefix(id, "lay:exp:")
+	if exp {
+		id = "lay:" + strings.TrimPrefix(id, "lay:exp:")
+	}
 	var i int
 	if _, err := fmt.Sscanf(id, "lay:%d", &i); err != nil {
 		return t
@@ -1433,11 +2052,46 @@ func (t Model) layersClick(id string, double bool) tea.Model {
 		t.lay.row = i
 	}
 	t.clampLayers()
+	if exp {
+		t.layersToggle()
+		return t
+	}
 	if double {
 		t.layersEnter(false)
 	}
 	t.touchLayers()
 	return t
+}
+
+func (t *Model) layersSortColumn(col string) {
+	if t.lay == nil {
+		return
+	}
+	s := t.lay
+	var next int
+	desc := true
+	switch col {
+	case "bytes":
+		next = layerSortSize
+	case "params":
+		next = layerSortParams
+	case "name":
+		next = layerSortName
+		desc = false
+	default:
+		return
+	}
+	if s.sortBy == next {
+		s.sortDesc = !s.sortDesc
+	} else {
+		s.sortBy = next
+		s.sortDesc = desc
+	}
+	t.notice = "sort: " + t.sortTitle()
+	s.dirty = true
+	s.ensure(t.m)
+	t.clampLayers()
+	t.touchLayers()
 }
 
 func unexpectedPrecision(m *model.Model, t *model.Tensor) bool {
@@ -1495,13 +2149,15 @@ func routerOrGate(name string) bool {
 func subLabel(sub string) sanitize.Text {
 	switch sub {
 	case "attn":
-		return ui.L("attention")
+		return ui.L("attn")
+	case "moe":
+		return ui.L("moe")
 	case "router":
 		return ui.L("router")
 	case "shared":
-		return ui.L("shared exp")
+		return ui.L("shared expert")
 	case "experts":
-		return ui.L("routed exp")
+		return ui.L("routed experts")
 	case "norms":
 		return ui.L("norms")
 	case "hyper":
@@ -1518,7 +2174,14 @@ func (t Model) layerGroupLabel(g *model.Group) sanitize.Text {
 		return sanitize.Program("")
 	}
 	if g.Key == "ngram" {
-		return ui.L("n-gram table (PLE)")
+		label := "n-gram table (PLE)"
+		if mark := t.ngramMark(g); mark != "" {
+			label += " " + mark + " shards"
+		}
+		return sanitize.Program(label)
+	}
+	if g.Kind == model.KindLayer {
+		return sanitize.Program(strconv.Itoa(g.Layer))
 	}
 	if t.lay == nil {
 		return sanitize.From(g.Key)
@@ -1544,11 +2207,21 @@ func (t Model) layerTensorLabel(g *model.Group, row model.LogicalTensor) sanitiz
 	}
 	if g != nil && g.Kind == model.KindLayer {
 		name = model.ShortName(name)
+	} else {
+		name = tailName(name)
 	}
 	if t.lay == nil {
 		return sanitize.From(name)
 	}
 	return t.lay.once(name)
+}
+
+func tailName(name string) string {
+	parts := strings.Split(name, ".")
+	if len(parts) <= 2 {
+		return name
+	}
+	return strings.Join(parts[len(parts)-2:], ".")
 }
 
 func tensorBadge(row model.LogicalTensor) string {

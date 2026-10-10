@@ -52,16 +52,16 @@ func TestLayersViewKeepsHyperConnectionTogether(t *testing.T) {
 
 	hyper := drill(t, layers.(Model), m, "hyper_connection")
 	for _, name := range []string{
-		"hyper_connection_mixer.input_mix_weight_up.weight",
-		"hyper_connection_mixer.input_mix_weight_down.weight",
-		"hyper_connection_mixer.hc_norm.weight",
+		"input_mix_weight_up.weight",
+		"input_mix_weight_down.weight",
+		"hc_norm.weight",
 	} {
 		if !strings.Contains(hyper, name) {
 			t.Errorf("hyper group view missing %s\n%s", name, hyper)
 		}
 	}
 	norms := drill(t, layers.(Model), m, "norms")
-	if !strings.Contains(norms, "model.norm.weight") {
+	if !strings.Contains(norms, "norm.weight") {
 		t.Fatalf("norms view = %s", norms)
 	}
 	if strings.Contains(norms, "hyper_connection_mixer") {

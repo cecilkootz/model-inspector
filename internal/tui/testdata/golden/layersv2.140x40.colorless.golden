@@ -1,27 +1,25 @@
 model-inspector  1 Identity 2 Config [3 Layers] 4 Scan ✗1                                                   ? keys   : commands   m mouse on
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  [ LAYERS ]  7 groups                                                       s sort      DETAIL                                      576 B  
-  >▸ embeddings                                                          q4 · 576 B      embeddings                                         
-   ▸ n-gram table (PLE)                                      q4 · ⌂ ×3 · 300.00 KiB      [q4]                                               
-   ▸ layer 0                                  lin · 4 exp · q2+q4+q8 · ◆ · 1.61 KiB                                                         
-   ▸ layer 1                                              full · 2 exp · q4 · 432 B      group    embeddings                                
-   ▸ norms                                                              bf16 · 16 B      kind     embeddings                                
-   ▸ hyper_connection                                                   bf16 · 32 B      tensors  2                                         
-   ▸ lm_head                                                           bf16 · 128 B      bytes    576 B                                     
-                                                                                                                                            
-                                                                                         ██▊                       11%                      
-                                                                                                                                            
-                                                                                         contains                                           
-                                                                                         language_model.model.embed_tokens.scales           
-                                                                                         language_model.model.embed_tokens.weight           
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
-                                                                                                                                            
+BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2× · per-layer totals differ by 344.4%                        
+            ○ ●  ●                                                                                                                          
+attention   ░░·· ··  288 B  flat                                                                                                            
+router      ░░·· ··  272 B  flat                                                                                                            
+shared exp  ···· ··  ·                                                                                                                      
+routed exp  ░░░░ ··  +86% ● 288 B-720 B                                                                                                     
+norms       ···· ··  ·                                                                                                                      
+256 B  <64K ▒ <4M ▓ <256M █  1.0 KiB  ○ linear  ● full  per-layer totals differ by 344.4%                                                   
+excludes ple 300.00 KiB · excludes hyper 48 B · other 496 B not in the grid                                                                 
+  [ TREE ]                                                            sort: natural      DETAIL                                      576 B  
+  NAME                         DTYPE      TYPE         vs siblin… BYTES       %   …      embeddings                                         
+  >▸ embeddings                [q4 g32]                ▏          576 B       0.2%…                                                         
+   ▸ n-gram table (PLE) ⌂ ×3 … [q4 g32]   ⌂ ×3         ██████████ 300.00 KiB  99.1…      TENSORS  2                                         
+   ▾ decoder layers 2          [q2+q4+q8] 1○ 1●        ▏          2.03 KiB    0.7%…      BYTES  576 B                                       
+   ├▸ 0                        [q2+q4+q8] ○ 4·2 ◆      ██████████ 1.61 KiB    0.5%…      PARAMS  1.0K                                       
+   └▸ 1                        [q4 g32]   ● 2·2        ██▋        432 B       0.1%…      DTYPE  q4 g32                                      
+   ▸ norms                     [bf16]                  ▏          16 B        <0.1…                                                         
+   ▸ hyper_connection          [bf16]                  ▏          32 B        <0.1…      contains                                           
+   ▸ lm_head                   [bf16]                  ▏          128 B       <0.1…      embed_tokens.scales                                
+                                                                                         embed_tokens.weight                                
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
@@ -37,4 +35,6 @@ model-inspector  1 Identity 2 Config [3 Layers] 4 Scan ✗1                     
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
-LAYERS │ /model │ ←→ fold │ ␣ toggle │ / search │ y/Y copy                safetensors·mlx │ 5.00 KiB │ q4 g32 +1 │ ✗ 1 fail │ – headers-only
+                                                                                                                                            
+                                                                                                                                            
+LAYERS · TREE │ /model │ ←→ fold │ ␣ toggle │ s sort │ o outliers │ t attn │ safetensors·mlx │ 5.00 KiB │ q4 g32 +1 │ ✗ 1 fail │ – headers-o

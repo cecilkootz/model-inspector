@@ -323,6 +323,13 @@ func (t Model) commands() []ui.Match {
 			ui.Match{ID: "lay-search", Title: ui.S(ui.L("Layers: search")), Key: ui.S(ui.L("/")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 2, Enable: true},
 			ui.Match{ID: "lay-path", Title: ui.S(ui.L("Layers: copy name")), Key: ui.S(ui.L("y")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 3, Enable: true},
 			ui.Match{ID: "lay-value", Title: ui.S(ui.L("Layers: copy value")), Key: ui.S(ui.L("Y")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 4, Enable: true},
+			ui.Match{ID: "lay-sort-params", Title: ui.S(ui.L("Layers: sort by params")), Key: ui.S(ui.L("s")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 5, Enable: true},
+			ui.Match{ID: "lay-sort-name", Title: ui.S(ui.L("Layers: sort by name")), Key: ui.S(ui.L("s")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 6, Enable: true},
+			ui.Match{ID: "lay-sort-natural", Title: ui.S(ui.L("Layers: sort by natural")), Key: ui.S(ui.L("s")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 7, Enable: true},
+			ui.Match{ID: "lay-outliers", Title: ui.S(ui.L("Layers: outliers only")), Key: ui.S(ui.L("o")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 8, Enable: true},
+			ui.Match{ID: "lay-attn", Title: ui.S(ui.L("Layers: attention filter")), Key: ui.S(ui.L("t")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 9, Enable: true},
+			ui.Match{ID: "lay-parts", Title: ui.S(ui.L("Layers: parts mode")), Key: ui.S(ui.L("x")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 10, Enable: true},
+			ui.Match{ID: "lay-jump", Title: ui.S(ui.L("Layers: jump to layer…")), Key: ui.S(ui.L("#")), Where: ui.S(ui.L("in Layers")), Order: len(out) + 11, Enable: true},
 		)
 	}
 	return out
@@ -382,6 +389,21 @@ func (t *Model) runCommand(id string) tea.Cmd {
 	case "lay-value":
 		t.active = tabLayers
 		t.copyLayers(true)
+	case "lay-sort-params", "lay-sort-name", "lay-sort-natural":
+		t.active = tabLayers
+		t.layersCycleSort()
+	case "lay-outliers":
+		t.active = tabLayers
+		t.layersToggleOutliers()
+	case "lay-attn":
+		t.active = tabLayers
+		t.layersCycleAttn()
+	case "lay-parts":
+		t.active = tabLayers
+		t.layersToggleParts()
+	case "lay-jump":
+		t.active = tabLayers
+		t.openLayerJump()
 	case "cfg-expand":
 		t.active = tabConfig
 		t.focusSecondary = true
