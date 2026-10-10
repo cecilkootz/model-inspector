@@ -38,7 +38,12 @@ func renderIdentity(m *model.Model, width int) string {
 		add(indent("text-only ≥ " + model.HumanBytes(mem.TextOnlyBytes)))
 	}
 	if mem.HostCapableBytes >= model.GiB {
-		add(indent(g.host + " of which " + model.HumanBytes(mem.HostCapableBytes) + " are lookup tables that can stay in CPU RAM"))
+		bytes := model.HumanBytes(mem.HostCapableBytes)
+		line := g.host + " of which " + bytes + " are lookup tables that can stay in CPU RAM"
+		if mem.HostCapablePartial {
+			line = g.host + " of which ≥ " + bytes + " are lookup tables that can stay in CPU RAM (incomplete)"
+		}
+		add(indent(line))
 		add(indent("  (heuristic) → ≥ " + model.HumanBytes(mem.AcceleratorMinBytes) + " on the GPU/accelerator"))
 	}
 	if mem.UnifiedMemory {
@@ -201,19 +206,19 @@ func sizeValue(m *model.Model) string {
 
 func paramsValue(m *model.Model) string {
 	s := fmt.Sprintf("~%s dequantized est.", model.HumanCount(m.TotalLogicalParams))
-	var best *model.Tensor
-	for _, t := range m.Tensors {
-		if best == nil || t.LogicalParams > best.LogicalParams {
-			best = t
-		}
+	if m.TotalLogicalParams <= 0 {
+		return s
 	}
-	if best != nil && m.TotalLogicalParams > 0 && best.LogicalParams*10 >= m.TotalLogicalParams {
-		lower := strings.ToLower(best.Name)
-		if strings.Contains(lower, "ngram") || strings.Contains(lower, "n_gram") {
-			s += fmt.Sprintf(" (~%s in one n-gram table)", model.HumanCount(best.LogicalParams))
-		} else {
-			s += " (" + model.ShortName(best.Name) + ")"
-		}
+	// Shard pieces of one lookup table are summed before the 10% check.
+	name, params, ngram := m.NotableParams()
+	if params*10 < m.TotalLogicalParams {
+		return s
+	}
+	if ngram {
+		return s + fmt.Sprintf(" (~%s in one n-gram table)", model.HumanCount(params))
+	}
+	if name != "" {
+		return s + " (" + model.ShortName(name) + ")"
 	}
 	return s
 }

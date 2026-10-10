@@ -165,7 +165,7 @@ func TestStorageLabel(t *testing.T) {
 }
 
 func TestCodeExecSuffixes(t *testing.T) {
-	yes := []string{"a.bin", "a.pt", "a.pth", "a.ckpt", "a.tar", "a.bin.gz", "a.pt.gz", "a.pkl.gz", "m.pt.zip", "m.ckpt.zip", "m.pth.tar", "dir/m.PTH.TAR"}
+	yes := []string{"a.bin", "a.pt", "a.pth", "a.ckpt", "a.tar", "a.tgz", "a.bin.gz", "a.pt.gz", "a.pkl.gz", "a.tar.gz", "m.pt.zip", "m.ckpt.zip", "m.pth.tar", "m.pth.zip", "m.bin.zip", "dir/m.PTH.TAR", "dir/m.TAR.GZ"}
 	no := []string{"m.onnx", "m.msgpack", "m.safetensors", "m.zip", "m.gz", "m.pt.onnx"}
 	for _, name := range yes {
 		if !codeExecName(name) {

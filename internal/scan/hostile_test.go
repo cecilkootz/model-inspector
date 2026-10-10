@@ -148,7 +148,7 @@ func TestUnreferencedShardIsChecked(t *testing.T) {
 	if bounds.Status == StatusSkip {
 		t.Fatal("extra shard was not examined")
 	}
-	if bounds.Status == StatusPass && !strings.Contains(bounds.Summary, "2 ranges") {
+	if !strings.Contains(bounds.Summary, "2 ranges") {
 		t.Fatalf("extra tensor was not examined: %s", bounds.Summary)
 	}
 	indexCheck := checkID(t, m, CheckIndex)

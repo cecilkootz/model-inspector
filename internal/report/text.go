@@ -16,8 +16,12 @@ func Text(d Document) string {
 	var b strings.Builder
 	writeIdentity(&b, d)
 	writeWrapped(&b, "format", formatLine(d))
-	writeWrapped(&b, "on disk", fmt.Sprintf("%s in %s files (%d shards) · %s tensors",
-		model.HumanBytes(d.Files.TotalBytes), model.Comma(int64(d.Files.Count)), d.Files.ShardCount, model.Comma(int64(d.Tensors.Count))))
+	disk := fmt.Sprintf("%s in %s files (%d shards) · %s tensors",
+		model.HumanBytes(d.Files.TotalBytes), model.Comma(int64(d.Files.Count)), d.Files.ShardCount, model.Comma(int64(d.Tensors.Count)))
+	if d.Partial {
+		disk += " (incomplete)"
+	}
+	writeWrapped(&b, "on disk", disk)
 	writeWrapped(&b, "params", fmt.Sprintf("~%s (dequantized est.; quant scales/biases excluded)", model.HumanCount(d.Tensors.ParamsEst)))
 	if line := layerLine(d); line != "" {
 		writeWrapped(&b, "layers", line)
@@ -137,7 +141,12 @@ func memoryLine(d Document) string {
 		parts = append(parts, fmt.Sprintf("text-only ≥ %s", model.HumanBytes(d.Memory.TextOnlyBytes)))
 	}
 	if d.Memory.HostCapableBytes >= model.GiB {
-		parts = append(parts, fmt.Sprintf("of which %s lookup tables can stay in CPU RAM (heuristic)", model.HumanBytes(d.Memory.HostCapableBytes)))
+		label := model.HumanBytes(d.Memory.HostCapableBytes)
+		line := fmt.Sprintf("of which %s lookup tables can stay in CPU RAM (heuristic)", label)
+		if d.Memory.HostPartial {
+			line = fmt.Sprintf("of which ≥ %s lookup tables can stay in CPU RAM (heuristic, incomplete)", label)
+		}
+		parts = append(parts, line)
 	}
 	if d.Memory.UnifiedMemory {
 		parts = append(parts, "unified memory (MLX): total unchanged")

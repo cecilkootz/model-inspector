@@ -270,7 +270,7 @@ func TestP3_CodeExec(t *testing.T) {
 	if err := os.Symlink("/nonexistent.ckpt", filepath.Join(d, "dangling.ckpt")); err != nil {
 		t.Fatal(err)
 	}
-	for _, n := range []string{"weights.h5", "m.keras", "m.nemo", "m.dill", "m.bin.gz", "m.pt.zip", "m.onnx", "m.msgpack", "m.mar", "m.tar", "m.pth.tar", "m.ckpt.zip"} {
+	for _, n := range []string{"weights.h5", "m.keras", "m.nemo", "m.dill", "m.bin.gz", "m.pt.zip", "m.onnx", "m.msgpack", "m.mar", "m.tar", "m.pth.tar", "m.ckpt.zip", "m.tar.gz", "m.tgz", "m.pth.zip", "m.bin.zip"} {
 		write(t, filepath.Join(d, n), nil)
 	}
 	out, _, code := rc(t, "inspect", "--path", d, "--json")
@@ -288,7 +288,7 @@ func TestP3_CodeExec(t *testing.T) {
 	for _, want := range []string{
 		"pytorch_model.BIN", "Modeling.Py", "deep.pkl", "link.py", "dangling.ckpt",
 		"weights.h5", "m.keras", "m.nemo", "m.dill", "m.bin.gz", "m.mar",
-		"m.pt.zip", "m.tar", "m.pth.tar", "m.ckpt.zip",
+		"m.pt.zip", "m.tar", "m.pth.tar", "m.ckpt.zip", "m.tar.gz", "m.tgz", "m.pth.zip", "m.bin.zip",
 	} {
 		if !strings.Contains(blob, want) {
 			t.Errorf("code-exec missing %s\n%s", want, blob)

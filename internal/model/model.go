@@ -140,9 +140,11 @@ type Model struct {
 	// needed could not be used: a walk cap, a per-entry walk error, an
 	// unreadable, dangling, or unparseable config.json (or an aux config
 	// that exists but cannot be read or parsed), an index directory that could
-	// not be listed, a display counter that overflowed, or an index
-	// metadata.total_size that is not a non-negative int64. A partial
-	// inspection must not produce an overall pass.
+	// not be listed, a display counter that overflowed, an index
+	// metadata.total_size that is not a non-negative int64, or a shard that
+	// is missing, unreadable, or not a local file name. The TUI, the text
+	// summary, JSON partial, and the inspect exit code all follow this flag.
+	// A partial inspection must not produce an overall pass.
 	Partial bool `json:"-"`
 
 	Shards  []*Shard
@@ -562,20 +564,20 @@ func (m *Model) loadShards() {
 		if !ok {
 			s.Err = fmt.Errorf("refusing non-local shard name %q", n)
 			m.warnf("shard %s: %v", n, s.Err)
-			m.Shards = append(m.Shards, s)
+			m.addShard(s)
 			continue
 		}
 		f, listed := byName[n]
 		if !listed {
 			s.Err = fmt.Errorf("not present in the model directory")
 			m.warnf("shard %s: %v", n, s.Err)
-			m.Shards = append(m.Shards, s)
+			m.addShard(s)
 			continue
 		}
 		if f.Broken {
 			s.Err = fmt.Errorf("not a readable regular file inside the model directory")
 			m.warnf("shard %s: %v", n, s.Err)
-			m.Shards = append(m.Shards, s)
+			m.addShard(s)
 			continue
 		}
 		s.Path = full
@@ -583,8 +585,17 @@ func (m *Model) loadShards() {
 		if s.Err != nil {
 			m.warnf("shard %s: %v", n, s.Err)
 		}
-		m.Shards = append(m.Shards, s)
+		m.addShard(s)
 	}
+}
+
+// addShard records a shard. A shard that did not yield a header is an
+// incomplete inspection, same as a walk cap or an unparsed config.
+func (m *Model) addShard(s *Shard) {
+	if s.Err != nil {
+		m.Partial = true
+	}
+	m.Shards = append(m.Shards, s)
 }
 
 // localShardName accepts a relative file name and rejects absolute paths

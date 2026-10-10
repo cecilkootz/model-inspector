@@ -24,13 +24,16 @@ var codeExts = map[string]struct{}{
 	".pkl": {}, ".pickle": {}, ".joblib": {},
 	".npy": {}, ".pyc": {}, ".py": {},
 	".h5": {}, ".keras": {}, ".nemo": {}, ".dill": {}, ".mar": {},
-	".tar": {},
+	".tar": {}, ".tgz": {},
 }
 
 // codeCompounds are suffixes filepath.Ext does not see as one extension,
 // such as model.bin.gz. .tar is also listed on its own; .pth.tar is here
 // so a tar of a pickle path is matched even if the single-suffix list changes.
-var codeCompounds = []string{".bin.gz", ".pt.gz", ".pkl.gz", ".pt.zip", ".ckpt.zip", ".pth.tar"}
+var codeCompounds = []string{
+	".bin.gz", ".pt.gz", ".pkl.gz", ".tar.gz",
+	".pt.zip", ".ckpt.zip", ".pth.zip", ".bin.zip", ".pth.tar",
+}
 
 // auxConfigNames are the small JSON files, besides config.json, whose
 // top-level auto_map is part of the code-exec check.

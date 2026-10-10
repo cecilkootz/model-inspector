@@ -116,16 +116,11 @@ func dominantDType(m *model.Model) string {
 	return best
 }
 
+// incomplete is the header marker. It follows Model.Partial, which the
+// loader sets for a missing, unreadable, or non-local shard as well as
+// for a walk cap, a bad config, and a counter overflow.
 func incomplete(m *model.Model) bool {
-	if m.Partial {
-		return true
-	}
-	for _, s := range m.Shards {
-		if s.Err != nil || s.Header == nil {
-			return true
-		}
-	}
-	return false
+	return m != nil && m.Partial
 }
 
 func (t Model) tabLine(width int) string {

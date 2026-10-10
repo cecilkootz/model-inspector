@@ -5,6 +5,7 @@ import (
 	"math"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -139,6 +140,10 @@ type MemoryEstimate struct {
 	UnifiedMemory       bool
 	Note                string
 	HostCapableNote     string
+	// HostCapablePartial is true when the host-capable byte total is a
+	// lower bound: the inspection is partial, or an index names pieces of
+	// a table that were not loaded. It is not a JSON field.
+	HostCapablePartial bool
 }
 
 const (
@@ -170,9 +175,17 @@ func (m *Model) MemoryEstimate() MemoryEstimate {
 	}
 	for _, t := range m.HostCapable() {
 		addInto(m, &est.HostCapableBytes, t.Bytes)
+		if t.incomplete {
+			est.HostCapablePartial = true
+		}
+	}
+	if m.Partial {
+		est.HostCapablePartial = true
 	}
 	est.AcceleratorMinBytes = est.WeightsBytes - est.HostCapableBytes
 	if est.AcceleratorMinBytes < 0 {
+		// Display floor only. Callers that check host bytes against weight
+		// bytes must use HostCapableBytes, not this clamped result.
 		est.AcceleratorMinBytes = 0
 	}
 	return est
@@ -200,36 +213,66 @@ type HostTensor struct {
 	// sharded is true when Name is the stem of .shard_N pieces rather than
 	// one weight tensor. It is not part of the JSON document.
 	sharded bool
+	// incomplete is true when this table's bytes are a lower bound.
+	// It is not part of the JSON document; callout text carries the marker.
+	incomplete bool
+}
+
+// shardAcc collects the pieces of one stem.shard_N table.
+type shardAcc struct {
+	stem   string
+	group  string
+	dtype  string
+	cols   int64
+	have   bool
+	bad    bool
+	seen   map[string]struct{}
+	pieces []*Tensor
 }
 
 // HostCapable returns lookup tables the heuristic says can stay in host RAM.
-// Pieces named stem.shard_N (plus .weight) are one logical table. Each piece
-// still has to be a 2-D table of at least 1024 rows; the bytes, scales,
-// biases, and dequantized params are then summed. One shard of the PLE
-// n-gram table is under the 1 GiB / 10% callout thresholds on its own.
+// Pieces named stem.shard_N (plus .weight) are one logical table when they
+// share a dtype and a column count. Each piece still has to be a 2-D table
+// of at least 1024 rows. Shard indexes are compared numerically, so
+// shard_1 and shard_01 are one piece. Bytes include that piece's .scales
+// and .biases, and each tensor is counted once. Orphan scales and biases
+// are not tables. One shard of the PLE n-gram table is under the 1 GiB /
+// 10% callout thresholds on its own.
 func (m *Model) HostCapable() []HostTensor {
 	if m == nil {
 		return nil
 	}
 	byName := make(map[string]*Tensor, len(m.Tensors))
+	loaded := make(map[string]struct{}, len(m.Tensors))
 	for _, t := range m.Tensors {
+		if t == nil {
+			continue
+		}
 		byName[t.Name] = t
+		loaded[t.Name] = struct{}{}
 	}
 	tied := m.tiedWordEmbeddings() && !m.hasKind(KindLMHead)
-	buckets := map[string]*HostTensor{}
-	var keys []string
+	used := map[string]struct{}{}
+	var plain []*Tensor
+	aggs := map[string]*shardAcc{}
+	var order []string
 	for _, t := range m.Tensors {
+		if t == nil {
+			continue
+		}
 		if t.Role != RolePlain && t.Role != RoleQuantWeight {
 			continue
 		}
 		if t.Kind == KindVision {
 			continue
 		}
+		// Scales and biases are companions of a weight, never their own table.
+		if hasSuffixFold(t.Name, ".scales") || hasSuffixFold(t.Name, ".biases") {
+			continue
+		}
 		stem, sharded := lookupStem(t.Name)
-		key := t.Name
 		nameForHost := t.Name
 		if sharded {
-			key = stem
 			nameForHost = stem
 		}
 		if !hostName(nameForHost) {
@@ -241,32 +284,161 @@ func (m *Model) HostCapable() []HostTensor {
 		if tied && tokenEmbedSegment(nameForHost) {
 			continue
 		}
-		b := buckets[key]
-		if b == nil {
-			b = &HostTensor{
-				Name: key, Group: t.Group, Rule: RuleLookupTable, sharded: sharded,
-			}
-			buckets[key] = b
-			keys = append(keys, key)
+		if !sharded {
+			plain = append(plain, t)
+			continue
 		}
-		addInto(m, &b.ParamsEst, t.LogicalParams)
-		addInto(m, &b.Bytes, t.ByteLen())
-		base := strings.TrimSuffix(t.Name, ".weight")
-		if base != t.Name {
-			if s := byName[base+".scales"]; s != nil {
-				addInto(m, &b.Bytes, s.ByteLen())
-			}
-			if s := byName[base+".biases"]; s != nil {
-				addInto(m, &b.Bytes, s.ByteLen())
-			}
+		a := aggs[stem]
+		if a == nil {
+			a = &shardAcc{stem: stem, group: t.Group, seen: map[string]struct{}{}}
+			aggs[stem] = a
+			order = append(order, stem)
+		}
+		cols := t.Shape[len(t.Shape)-1]
+		if !a.have {
+			a.dtype, a.cols, a.have = t.DType, cols, true
+		} else if foldASCII(a.dtype) != foldASCII(t.DType) || a.cols != cols {
+			a.bad = true
+		}
+		key, ok := shardOrdinal(t.Name)
+		if !ok {
+			a.bad = true
+			continue
+		}
+		if _, dup := a.seen[key]; dup {
+			m.warnOnce("lookup table %s: duplicate shard index %s ignored", a.stem, key)
+			continue
+		}
+		a.seen[key] = struct{}{}
+		a.pieces = append(a.pieces, t)
+	}
+	out := make([]HostTensor, 0, len(plain)+len(order))
+	for _, t := range plain {
+		ht := HostTensor{Name: t.Name, Group: t.Group, Rule: RuleLookupTable}
+		addTableBytes(m, byName, used, &ht, t)
+		if m.tableIncomplete(t.Name, false, loaded) {
+			ht.incomplete = true
+		}
+		out = append(out, ht)
+	}
+	for _, stem := range order {
+		a := aggs[stem]
+		if a.bad {
+			m.warnOnce("lookup table %s: pieces differ in dtype or column count and were not merged", stem)
+			continue
+		}
+		ht := HostTensor{Name: stem, Group: a.group, Rule: RuleLookupTable, sharded: true}
+		for _, t := range a.pieces {
+			addTableBytes(m, byName, used, &ht, t)
+		}
+		if m.tableIncomplete(stem, true, loaded) {
+			ht.incomplete = true
+		}
+		out = append(out, ht)
+	}
+	if m.Partial {
+		for i := range out {
+			out[i].incomplete = true
 		}
 	}
-	out := make([]HostTensor, 0, len(keys))
-	for _, k := range keys {
-		out = append(out, *buckets[k])
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return !out[i].sharded && out[j].sharded
+	})
 	return out
+}
+
+// addTableBytes adds one weight and, once, its .scales and .biases.
+func addTableBytes(m *Model, byName map[string]*Tensor, used map[string]struct{}, ht *HostTensor, t *Tensor) {
+	if _, ok := used[t.Name]; ok {
+		return
+	}
+	used[t.Name] = struct{}{}
+	addInto(m, &ht.ParamsEst, t.LogicalParams)
+	addInto(m, &ht.Bytes, t.ByteLen())
+	if !hasSuffixFold(t.Name, ".weight") {
+		return
+	}
+	base := stripWeightSuffix(t.Name)
+	for _, suf := range []string{".scales", ".biases"} {
+		s := byName[base+suf]
+		if s == nil {
+			continue
+		}
+		if _, ok := used[s.Name]; ok {
+			continue
+		}
+		used[s.Name] = struct{}{}
+		addInto(m, &ht.Bytes, s.ByteLen())
+	}
+}
+
+// tableIncomplete reports whether the index names a piece of this table
+// that was not loaded. For an unsharded table, stem is the weight name.
+func (m *Model) tableIncomplete(stem string, sharded bool, loaded map[string]struct{}) bool {
+	if m == nil || m.Index == nil {
+		return false
+	}
+	base := stem
+	if !sharded {
+		base = stripWeightSuffix(stem)
+	}
+	for name := range m.Index.WeightMap {
+		got, isShard := lookupStem(name)
+		if sharded {
+			if !isShard || got != stem {
+				continue
+			}
+		} else if name != stem && got != base {
+			continue
+		}
+		if _, ok := loaded[name]; !ok {
+			return true
+		}
+	}
+	return false
+}
+
+// NotableParams is the largest parameter contributor. Shard pieces of one
+// lookup table are summed first, so a split n-gram table can cross the
+// 10% line a single shard never reaches. ngram is true when that
+// contributor is an n-gram embedding table.
+func (m *Model) NotableParams() (name string, params int64, ngram bool) {
+	if m == nil {
+		return "", 0, false
+	}
+	covered := map[*Tensor]bool{}
+	consider := func(n int64, tensorName string) {
+		if n > params {
+			params = n
+			name = tensorName
+			ngram = ngramName(tensorName)
+		}
+	}
+	for _, h := range m.HostCapable() {
+		if !h.sharded {
+			continue
+		}
+		consider(h.ParamsEst, h.Name)
+		for _, t := range m.Tensors {
+			if t == nil {
+				continue
+			}
+			stem, sharded := lookupStem(t.Name)
+			if sharded && stem == h.Name {
+				covered[t] = true
+			}
+		}
+	}
+	for _, t := range m.Tensors {
+		if t == nil || covered[t] {
+			continue
+		}
+		consider(t.LogicalParams, t.Name)
+	}
+	return name, params, ngram
 }
 
 // Callout is one identity finding. Kind is the v1 JSON enum.
@@ -361,6 +533,9 @@ func (m *Model) Outliers() []Callout {
 		msg := fmt.Sprintf("%s is %s, %.1f%% of weights", ShortName(h.Name), HumanBytes(h.Bytes), pct(h.Bytes, m.TensorBytes))
 		if ngramName(h.Name) {
 			msg += fmt.Sprintf(": ~%s-param n-gram embedding table", HumanCount(h.ParamsEst))
+		}
+		if h.incomplete {
+			msg += " (incomplete)"
 		}
 		out = append(out, Callout{Kind: "big_tensor", Group: h.Group, Tensor: h.Name, Message: msg})
 	}
@@ -585,40 +760,54 @@ func (m *Model) hasKind(kind string) bool {
 // lookupStem strips a trailing .weight/.scales/.biases and, when the
 // remainder ends in .shard_<digits>, the shard suffix. sharded is false
 // for an ordinary tensor name. The original spelling of the stem is kept.
+//
+// Case is folded for ASCII only. strings.ToLower changes the byte length
+// of some runes (U+023A grows, U+212A and U+0130 shrink), and an index
+// taken from that lowered string panics or cuts the original name short
+// when it is used to slice it. Every match below is a window of the
+// original string, so the stem is always a substring of name.
 func lookupStem(name string) (stem string, sharded bool) {
-	base := name
-	lower := strings.ToLower(name)
-	for _, suf := range []string{".weight", ".scales", ".biases"} {
-		if strings.HasSuffix(lower, suf) {
-			base = base[:len(base)-len(suf)]
-			lower = lower[:len(lower)-len(suf)]
-			break
-		}
-	}
+	base := stripWeightSuffix(name)
 	const mark = ".shard_"
-	i := strings.LastIndex(lower, mark)
+	i := lastIndexFold(base, mark)
 	if i < 0 {
 		return base, false
 	}
-	digits := lower[i+len(mark):]
-	if digits == "" {
+	digits := base[i+len(mark):]
+	if !asciiDigits(digits) {
 		return base, false
-	}
-	for _, r := range digits {
-		if r < '0' || r > '9' {
-			return base, false
-		}
 	}
 	return base[:i], true
 }
 
+// shardOrdinal is the numeric shard index, with leading zeros removed.
+// A digit string that does not fit in uint64 keeps its own key so it
+// cannot collide with a smaller index. ok is false when name is not a shard.
+func shardOrdinal(name string) (string, bool) {
+	base := stripWeightSuffix(name)
+	const mark = ".shard_"
+	i := lastIndexFold(base, mark)
+	if i < 0 {
+		return "", false
+	}
+	digits := base[i+len(mark):]
+	if !asciiDigits(digits) {
+		return "", false
+	}
+	n, err := strconv.ParseUint(digits, 10, 64)
+	if err != nil {
+		return "raw:" + digits, true
+	}
+	return strconv.FormatUint(n, 10), true
+}
+
 func ngramName(name string) bool {
-	lower := strings.ToLower(name)
-	return strings.Contains(lower, "ngram") || strings.Contains(lower, "n_gram")
+	folded := foldASCII(name)
+	return strings.Contains(folded, "ngram") || strings.Contains(folded, "n_gram")
 }
 
 func hostName(name string) bool {
-	seg := lastSegment(stripWeightSuffix(name))
+	seg := foldASCII(lastSegment(stripWeightSuffix(name)))
 	for _, bad := range []string{"patch", "pos", "position", "proj", "norm", "head"} {
 		if strings.Contains(seg, bad) {
 			return false
@@ -639,7 +828,7 @@ func hostName(name string) bool {
 }
 
 func tokenEmbedSegment(name string) bool {
-	switch lastSegment(stripWeightSuffix(name)) {
+	switch foldASCII(lastSegment(stripWeightSuffix(name))) {
 	case "embed_tokens", "tok_embeddings", "word_embeddings", "wte":
 		return true
 	default:
@@ -648,13 +837,74 @@ func tokenEmbedSegment(name string) bool {
 }
 
 func stripWeightSuffix(name string) string {
-	lower := strings.ToLower(name)
 	for _, suf := range []string{".weight", ".scales", ".biases"} {
-		if strings.HasSuffix(lower, suf) {
-			return lower[:len(lower)-len(suf)]
+		if hasSuffixFold(name, suf) {
+			return name[:len(name)-len(suf)]
 		}
 	}
-	return lower
+	return name
+}
+
+// foldASCII lowercases ASCII letters and leaves every other byte alone,
+// so the result has the same length as s.
+func foldASCII(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if c >= 'A' && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	return string(b)
+}
+
+func foldByte(c byte) byte {
+	if c >= 'A' && c <= 'Z' {
+		return c + ('a' - 'A')
+	}
+	return c
+}
+
+func foldEq(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if foldByte(a[i]) != foldByte(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func hasSuffixFold(s, suf string) bool {
+	if len(suf) == 0 || len(s) < len(suf) {
+		return false
+	}
+	return foldEq(s[len(s)-len(suf):], suf)
+}
+
+func lastIndexFold(s, sub string) int {
+	if len(sub) == 0 || len(s) < len(sub) {
+		return -1
+	}
+	for i := len(s) - len(sub); i >= 0; i-- {
+		if foldEq(s[i:i+len(sub)], sub) {
+			return i
+		}
+	}
+	return -1
+}
+
+func asciiDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func lastSegment(name string) string {
@@ -685,10 +935,14 @@ func tensorPhrase(t *Tensor) string {
 }
 
 func hostMessage(h HostTensor) string {
-	if ngramName(h.Name) {
-		return fmt.Sprintf("n-gram embedding table %s can stay in CPU RAM (heuristic)", HumanBytes(h.Bytes))
+	tail := "heuristic"
+	if h.incomplete {
+		tail = "heuristic, incomplete"
 	}
-	return fmt.Sprintf("%s (%s) can stay in CPU RAM (heuristic)", ShortName(h.Name), HumanBytes(h.Bytes))
+	if ngramName(h.Name) {
+		return fmt.Sprintf("n-gram embedding table %s can stay in CPU RAM (%s)", HumanBytes(h.Bytes), tail)
+	}
+	return fmt.Sprintf("%s (%s) can stay in CPU RAM (%s)", ShortName(h.Name), HumanBytes(h.Bytes), tail)
 }
 
 func dominantPlain(g *Group) (string, int64) {
@@ -826,6 +1080,19 @@ func satAdd(dst *int64, n int64) bool {
 	}
 	*dst += n
 	return true
+}
+
+func (m *Model) warnOnce(format string, a ...any) {
+	if m == nil {
+		return
+	}
+	msg := fmt.Sprintf(format, a...)
+	for _, w := range m.Warnings {
+		if w == msg {
+			return
+		}
+	}
+	m.warnf("%s", msg)
 }
 
 // addInto is satAdd, and marks m partial when the sum does not fit.
