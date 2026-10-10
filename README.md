@@ -76,14 +76,21 @@ stamps that outer revision. A tree that is not inside any repository, or a
 build with `-buildvcs=false`, prints `unknown`.
 
 `BIN` defaults to `bin/model-inspector` (paths with spaces are quoted).
-`make clean` deletes only `coverage.out` (when it is a regular file or a
-symlink) and this checkout's `bin/` directory. It does not remove `BIN`.
-That variable is also read from the environment, and using it as a delete
-path removed `.git` and tracked files. A binary written under `bin/`,
-including a custom name, is removed with the directory. `rm -rf` runs only
-after `bin` resolves to this repository's `bin` directory; a symlinked
-`bin` is unlinked and not followed. `bin/` is gitignored. Recipes call
-`go` on `PATH` and honor `GOTOOLCHAIN=local` (no toolchain download).
+`build`, `test`, `cover`, `fuzz`, and `clean` run in the directory that
+contains the Makefile, not the caller's working directory, so
+`make -f /path/to/Makefile` from another directory still reads and writes
+this checkout. `make clean` deletes only `coverage.out` (when it is a
+regular file or a symlink) and this checkout's `bin/` directory. It does
+not remove `BIN`. That variable is also read from the environment, and
+using it as a delete path removed `.git` and tracked files. A binary
+written under `bin/`, including a custom name, is removed with the
+directory. `rm -rf` runs only after `bin` resolves to this repository's
+`bin` directory; a symlinked `bin` is unlinked and not followed. A
+directory named `coverage.out` is left in place with a warning, `bin/` is
+still removed, and `clean` exits non-zero. The override check includes
+that `clean`, so `make test` removes this checkout's `bin/` and
+`coverage.out`. `bin/` is gitignored. Recipes call `go` on `PATH` and
+honor `GOTOOLCHAIN=local` (no toolchain download).
 
 `go install origin.cursor.com/cecilkootz/model-inspector/cmd/model-inspector@latest`
 fails even with `GOPRIVATE=origin.cursor.com`. Origin does not answer Go's
