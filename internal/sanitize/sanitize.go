@@ -76,20 +76,22 @@ func Notef(format formatLit, args ...any) error {
 }
 
 func safeArg(a any, star, char bool) any {
-	switch {
-	case star:
-		return a
-	case isText(a):
-		return a
-	case formatsItself(a):
-		return sanitized{a}
-	case isNilLike(a):
-		return a
-	case char || !isNumberOrBool(a):
-		return sanitized{a}
-	default:
+	if star || isText(a) {
 		return a
 	}
+	if call, nilWord := formatsItself(a); call || nilWord {
+		if nilWord {
+			return "<nil>"
+		}
+		return sanitized{a}
+	}
+	if isNilLike(a) {
+		return a
+	}
+	if char || !isNumberOrBool(a) {
+		return sanitized{a}
+	}
+	return a
 }
 
 func isText(a any) bool {
@@ -101,21 +103,36 @@ func isText(a any) bool {
 	}
 }
 
-// formatsItself is true when fmt will print a method's text instead of the
-// underlying number or bool.
-func formatsItself(a any) bool {
+// formatsItself reports whether fmt would print a method's text instead of
+// the underlying number or bool. call means the method may be invoked and
+// its text sanitized. nilWord means a is a nil pointer: the method is not
+// called, and the caller prints a literal "<nil>". A nil receiver often
+// panics, and fmt's recovered "<nil>" would otherwise pass through From
+// and become "<U+003C>nil>".
+func formatsItself(a any) (call, nilWord bool) {
 	switch a.(type) {
 	case fmt.Stringer, error, fmt.Formatter, fmt.GoStringer:
-		return true
 	default:
+		return false, false
+	}
+	if isNilPointer(a) {
+		return false, true
+	}
+	return true, false
+}
+
+func isNilPointer(a any) bool {
+	if a == nil {
 		return false
 	}
+	v := reflect.ValueOf(a)
+	return v.Kind() == reflect.Pointer && v.IsNil()
 }
 
 // isNilLike reports a nil value: the interface itself, or a nil pointer,
 // interface, map, slice, chan, or func. The formatted text is irrelevant.
-// A typed nil that implements Stringer or error is handled earlier, so its
-// method text is still sanitized.
+// A nil pointer that implements Stringer or error is handled in
+// formatsItself, which prints a literal "<nil>" and does not call the method.
 func isNilLike(a any) bool {
 	if a == nil {
 		return true

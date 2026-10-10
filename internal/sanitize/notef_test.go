@@ -52,8 +52,11 @@ func TestNotefSanitizesEveryUntrustedArg(t *testing.T) {
 	check(t, Notef("%#v", goStringInt(1)).Error(), "<U+001B>")
 	check(t, Notef("%v", formatInt(1)).Error(), "<U+001B>")
 	check(t, Notef("%v", stringerBool(true)).Error(), "<U+001B>")
-	check(t, Notef("%v", (*nilStringer)(nil)).Error(), "<U+001B>")
-	if got := Notef("%v", (*panicStringer)(nil)).Error(); got != "<U+003C>nil>" {
+	check(t, Notef("%v", &nilStringer{}).Error(), "<U+001B>")
+	if got := Notef("%v", (*nilStringer)(nil)).Error(); got != "<nil>" || strings.Contains(got, "U+") {
+		t.Fatalf("nil stringer: %q", got)
+	}
+	if got := Notef("%v", (*panicStringer)(nil)).Error(); got != "<nil>" || strings.Contains(got, "U+") {
 		t.Fatalf("panicking nil stringer: %q", got)
 	}
 	if got := Notef("%d", plainInt(3)).Error(); got != "3" {
@@ -123,6 +126,12 @@ func TestNotefNilIsTheValue(t *testing.T) {
 	}
 	if got := Notef("%v", nil).Error(); got != "<nil>" {
 		t.Fatalf("nil: %q", got)
+	}
+}
+
+func TestNotefNilPointerPanicPrintsNil(t *testing.T) {
+	if got := Notef("%v", (*panicStringer)(nil)).Error(); got != "<nil>" || strings.Contains(got, "U+") {
+		t.Fatalf("panicking nil stringer: %q", got)
 	}
 }
 
