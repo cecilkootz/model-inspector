@@ -10,21 +10,22 @@ import (
 func TestResolveRepoID(t *testing.T) {
 	hub := t.TempDir()
 	repo := filepath.Join(hub, "models--Org--Model-4bit")
-	snap := filepath.Join(repo, "snapshots", "abc123")
+	const commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	snap := filepath.Join(repo, "snapshots", commit)
 	if err := os.MkdirAll(snap, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(repo, "refs"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(repo, "refs", "main"), []byte("abc123\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(repo, "refs", "main"), []byte(commit+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	r, err := Resolve("Org/Model-4bit", hub)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Dir != snap || r.RepoID != "Org/Model-4bit" || r.Revision != "abc123" {
+	if r.Dir != snap || r.RepoID != "Org/Model-4bit" || r.Revision != commit {
 		t.Errorf("got %+v", r)
 	}
 	// Explicit snapshot path infers the same identity.
@@ -32,7 +33,7 @@ func TestResolveRepoID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r2.RepoID != "Org/Model-4bit" || r2.Revision != "abc123" || r2.FromCache {
+	if r2.RepoID != "Org/Model-4bit" || r2.Revision != commit || r2.FromCache {
 		t.Errorf("path resolve got %+v", r2)
 	}
 	if _, err := Resolve("Org/Missing", hub); err == nil {
@@ -50,14 +51,15 @@ func TestResolveRefPointsAtMissingSnapshot(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(repo, "snapshots", "other"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(repo, "refs", "main"), []byte("deadbeef\n"), 0o644); err != nil {
+	const missing = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	if err := os.WriteFile(filepath.Join(repo, "refs", "main"), []byte(missing+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := Resolve("Org/Model-4bit", hub)
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "deadbeef") || !strings.Contains(err.Error(), "not present") {
+	if !strings.Contains(err.Error(), missing) || !strings.Contains(err.Error(), "not present") {
 		t.Fatalf("error = %v", err)
 	}
 }

@@ -1,6 +1,9 @@
 package model
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestClassify(t *testing.T) {
 	cases := []struct {
@@ -81,5 +84,15 @@ func TestInferQuant(t *testing.T) {
 	bits, logical := inferQuant(w, s, 32)
 	if bits != 4 || logical != 248320*2560 {
 		t.Errorf("inferQuant = (%d, %d)", bits, logical)
+	}
+}
+
+func TestInferQuantOverflow(t *testing.T) {
+	w := &Tensor{}
+	w.DType, w.Shape = "U32", []int64{math.MaxInt64}
+	s := &Tensor{}
+	s.DType, s.Shape = "BF16", []int64{math.MaxInt64}
+	if bits, logical := inferQuant(w, s, 32); bits != 0 || logical != 0 {
+		t.Fatalf("inferQuant = (%d, %d)", bits, logical)
 	}
 }

@@ -3,19 +3,38 @@
 package model
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/mwelch/model-inspector/internal/safetensors"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
 )
 
-// maxSmallJSON caps config/index reads; anything bigger is refused.
-const maxSmallJSON = 64 << 20
+const (
+	// maxSmallJSON caps config and index reads; anything bigger is refused.
+	maxSmallJSON = 64 << 20
+	// maxWalkDepth, maxFiles, and maxWarnings stop a hostile tree from
+	// turning a directory walk into unbounded work. maxFiles counts every
+	// visited entry, directories included.
+	maxWalkDepth = 8
+	maxFiles     = 20_000
+	maxWarnings  = 100
+)
+
+// ErrIndexWeightMap is reported when an index file parses but weight_map
+// is missing or has no entries. The JSON itself was readable.
+var ErrIndexWeightMap = errors.New("missing or empty weight_map")
+
+// ErrMultipleIndex is reported when a directory contains more than one
+// *.safetensors.index.json. None of them is selected.
+var ErrMultipleIndex = errors.New("multiple safetensors index files")
 
 // Tensor roles.
 const (
@@ -67,6 +86,10 @@ type Index struct {
 	File      string
 	TotalSize int64
 	WeightMap map[string]string
+	// badTotalSize is set when metadata.total_size was present but did not
+	// fit in a non-negative int64. TotalSize stays 0 so it is not displayed
+	// as a wrapped value.
+	badTotalSize bool
 }
 
 type QuantParams struct {
@@ -100,12 +123,27 @@ type Model struct {
 
 	ConfigRaw []byte
 	Config    map[string]any
-	Quant     *Quantization
-	Index     *Index
+	// auxParsed holds tokenizer/processor/preprocessor configs that parsed.
+	auxParsed map[string]map[string]any
+	// UncheckedAutoMap lists config files that exist but could not be read
+	// or parsed, so top-level auto_map was not checked. The inspection is
+	// partial, and code-exec warns instead of passing as "none".
+	UncheckedAutoMap []string
+	Quant            *Quantization
+	Index            *Index
 	// IndexErr is set when an index file is present but cannot be used
-	// (unreadable JSON, or a weight_map with no entries). Index stays nil
-	// so shard discovery can still see the .safetensors files.
+	// (unreadable JSON, a missing or empty weight_map, or several index
+	// files). Index stays nil so shard discovery can still see the
+	// .safetensors files.
 	IndexErr error `json:"-"`
+	// Partial is set when the inspection did not finish, or a value it
+	// needed could not be used: a walk cap, a per-entry walk error, an
+	// unreadable, dangling, or unparseable config.json (or an aux config
+	// that exists but cannot be read or parsed), an index directory that could
+	// not be listed, a display counter that overflowed, or an index
+	// metadata.total_size that is not a non-negative int64. A partial
+	// inspection must not produce an overall pass.
+	Partial bool `json:"-"`
 
 	Shards  []*Shard
 	Tensors []*Tensor
@@ -118,22 +156,36 @@ type Model struct {
 	TensorBytes        int64
 
 	Warnings []string
+
+	warningsTrunc bool
+	overflowed    bool
 }
 
 // Load inspects dir. Errors in individual shards are recorded, not fatal.
+// dir is resolved with EvalSymlinks before the walk, so a symlinked root
+// is inspected at its target.
 func Load(dir string) (*Model, error) {
-	fi, err := os.Stat(dir)
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+	real, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := os.Stat(real)
 	if err != nil {
 		return nil, err
 	}
 	if !fi.IsDir() {
 		return nil, fmt.Errorf("%s is not a directory", dir)
 	}
-	m := &Model{Dir: dir, DTypes: map[string]*DTypeStat{}, BitsHistogram: map[int]int{}}
+	m := &Model{Dir: real, DTypes: map[string]*DTypeStat{}, BitsHistogram: map[int]int{}}
 	if err := m.scanFiles(); err != nil {
 		return nil, err
 	}
 	m.loadConfig()
+	m.loadAuxConfigs()
 	m.loadIndex()
 	m.loadShards()
 	m.buildTensors()
@@ -143,67 +195,159 @@ func Load(dir string) (*Model, error) {
 }
 
 func (m *Model) warnf(format string, a ...any) {
+	if len(m.Warnings) >= maxWarnings {
+		if !m.warningsTrunc {
+			m.warningsTrunc = true
+			m.Partial = true
+			m.Warnings = append(m.Warnings, fmt.Sprintf("too many warnings; truncated at %d", maxWarnings))
+		}
+		return
+	}
 	m.Warnings = append(m.Warnings, fmt.Sprintf(format, a...))
 }
 
 func (m *Model) scanFiles() error {
+	roots := m.allowedRoots()
+	nfiles := 0
 	return filepath.WalkDir(m.Dir, func(p string, d fs.DirEntry, err error) error {
+		rel := p
+		if r, relErr := filepath.Rel(m.Dir, p); relErr == nil {
+			rel = r
+		}
+		// A per-entry failure (unreadable directory, vanished path) is a
+		// warning that marks the inspection incomplete. It must not abort
+		// the load: the error string contains the raw path.
 		if err != nil {
-			return err
+			m.Partial = true
+			m.warnf("%s: %v", rel, err)
+			return nil
+		}
+		nfiles++
+		if nfiles > maxFiles {
+			m.Partial = true
+			m.warnf("stopped after %d entries", maxFiles)
+			return fs.SkipAll
+		}
+		depth := 0
+		if rel != "." {
+			depth = strings.Count(rel, string(filepath.Separator))
 		}
 		if d.IsDir() {
 			if p != m.Dir && d.Name() == ".git" {
 				return filepath.SkipDir
 			}
+			if depth > maxWalkDepth {
+				m.Partial = true
+				m.warnf("not descending past depth %d at %s", maxWalkDepth, rel)
+				return filepath.SkipDir
+			}
 			return nil
 		}
-		rel, _ := filepath.Rel(m.Dir, p)
+		if depth > maxWalkDepth {
+			m.Partial = true
+			m.warnf("skipping %s past depth %d", rel, maxWalkDepth)
+			return nil
+		}
 		f := File{Name: rel, Symlink: d.Type()&fs.ModeSymlink != 0}
-		// os.Stat follows HF snapshot symlinks into blobs/: metadata only, no data read.
-		if st, err := os.Stat(p); err != nil {
+		if f.Symlink {
+			real, err := filepath.EvalSymlinks(p)
+			if err != nil {
+				f.Broken = true
+				m.warnf("%s: %v", rel, err)
+				m.Files = append(m.Files, f)
+				return nil
+			}
+			if !withinAny(real, roots) {
+				f.Broken = true
+				m.warnf("%s: symlink escapes the model directory", rel)
+				m.Files = append(m.Files, f)
+				return nil
+			}
+		}
+		// Size for the file table. Content reads go through safeopen on one fd.
+		st, err := os.Stat(p)
+		if err != nil {
 			f.Broken = true
 			m.warnf("%s: %v", rel, err)
+		} else if !st.Mode().IsRegular() {
+			f.Broken = true
+			m.warnf("%s: not a regular file", rel)
 		} else {
 			f.Size = st.Size()
-			m.TotalSize += st.Size()
+			m.acc(&m.TotalSize, st.Size())
 		}
 		m.Files = append(m.Files, f)
 		return nil
 	})
 }
 
-func readSmallJSON(path string, v any) ([]byte, error) {
-	st, err := os.Stat(path)
-	if err != nil {
-		return nil, err
+// allowedRoots are the directories a snapshot symlink may point at:
+// the model directory itself, and the sibling blobs/ directory when this
+// is an HF snapshot (.../snapshots/<commit>).
+func (m *Model) allowedRoots() []string {
+	roots := []string{m.Dir}
+	parent := filepath.Dir(m.Dir)
+	if filepath.Base(parent) == "snapshots" {
+		blobs := filepath.Join(filepath.Dir(parent), "blobs")
+		if real, err := filepath.EvalSymlinks(blobs); err == nil {
+			roots = append(roots, real)
+		}
 	}
-	if st.Size() > maxSmallJSON {
-		return nil, fmt.Errorf("%s is %d bytes; refusing to read JSON over %d bytes", filepath.Base(path), st.Size(), maxSmallJSON)
+	return roots
+}
+
+func withinAny(path string, roots []string) bool {
+	for _, root := range roots {
+		if safeopen.Within(root, path) {
+			return true
+		}
 	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(b, v); err != nil {
-		return b, fmt.Errorf("parsing %s: %w", filepath.Base(path), err)
-	}
-	return b, nil
+	return false
 }
 
 func (m *Model) loadConfig() {
 	p := filepath.Join(m.Dir, "config.json")
-	if _, err := os.Stat(p); err != nil {
+	raw, err := safeopen.ReadAll(p, maxSmallJSON, m.allowedRoots()...)
+	if err != nil {
+		// A missing name is "no config". A directory entry that cannot be
+		// read, including a dangling symlink, is an incomplete inspection:
+		// Stat of a broken symlink is ENOENT, which would otherwise look
+		// like the file was never there.
+		if os.IsNotExist(err) {
+			if _, lerr := os.Lstat(p); lerr != nil {
+				return
+			}
+			m.warnf("config.json: broken symlink: %v", err)
+			m.noteUnchecked("config.json")
+			return
+		}
+		// The file is there but cannot be read safely (device, FIFO, escape).
+		// That is an incomplete inspection, not a clean pass.
+		m.warnf("%v", err)
+		m.noteUnchecked("config.json")
 		return
 	}
-	var cfg map[string]any
-	raw, err := readSmallJSON(p, &cfg)
 	m.ConfigRaw = raw
+	cfg, err := parseConfigObject("config.json", raw)
 	if err != nil {
-		m.warnf("%v", err)
+		m.warnf("%s", err.Error())
+		m.noteUnchecked("config.json")
 		return
 	}
 	m.Config = cfg
 	m.Quant = parseQuant(cfg)
+}
+
+func parseConfigObject(name string, raw []byte) (map[string]any, error) {
+	v, err := jsonx.Unmarshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s: %v", name, err)
+	}
+	cfg, ok := v.(map[string]any)
+	if !ok || cfg == nil {
+		return nil, fmt.Errorf("parsing %s: expected a JSON object", name)
+	}
+	return cfg, nil
 }
 
 func parseQuant(cfg map[string]any) *Quantization {
@@ -243,70 +387,222 @@ func parseQuant(cfg map[string]any) *Quantization {
 }
 
 func (m *Model) loadIndex() {
-	p := filepath.Join(m.Dir, "model.safetensors.index.json")
-	if _, err := os.Stat(p); err != nil {
-		matches, _ := filepath.Glob(filepath.Join(m.Dir, "*.safetensors.index.json"))
-		if len(matches) == 0 {
-			return
-		}
-		p = matches[0]
-	}
-	var raw struct {
-		Metadata  map[string]any    `json:"metadata"`
-		WeightMap map[string]string `json:"weight_map"`
-	}
-	if _, err := readSmallJSON(p, &raw); err != nil {
+	// Read the directory and suffix-match. filepath.Glob treats "[" in the
+	// directory name as a character class, so a folder like "Qwen3 [4bit]"
+	// would lose its index and a folder named "m[" would be a pattern error.
+	names, err := m.indexFileNames()
+	if err != nil {
+		m.Partial = true
 		m.IndexErr = err
 		m.warnf("%v", err)
 		return
 	}
-	// A JSON null and {"weight_map":{}} both have no entries. Leaving the
-	// empty map in place makes shard discovery trust the index and skip
-	// every file on disk, so a corrupt shard is never opened and the scan
-	// skips with an overall pass.
-	if len(raw.WeightMap) == 0 {
-		m.IndexErr = fmt.Errorf("%s: empty weight_map", filepath.Base(p))
+	if len(names) == 0 {
+		return
+	}
+	if len(names) > 1 {
+		m.IndexErr = fmt.Errorf("%w: %s", ErrMultipleIndex, strings.Join(names, ", "))
 		m.warnf("%v", m.IndexErr)
 		return
 	}
-	idx := &Index{File: filepath.Base(p), WeightMap: raw.WeightMap}
-	if v, ok := raw.Metadata["total_size"]; ok {
-		idx.TotalSize = int64(floatOf(v))
+	p := filepath.Join(m.Dir, names[0])
+	b, err := safeopen.ReadAll(p, maxSmallJSON, m.allowedRoots()...)
+	if err != nil {
+		m.IndexErr = err
+		m.warnf("%v", err)
+		return
+	}
+	idx, err := parseIndex(filepath.Base(p), b)
+	if err != nil {
+		m.IndexErr = err
+		m.warnf("%v", err)
+		return
+	}
+	if idx.badTotalSize {
+		// Zero would look like "no total_size", and the mismatch check
+		// skips that. The declaration cannot be verified, so this is partial.
+		m.Partial = true
+		m.warnf("%s: metadata.total_size is not a non-negative int64", idx.File)
 	}
 	m.Index = idx
 }
 
-func (m *Model) loadShards() {
+// indexFileNames lists top-level *.safetensors.index.json names.
+// The conventional model.safetensors.index.json is included by the same
+// suffix check; more than one match is left for the caller to reject.
+// Names are not globbed.
+func (m *Model) indexFileNames() ([]string, error) {
+	entries, err := os.ReadDir(m.Dir)
+	if err != nil {
+		return nil, err
+	}
 	var names []string
-	if m.Index != nil {
-		seen := map[string]bool{}
-		for _, s := range m.Index.WeightMap {
-			if !seen[s] {
-				seen[s] = true
-				names = append(names, s)
-			}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".safetensors.index.json") {
+			continue
 		}
-	} else {
-		for _, f := range m.Files {
-			if strings.HasSuffix(f.Name, ".safetensors") {
-				names = append(names, f.Name)
+		if !filepath.IsLocal(name) || strings.ContainsRune(name, os.PathSeparator) {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func parseIndex(name string, b []byte) (*Index, error) {
+	v, err := jsonx.Unmarshal(b)
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", name, err)
+	}
+	obj, ok := v.(map[string]any)
+	if !ok || obj == nil {
+		return nil, fmt.Errorf("parsing %s: expected a JSON object", name)
+	}
+	rawMap, exists := obj["weight_map"]
+	wm, isMap := rawMap.(map[string]any)
+	// A missing key, JSON null, and {"weight_map":{}} all have no entries.
+	// An empty map must not become a usable index: shard discovery would
+	// trust it and skip every file on disk.
+	if !exists || rawMap == nil || (isMap && len(wm) == 0) {
+		return nil, fmt.Errorf("%s: %w", name, ErrIndexWeightMap)
+	}
+	if !isMap {
+		return nil, fmt.Errorf("parsing %s: weight_map must be an object", name)
+	}
+	weight := make(map[string]string, len(wm))
+	for k, val := range wm {
+		s, ok := val.(string)
+		if !ok {
+			return nil, fmt.Errorf("parsing %s: weight_map %q is not a string", name, k)
+		}
+		weight[k] = s
+	}
+	idx := &Index{File: name, WeightMap: weight}
+	if meta, ok := obj["metadata"].(map[string]any); ok {
+		if ts, ok := meta["total_size"]; ok {
+			n, ok := fitInt64(ts)
+			if !ok {
+				idx.badTotalSize = true
+			} else {
+				idx.TotalSize = n
 			}
 		}
 	}
-	sort.Strings(names)
-	for _, n := range names {
-		s := &Shard{Name: n, Path: filepath.Join(m.Dir, n)}
-		if st, err := os.Stat(s.Path); err != nil {
-			s.Err = err
-		} else {
-			s.Size = st.Size()
-			s.Header, s.Err = safetensors.ReadFile(s.Path)
+	return idx, nil
+}
+
+// fitInt64 converts a JSON number to int64 when the value is finite and in range.
+// Out-of-range floats are rejected instead of truncated into a wrapped int64.
+func fitInt64(v any) (int64, bool) {
+	f, ok := v.(float64)
+	if !ok || math.IsNaN(f) || math.IsInf(f, 0) || f < 0 || f >= float64(uint64(1)<<63) {
+		return 0, false
+	}
+	return int64(f), true
+}
+
+func mulNonNeg(a, b int64) (int64, bool) {
+	if a < 0 || b < 0 {
+		return 0, false
+	}
+	if a == 0 || b == 0 {
+		return 0, true
+	}
+	if a > math.MaxInt64/b {
+		return 0, false
+	}
+	return a * b, true
+}
+
+func (m *Model) acc(dst *int64, n int64) {
+	if n < 0 || *dst < 0 || *dst > math.MaxInt64-n {
+		m.noteOverflow()
+		return
+	}
+	*dst += n
+}
+
+func (m *Model) noteOverflow() {
+	if m.overflowed {
+		return
+	}
+	m.overflowed = true
+	m.Partial = true
+	m.warnf("displayed size overflowed int64 and was not accumulated")
+}
+
+func (m *Model) loadShards() {
+	byName := make(map[string]File, len(m.Files))
+	names := map[string]struct{}{}
+	for _, f := range m.Files {
+		byName[f.Name] = f
+		if strings.HasSuffix(f.Name, ".safetensors") {
+			names[f.Name] = struct{}{}
 		}
+	}
+	// Names from the index are included even when the file is absent, so a
+	// missing or non-local shard is reported. On-disk .safetensors files
+	// are always included, including ones the index does not mention.
+	if m.Index != nil {
+		for _, shard := range m.Index.WeightMap {
+			names[shard] = struct{}{}
+		}
+	}
+	ordered := make([]string, 0, len(names))
+	for n := range names {
+		ordered = append(ordered, n)
+	}
+	sort.Strings(ordered)
+	roots := m.allowedRoots()
+	for _, n := range ordered {
+		s := &Shard{Name: n}
+		full, ok := joinWithin(m.Dir, n)
+		if !ok {
+			s.Err = fmt.Errorf("refusing non-local shard name %q", n)
+			m.warnf("shard %s: %v", n, s.Err)
+			m.Shards = append(m.Shards, s)
+			continue
+		}
+		f, listed := byName[n]
+		if !listed {
+			s.Err = fmt.Errorf("not present in the model directory")
+			m.warnf("shard %s: %v", n, s.Err)
+			m.Shards = append(m.Shards, s)
+			continue
+		}
+		if f.Broken {
+			s.Err = fmt.Errorf("not a readable regular file inside the model directory")
+			m.warnf("shard %s: %v", n, s.Err)
+			m.Shards = append(m.Shards, s)
+			continue
+		}
+		s.Path = full
+		s.Header, s.Size, s.Err = safetensors.ReadFile(full, roots...)
 		if s.Err != nil {
 			m.warnf("shard %s: %v", n, s.Err)
 		}
 		m.Shards = append(m.Shards, s)
 	}
+}
+
+// localShardName accepts a relative file name and rejects absolute paths
+// and any ".." segment. filepath.IsLocal is the check weight_map values
+// have to pass before they are joined onto the model directory.
+func localShardName(name string) bool {
+	return name != "" && filepath.IsLocal(name)
+}
+
+func joinWithin(root, name string) (string, bool) {
+	if !localShardName(name) {
+		return "", false
+	}
+	full := filepath.Join(root, name)
+	if !safeopen.Within(root, full) {
+		return "", false
+	}
+	return full, true
 }
 
 func (m *Model) groupSizeFor(module string) int {
@@ -344,15 +640,24 @@ func inferQuant(w, scales *Tensor, groupSize int) (bits int, logical int64) {
 		return 0, 0
 	}
 	packed := w.Shape[len(w.Shape)-1]
-	in := scales.Shape[len(scales.Shape)-1] * int64(groupSize)
-	if packed == 0 || in == 0 {
+	in, ok := mulNonNeg(scales.Shape[len(scales.Shape)-1], int64(groupSize))
+	if !ok || packed == 0 || in == 0 {
 		return 0, 0
 	}
-	total := packed * int64(storage)
-	if total%in != 0 {
+	total, ok := mulNonNeg(packed, int64(storage))
+	if !ok || total%in != 0 {
 		return 0, 0
 	}
-	return int(total / in), w.NumElements() / packed * in
+	bits64 := total / in
+	if bits64 > int64(math.MaxInt) {
+		return 0, 0
+	}
+	perPacked := w.NumElements() / packed
+	logical, ok = mulNonNeg(perPacked, in)
+	if !ok {
+		return 0, 0
+	}
+	return int(bits64), logical
 }
 
 func (m *Model) buildTensors() {
@@ -395,11 +700,11 @@ func (m *Model) buildTensors() {
 			m.DTypes[t.DType] = d
 		}
 		d.Tensors++
-		d.Elements += t.NumElements()
-		d.Bytes += t.ByteLen()
-		m.TotalElements += t.NumElements()
-		m.TotalLogicalParams += t.LogicalParams
-		m.TensorBytes += t.ByteLen()
+		m.acc(&d.Elements, t.NumElements())
+		m.acc(&d.Bytes, t.ByteLen())
+		m.acc(&m.TotalElements, t.NumElements())
+		m.acc(&m.TotalLogicalParams, t.LogicalParams)
+		m.acc(&m.TensorBytes, t.ByteLen())
 		if t.Role == RoleQuantWeight {
 			m.BitsHistogram[t.Bits]++
 		}
@@ -416,9 +721,9 @@ func (m *Model) buildGroups() {
 			m.Groups = append(m.Groups, g)
 		}
 		g.Tensors = append(g.Tensors, t)
-		g.Elements += t.NumElements()
-		g.LogicalParams += t.LogicalParams
-		g.Bytes += t.ByteLen()
+		m.acc(&g.Elements, t.NumElements())
+		m.acc(&g.LogicalParams, t.LogicalParams)
+		m.acc(&g.Bytes, t.ByteLen())
 		if IsExpertTensor(t.Name) {
 			g.HasExperts = true
 		}

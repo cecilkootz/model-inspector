@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mwelch/model-inspector/internal/safetensors"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
 )
 
 // File is one snapshot-relative file.
@@ -295,4 +295,132 @@ func MaterializeHub(hubDir, repoID, commit string, files []File) (snapshot strin
 		}
 	}
 	return snap, nil
+}
+
+// NgramTable is a three-layer checkpoint whose layer 1 holds a 2-D
+// ngram_embed table large enough to be a size outlier and a
+// lookup_table_v1 hit, while staying well under 1 MiB.
+func NgramTable() ([]File, error) {
+	shard, n, err := WriteShard("", []Tensor{
+		{"model.layers.0.mlp.down_proj.weight", "BF16", []int64{8}},
+		{"model.layers.1.ngram_embed.weight", "BF16", []int64{1024, 16}},
+		{"model.layers.1.self_attn.q_proj.weight", "BF16", []int64{8}},
+		{"model.layers.2.mlp.down_proj.weight", "BF16", []int64{8}},
+		{"model.embed_tokens.weight", "BF16", []int64{8, 4}},
+		{"lm_head.weight", "BF16", []int64{8, 4}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	wm := map[string]string{}
+	for _, name := range []string{
+		"model.layers.0.mlp.down_proj.weight",
+		"model.layers.1.ngram_embed.weight",
+		"model.layers.1.self_attn.q_proj.weight",
+		"model.layers.2.mlp.down_proj.weight",
+		"model.embed_tokens.weight",
+		"lm_head.weight",
+	} {
+		wm[name] = "model.safetensors"
+	}
+	idx, err := IndexJSON(n, wm)
+	if err != nil {
+		return nil, err
+	}
+	cfg := []byte(`{
+  "model_type": "qwen3_next",
+  "num_hidden_layers": 3,
+  "tie_word_embeddings": false,
+  "layer_types": ["linear_attention", "linear_attention", "full_attention"]
+}
+`)
+	return []File{
+		{Name: "config.json", Data: cfg},
+		{Name: "model.safetensors.index.json", Data: idx},
+		{Name: "model.safetensors", Data: shard},
+	}, nil
+}
+
+// TiedEmbed is a negative lookup_table_v1 case: tie_word_embeddings is
+// true, there is no lm_head, and the only table is a token embedding.
+func TiedEmbed() ([]File, error) {
+	shard, _, err := WriteShard("", []Tensor{
+		{"model.embed_tokens.weight", "BF16", []int64{1024, 4}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	cfg := []byte(`{"model_type":"dense","tie_word_embeddings":true,"num_hidden_layers":0}`)
+	return []File{
+		{Name: "config.json", Data: cfg},
+		{Name: "model.safetensors", Data: shard},
+	}, nil
+}
+
+// UntiedEmbed is the matching positive case: the token embedding is not
+// tied, and an lm_head is present.
+func UntiedEmbed() ([]File, error) {
+	shard, _, err := WriteShard("", []Tensor{
+		{"model.embed_tokens.weight", "BF16", []int64{1024, 4}},
+		{"lm_head.weight", "BF16", []int64{8, 4}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	cfg := []byte(`{"model_type":"dense","tie_word_embeddings":false}`)
+	return []File{
+		{Name: "config.json", Data: cfg},
+		{Name: "model.safetensors", Data: shard},
+	}, nil
+}
+
+// CodeExec is a tiny safetensors checkpoint plus the names the
+// code-exec-formats check looks for: a .py, a .bin, and auto_map.
+// The code file is not executed. The .bin is not a pickle.
+func CodeExec() ([]File, error) {
+	shard, n, err := WriteShard("", []Tensor{
+		{"model.layers.0.self_attn.q_proj.weight", "BF16", []int64{2}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	idx, err := IndexJSON(n, map[string]string{
+		"model.layers.0.self_attn.q_proj.weight": "model.safetensors",
+	})
+	if err != nil {
+		return nil, err
+	}
+	cfg := []byte(`{
+  "model_type": "demo",
+  "auto_map": {"AutoModelForCausalLM": "modeling_demo.DemoForCausalLM"}
+}
+`)
+	py := []byte("# fixture only\nclass DemoForCausalLM:\n    pass\n")
+	bin := []byte("not-a-pickle\n")
+	return []File{
+		{Name: "config.json", Data: cfg},
+		{Name: "model.safetensors.index.json", Data: idx},
+		{Name: "model.safetensors", Data: shard},
+		{Name: "modeling_demo.py", Data: py},
+		{Name: "weights.bin", Data: bin},
+	}, nil
+}
+
+// TinyQwenMLXQuant is TinyQwen with quantization recorded as a top-level
+// "quantization" object (mlx-lm style) instead of text_config.quantization_config.
+func TinyQwenMLXQuant() ([]File, int64, error) {
+	files, n, err := TinyQwen()
+	if err != nil {
+		return nil, 0, err
+	}
+	cfg, err := TinyQwenMLXQuantConfig()
+	if err != nil {
+		return nil, 0, err
+	}
+	for i := range files {
+		if files[i].Name == "config.json" {
+			files[i].Data = cfg
+		}
+	}
+	return files, n, nil
 }

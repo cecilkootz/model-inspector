@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mwelch/model-inspector/internal/fixture"
-	"github.com/mwelch/model-inspector/internal/hfcache"
-	"github.com/mwelch/model-inspector/internal/model"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/hfcache"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 )
 
 func loadDir(t *testing.T, files map[string][]byte) *model.Model {
@@ -48,16 +48,25 @@ func mustIndex(t *testing.T, total int64, wm map[string]string) []byte {
 	return b
 }
 
+func checkID(t *testing.T, m *model.Model, id string) Check {
+	t.Helper()
+	return findCheck(t, Run(m), id)
+}
+
 func check(t *testing.T, m *model.Model) Check {
 	t.Helper()
-	res := Run(m)
-	if len(res.Checks) == 0 || res.Checks[0].ID != "index-shard-consistency" {
-		t.Fatalf("checks = %+v", res.Checks)
+	return checkID(t, m, CheckIndex)
+}
+
+func findCheck(t *testing.T, res Result, id string) Check {
+	t.Helper()
+	for _, c := range res.Checks {
+		if c.ID == id {
+			return c
+		}
 	}
-	if res.Overall != res.Checks[0].Status && !(res.Checks[0].Status == StatusSkip && res.Overall == StatusPass) {
-		t.Fatalf("overall %s, check %s", res.Overall, res.Checks[0].Status)
-	}
-	return res.Checks[0]
+	t.Fatalf("no check %s in %+v", id, res.Checks)
+	return Check{}
 }
 
 func detailsContain(t *testing.T, c Check, subs ...string) {
@@ -109,8 +118,15 @@ func TestNoIndexPassesBounds(t *testing.T) {
 	})
 	m := loadDir(t, map[string][]byte{"model.safetensors": shard})
 	c := check(t, m)
-	if c.Status != StatusPass || !strings.Contains(c.Summary, "no index file") {
+	if c.Status != StatusSkip || !strings.Contains(c.Summary, "no index file") {
 		t.Fatalf("%+v", c)
+	}
+	bounds := checkID(t, m, CheckOffsets)
+	if bounds.Status != StatusPass {
+		t.Fatalf("bounds %+v", bounds)
+	}
+	if Run(m).Overall != StatusPass {
+		t.Fatal("single-file model with a valid header did not pass")
 	}
 }
 
@@ -157,14 +173,16 @@ func TestIndexPointsAtMissingShard(t *testing.T) {
 		"model.layers.0.self_attn.q_proj.weight": "missing.safetensors",
 	})
 	m := loadDir(t, map[string][]byte{"model.safetensors.index.json": idx})
+	files := checkID(t, m, CheckFiles)
+	if files.Status != StatusFail {
+		t.Fatalf("files %+v", files)
+	}
+	detailsContain(t, files, "missing.safetensors: unreadable:")
 	c := check(t, m)
 	if c.Status != StatusFail {
 		t.Fatalf("status %s details %v", c.Status, c.Details)
 	}
-	detailsContain(t, c,
-		"missing.safetensors: unreadable:",
-		"model.layers.0.self_attn.q_proj.weight -> missing.safetensors: shard missing or unreadable",
-	)
+	detailsContain(t, c, "model.layers.0.self_attn.q_proj.weight -> missing.safetensors: shard missing or unreadable")
 }
 
 func TestTruncatedHeader(t *testing.T) {
@@ -172,7 +190,7 @@ func TestTruncatedHeader(t *testing.T) {
 		ten("model.layers.0.self_attn.q_proj.weight", "BF16", 2),
 	})
 	m := loadDir(t, map[string][]byte{"model.safetensors": shard[:10]})
-	c := check(t, m)
+	c := checkID(t, m, CheckHeader)
 	if c.Status != StatusFail {
 		t.Fatalf("status %s details %v", c.Status, c.Details)
 	}
@@ -184,7 +202,7 @@ func TestCorruptHeader(t *testing.T) {
 	m := loadDir(t, map[string][]byte{
 		"model.safetensors": fixture.EncodeHeader([]byte("not-json"), nil),
 	})
-	c := check(t, m)
+	c := checkID(t, m, CheckHeader)
 	if c.Status != StatusFail {
 		t.Fatalf("status %s details %v", c.Status, c.Details)
 	}
@@ -196,7 +214,7 @@ func TestDataRangePastEOF(t *testing.T) {
 	m := loadDir(t, map[string][]byte{
 		"model.safetensors": fixture.EncodeHeader([]byte(hdr), []byte{0x00}),
 	})
-	c := check(t, m)
+	c := checkID(t, m, CheckOffsets)
 	if c.Status != StatusFail {
 		t.Fatalf("status %s details %v", c.Status, c.Details)
 	}
@@ -208,7 +226,7 @@ func TestDTypeSizeMismatch(t *testing.T) {
 	m := loadDir(t, map[string][]byte{
 		"model.safetensors": fixture.EncodeHeader([]byte(hdr), []byte{0, 0, 0, 0}),
 	})
-	c := check(t, m)
+	c := checkID(t, m, CheckOffsets)
 	if c.Status != StatusFail {
 		t.Fatalf("status %s details %v", c.Status, c.Details)
 	}
@@ -221,7 +239,7 @@ func TestOverlappingRanges(t *testing.T) {
 	m := loadDir(t, map[string][]byte{
 		"model.safetensors": fixture.EncodeHeader([]byte(hdr), make([]byte, 6)),
 	})
-	c := check(t, m)
+	c := checkID(t, m, CheckOffsets)
 	if c.Status != StatusFail {
 		t.Fatalf("status %s details %v", c.Status, c.Details)
 	}
@@ -233,7 +251,7 @@ func TestInvalidOffsets(t *testing.T) {
 	m := loadDir(t, map[string][]byte{
 		"model.safetensors": fixture.EncodeHeader([]byte(hdr), make([]byte, 4)),
 	})
-	c := check(t, m)
+	c := checkID(t, m, CheckOffsets)
 	if c.Status != StatusFail {
 		t.Fatalf("status %s details %v", c.Status, c.Details)
 	}
@@ -303,12 +321,15 @@ func TestEmptyWeightMapWithCorruptShard(t *testing.T) {
 	}
 	res := Run(m)
 	if res.Overall != StatusFail {
-		t.Fatalf("overall %s; check %+v", res.Overall, res.Checks[0])
+		t.Fatalf("overall %s; checks %+v", res.Overall, res.Checks)
 	}
-	if res.Checks[0].Status != StatusFail {
-		t.Fatalf("check %+v", res.Checks[0])
+	idx := findCheck(t, res, CheckIndex)
+	if idx.Status != StatusFail {
+		t.Fatalf("index %+v", idx)
 	}
-	detailsContain(t, res.Checks[0], "weight_map", "model.safetensors: unreadable:", "parsing header JSON")
+	detailsContain(t, idx, "weight_map")
+	hdr := findCheck(t, res, CheckHeader)
+	detailsContain(t, hdr, "model.safetensors: unreadable:", "parsing header JSON")
 }
 
 func TestIndexMissingWeightMap(t *testing.T) {
@@ -319,14 +340,20 @@ func TestIndexMissingWeightMap(t *testing.T) {
 		"model.safetensors":            shard,
 		"model.safetensors.index.json": []byte(`{"metadata":{"total_size":4}}`),
 	})
-	if m.IndexErr == nil || !strings.Contains(m.IndexErr.Error(), "empty weight_map") {
+	if m.IndexErr == nil || !strings.Contains(m.IndexErr.Error(), "missing or empty weight_map") {
 		t.Fatalf("IndexErr = %v", m.IndexErr)
 	}
 	c := check(t, m)
 	if c.Status != StatusFail {
 		t.Fatalf("status %s details %v", c.Status, c.Details)
 	}
-	detailsContain(t, c, "empty weight_map")
+	detailsContain(t, c, "missing or empty weight_map")
+	if strings.Contains(c.Summary, "unreadable") {
+		t.Fatalf("parsed index called unreadable: %s", c.Summary)
+	}
+	if !strings.Contains(c.Summary, "missing or empty weight_map") {
+		t.Fatalf("summary = %s", c.Summary)
+	}
 	if len(m.Shards) != 1 || m.Shards[0].Header == nil {
 		t.Fatal("expected the on-disk shard to still be read")
 	}
@@ -383,12 +410,134 @@ func TestDanglingSnapshotSymlink(t *testing.T) {
 	if !warned {
 		t.Fatalf("warnings = %v", m.Warnings)
 	}
+	files := checkID(t, m, CheckFiles)
+	if files.Status != StatusFail {
+		t.Fatalf("files %+v", files)
+	}
+	detailsContain(t, files, "model-00002-of-00002.safetensors: unreadable:")
 	c := check(t, m)
 	if c.Status != StatusFail {
 		t.Fatalf("status %s details %v", c.Status, c.Details)
 	}
-	detailsContain(t, c,
-		"model-00002-of-00002.safetensors: unreadable:",
-		"model.norm.weight -> model-00002-of-00002.safetensors: shard missing or unreadable",
-	)
+	detailsContain(t, c, "model.norm.weight -> model-00002-of-00002.safetensors: shard missing or unreadable")
+}
+
+func TestCodeExecWarnsAndStrictPromotes(t *testing.T) {
+	files, err := fixture.CodeExec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := fixture.Materialize(dir, files); err != nil {
+		t.Fatal(err)
+	}
+	m, err := model.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := Run(m)
+	c := findCheck(t, res, CheckCodeExec)
+	if c.Status != StatusWarn || c.EffectiveStatus != StatusWarn {
+		t.Fatalf("%+v", c)
+	}
+	if res.Overall != StatusWarn {
+		t.Fatalf("overall %s", res.Overall)
+	}
+	blob := strings.Join(c.Details, "\n")
+	for _, want := range []string{"modeling_demo.py", "weights.bin", "auto_map", "modeling_demo.DemoForCausalLM"} {
+		if !strings.Contains(blob, want) {
+			t.Errorf("details missing %s\n%s", want, blob)
+		}
+	}
+	content := findCheck(t, res, CheckCode)
+	if content.Status != StatusSkip || !strings.Contains(content.Summary, "not run") {
+		t.Fatalf("code-content %+v", content)
+	}
+	for _, ch := range res.Checks {
+		if ch.ID == "behavior-probes" {
+			t.Fatal("behavior-probes is still a check")
+		}
+	}
+	strict := RunOptions(m, Options{Strict: true})
+	promoted := findCheck(t, strict, CheckCodeExec)
+	if promoted.Status != StatusWarn || promoted.EffectiveStatus != StatusFail {
+		t.Fatalf("strict %+v", promoted)
+	}
+	if strict.Overall != StatusFail || !strict.Strict {
+		t.Fatalf("strict overall %s", strict.Overall)
+	}
+}
+
+func TestTotalSizeStrictPromotesWarn(t *testing.T) {
+	shard, n := mustShard(t, []fixture.Tensor{
+		ten("model.layers.0.self_attn.q_proj.weight", "BF16", 2),
+	})
+	if n == 999 {
+		t.Fatal("payload unexpectedly 999")
+	}
+	idx := mustIndex(t, 999, map[string]string{
+		"model.layers.0.self_attn.q_proj.weight": "model.safetensors",
+	})
+	m := loadDir(t, map[string][]byte{
+		"model.safetensors":            shard,
+		"model.safetensors.index.json": idx,
+	})
+	res := RunOptions(m, Options{Strict: true})
+	c := findCheck(t, res, CheckIndex)
+	if c.Status != StatusWarn || c.EffectiveStatus != StatusFail || res.Overall != StatusFail {
+		t.Fatalf("status %s effective %s overall %s", c.Status, c.EffectiveStatus, res.Overall)
+	}
+}
+
+func TestNoFlaggedCodeContentSkipsQuietly(t *testing.T) {
+	files, _, err := fixture.TinyQwen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := fixture.Materialize(dir, files); err != nil {
+		t.Fatal(err)
+	}
+	m, err := model.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := Run(m)
+	c := findCheck(t, res, CheckCode)
+	if c.Status != StatusSkip || !strings.Contains(c.Summary, "nothing to read") {
+		t.Fatalf("%+v", c)
+	}
+	if res.Overall != StatusPass {
+		t.Fatalf("overall %s", res.Overall)
+	}
+}
+
+func TestPartialSaysIncompleteNotSafetyCap(t *testing.T) {
+	good, _ := mustShard(t, []fixture.Tensor{ten("w", "F32", 1)})
+	d := t.TempDir()
+	if err := os.WriteFile(filepath.Join(d, "a.safetensors"), good, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("missing-config.json", filepath.Join(d, "config.json")); err != nil {
+		t.Fatal(err)
+	}
+	m, err := model.Load(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.Partial {
+		t.Fatal("dangling config.json was not partial")
+	}
+	res := Run(m)
+	if res.Overall == StatusPass {
+		t.Fatal("dangling config.json overall pass")
+	}
+	c := findCheck(t, res, CheckFiles)
+	blob := c.Summary + "\n" + strings.Join(c.Details, "\n")
+	if !strings.Contains(blob, incompleteInspection) {
+		t.Fatalf("file-presence = %s", blob)
+	}
+	if strings.Contains(blob, "safety cap") {
+		t.Fatalf("partial wording still says safety cap: %s", blob)
+	}
 }
