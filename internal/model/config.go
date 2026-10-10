@@ -18,6 +18,34 @@ var keyFields = []string{
 	"full_attention_interval", "mtp_num_hidden_layers", "num_nextn_predict_layers",
 }
 
+// fieldGroup is the v1 JSON group for each keyFields entry. The Config
+// screen layout that uses these groups is a later change; the names are
+// stable for schema_version 1.
+var fieldGroup = map[string]string{
+	"model_type": "architecture", "architectures": "architecture",
+	"num_hidden_layers": "architecture", "hidden_size": "architecture",
+	"intermediate_size": "architecture", "vocab_size": "architecture",
+	"max_position_embeddings": "architecture", "tie_word_embeddings": "architecture",
+	"torch_dtype": "architecture", "dtype": "architecture",
+	"num_attention_heads": "attention", "num_key_value_heads": "attention",
+	"head_dim": "attention", "full_attention_interval": "attention",
+	"num_experts": "moe", "num_local_experts": "moe", "n_routed_experts": "moe",
+	"num_experts_per_tok": "moe", "moe_intermediate_size": "moe",
+	"shared_expert_intermediate_size": "moe", "n_shared_experts": "moe",
+	"mtp_num_hidden_layers": "mtp_vision", "num_nextn_predict_layers": "mtp_vision",
+	"vision.depth": "mtp_vision", "vision.hidden_size": "mtp_vision",
+	"vision.num_heads": "mtp_vision", "vision.patch_size": "mtp_vision",
+}
+
+// FieldGroup returns the schema group for a key from KeyConfig.
+// Unknown keys return "other".
+func FieldGroup(key string) string {
+	if g, ok := fieldGroup[key]; ok {
+		return g
+	}
+	return "other"
+}
+
 // KeyConfig extracts architecture fields, looking at the root first and then
 // nested text/LLM configs used by multimodal models.
 func (m *Model) KeyConfig() []KV {

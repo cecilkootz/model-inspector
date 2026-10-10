@@ -40,13 +40,13 @@ func TestQA_HostileNamesView(t *testing.T) {
 	vs := qaViews(t, m)
 	assertViewRunes(t, "hostile", vs)
 	all := strings.Join(vs, "\n")
-	for _, want := range []string{"<U+009B>", "<U+202E>", "<U+2066>", "<U+2067>", "<U+2028>", "<U+200B>", "<U+001B>", "config.json could not be parsed", scan.ChecksImplemented} {
+	for _, want := range []string{"<U+009B>", "<U+202E>", "<U+2066>", "<U+2067>", "<U+2028>", "<U+200B>", "<U+001B>", "config.json did not parse.", "Not a malware or behavior scan"} {
 		if !strings.Contains(all, want) {
 			t.Errorf("missing %s", want)
 		}
 	}
-	if !strings.Contains(vs[len(vs)-1], scan.ChecksImplemented) {
-		t.Fatalf("scan tab missing the checks sentence:\n%s", vs[len(vs)-1])
+	if !strings.Contains(vs[len(vs)-1], "Not a malware or behavior scan") {
+		t.Fatalf("scan tab missing the disclaimer:\n%s", vs[len(vs)-1])
 	}
 
 	d2 := t.TempDir()
@@ -97,6 +97,13 @@ func qaViews(t *testing.T, m *model.Model) []string {
 			x, _ = x.Update(tea.KeyMsg{Type: tea.KeyEnter})
 			vs = append(vs, x.View())
 			x, _ = x.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		}
+		if k == "4" {
+			for i := 0; i < len(scan.Run(m).Checks); i++ {
+				x, _ = x.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				vs = append(vs, x.View())
+				x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown})
+			}
 		}
 	}
 	return vs

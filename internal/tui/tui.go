@@ -4,9 +4,6 @@ package tui
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
-	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -31,24 +28,6 @@ const (
 
 var tabNames = [numTabs]string{"1 Identity", "2 Config", "3 Layers", "4 Scan"}
 
-var (
-	titleStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212")).Padding(0, 1)
-	tabStyle       = lipgloss.NewStyle().Padding(0, 2).Foreground(lipgloss.Color("245"))
-	activeTabStyle = tabStyle.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62")).Bold(true)
-	labelStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Width(26)
-	valueStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-	headingStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))
-	helpStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	warnStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
-	statusStyles   = map[scan.Status]lipgloss.Style{
-		scan.StatusPass:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42")),
-		scan.StatusWarn:    warnStyle,
-		scan.StatusFail:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196")),
-		scan.StatusSkip:    lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		scan.StatusPlanned: lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-	}
-)
-
 // Model is the root Bubble Tea model.
 type Model struct {
 	m      *model.Model
@@ -58,9 +37,15 @@ type Model struct {
 	height int
 	ready  bool
 
+	help         bool
+	notice       string
+	inputFocused bool
+	scanCursor   int
+	scanScroll   int
+	scanOpen     map[string]bool
+
 	identityVP viewport.Model
 	configVP   viewport.Model
-	scanVP     viewport.Model
 
 	groupTable  table.Model
 	tensorTable table.Model
@@ -75,17 +60,16 @@ func Run(m *model.Model, res scan.Result) error {
 
 // New builds the UI for a loaded model.
 func New(m *model.Model, res scan.Result) Model {
-	t := Model{m: m, scan: res, width: 100, height: 30}
+	configure()
+	t := Model{m: m, scan: res, width: 100, height: 30, scanOpen: map[string]bool{}}
 	t.identityVP = viewport.New(t.width, t.bodyHeight())
 	t.configVP = viewport.New(t.width, t.bodyHeight())
-	t.scanVP = viewport.New(t.width, t.bodyHeight())
-	t.identityVP.SetContent(renderIdentity(m))
-	t.configVP.SetContent(renderConfig(m))
-	t.scanVP.SetContent(renderScan(res))
+	t.identityVP.SetContent(renderIdentity(m, t.width))
+	t.configVP.SetContent(renderConfig(m, t.width))
 
 	styles := table.DefaultStyles()
-	styles.Header = styles.Header.Bold(true).Foreground(lipgloss.Color("99"))
-	styles.Selected = styles.Selected.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62"))
+	styles.Header = styles.Header.Bold(true).Foreground(lipgloss.AdaptiveColor{Dark: "99", Light: "55"})
+	styles.Selected = styles.Selected.Foreground(lipgloss.AdaptiveColor{Dark: "230", Light: "255"}).Background(lipgloss.AdaptiveColor{Dark: "62", Light: "61"})
 	t.groupTable = table.New(table.WithColumns(groupColumns(t.width)), table.WithRows(groupRows(m)),
 		table.WithFocused(true), table.WithHeight(t.bodyHeight()), table.WithStyles(styles))
 	t.tensorTable = table.New(table.WithColumns(tensorColumns(t.width)),
@@ -96,23 +80,29 @@ func New(m *model.Model, res scan.Result) Model {
 func (t Model) Init() tea.Cmd { return nil }
 
 func (t Model) bodyHeight() int {
-	if h := t.height - 4; h > 3 {
+	if h := t.height - 3; h > 1 {
 		return h
 	}
-	return 3
+	return 1
 }
 
 func (t *Model) resize() {
 	h := t.bodyHeight()
-	for _, vp := range []*viewport.Model{&t.identityVP, &t.configVP, &t.scanVP} {
+	for _, vp := range []*viewport.Model{&t.identityVP, &t.configVP} {
 		vp.Width, vp.Height = t.width, h
 	}
+	t.identityVP.SetContent(renderIdentity(t.m, t.width))
+	t.configVP.SetContent(renderConfig(t.m, t.width))
 	t.groupTable.SetColumns(groupColumns(t.width))
 	t.groupTable.SetWidth(t.width)
 	t.groupTable.SetHeight(h)
 	t.tensorTable.SetColumns(tensorColumns(t.width))
 	t.tensorTable.SetWidth(t.width)
-	t.tensorTable.SetHeight(h - 1)
+	th := h - 1
+	if th < 1 {
+		th = 1
+	}
+	t.tensorTable.SetHeight(th)
 }
 
 func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -120,11 +110,49 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		t.width, t.height, t.ready = msg.Width, msg.Height, true
 		t.resize()
+		t.ensureScanVisible()
 		return t, nil
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
+		if t.notice != "" && msg.String() != "ctrl+c" {
+			t.notice = ""
+		}
+		if msg.String() == "ctrl+c" {
 			return t, tea.Quit
+		}
+		if t.inputFocused {
+			if msg.String() == "esc" {
+				t.inputFocused = false
+			}
+			// q and other keys do not quit or change tabs while a text input is focused.
+			return t, nil
+		}
+		if t.ready && (t.width < 60 || t.height < 16) {
+			if msg.String() == "q" {
+				return t, tea.Quit
+			}
+			return t, nil
+		}
+		switch msg.String() {
+		case "q":
+			return t, tea.Quit
+		case "?":
+			t.help = !t.help
+			return t, nil
+		case "esc":
+			if t.help {
+				t.help = false
+				return t, nil
+			}
+			if t.detail != nil {
+				t.detail = nil
+				return t, nil
+			}
+			return t, nil
+		case "backspace":
+			if t.detail != nil {
+				t.detail = nil
+			}
+			return t, nil
 		case "tab", "right", "l":
 			t.active = (t.active + 1) % numTabs
 			return t, nil
@@ -134,6 +162,12 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "1", "2", "3", "4":
 			t.active = tab(msg.String()[0] - '1')
 			return t, nil
+		}
+		if t.help {
+			return t, nil
+		}
+		if t.active == tabScan {
+			return t.updateScan(msg)
 		}
 		if t.active == tabLayers {
 			switch msg.String() {
@@ -146,13 +180,13 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				return t, nil
-			case "esc", "backspace":
-				t.detail = nil
-				return t, nil
 			}
 		}
 	}
 
+	if t.help {
+		return t, nil
+	}
 	var cmd tea.Cmd
 	switch t.active {
 	case tabIdentity:
@@ -165,49 +199,90 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			t.groupTable, cmd = t.groupTable.Update(msg)
 		}
-	case tabScan:
-		t.scanVP, cmd = t.scanVP.Update(msg)
 	}
 	return t, cmd
 }
 
-func (t Model) View() string {
-	if !t.ready {
-		return "loading..."
-	}
-	name := t.m.RepoID
-	if name == "" {
-		name = filepath.Base(t.m.Dir)
-	}
-	name = sanitize.From(name).String()
-	var tabs []string
-	for i, n := range tabNames {
-		if tab(i) == t.active {
-			tabs = append(tabs, activeTabStyle.Render(n))
-		} else {
-			tabs = append(tabs, tabStyle.Render(n))
+func (t Model) updateScan(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	n := len(t.scan.Checks)
+	switch msg.String() {
+	case "up", "k":
+		if t.scanCursor > 0 {
+			t.scanCursor--
 		}
+	case "down", "j":
+		if n > 0 && t.scanCursor < n-1 {
+			t.scanCursor++
+		}
+	case "pgup", "b", "u":
+		t.scanCursor -= t.bodyHeight() / 2
+		if t.scanCursor < 0 {
+			t.scanCursor = 0
+		}
+	case "pgdown", "f", "d":
+		t.scanCursor += t.bodyHeight() / 2
+		if n > 0 && t.scanCursor >= n {
+			t.scanCursor = n - 1
+		}
+	case "home", "g":
+		t.scanCursor = 0
+	case "end", "G":
+		if n > 0 {
+			t.scanCursor = n - 1
+		}
+	case "enter":
+		if n > 0 && t.scanCursor >= 0 && t.scanCursor < n {
+			id := t.scan.Checks[t.scanCursor].ID
+			if t.scanOpen == nil {
+				t.scanOpen = map[string]bool{}
+			}
+			t.scanOpen[id] = !t.scanOpen[id]
+		}
+	case "c":
+		t.notice = "Code & pickles arrives in a later version"
 	}
-	header := titleStyle.Render("model-inspector · "+name) + "\n" + lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
+	t.ensureScanVisible()
+	return t, nil
+}
 
-	var body, help string
-	switch t.active {
-	case tabIdentity:
-		body, help = t.identityVP.View(), "↑/↓ scroll"
-	case tabConfig:
-		body, help = t.configVP.View(), "↑/↓ scroll"
-	case tabLayers:
-		if t.detail != nil {
-			body = headingStyle.Render(sanitize.From(fmt.Sprintf("%s · %d tensors · %s", t.detail.Key, len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))).String()) +
-				"\n" + t.tensorTable.View()
-			help = "↑/↓ select • esc back"
-		} else {
-			body, help = t.groupTable.View(), "↑/↓ select • enter drill in"
-		}
-	case tabScan:
-		body, help = t.scanVP.View(), "↑/↓ scroll"
+func (t Model) View() string {
+	configure()
+	if !t.ready {
+		return t.headerLine(80) + "\n" + t.tabLine(80)
 	}
-	return header + "\n" + body + "\n" + helpStyle.Render(help+" • tab/←/→/1-4 switch • q quit")
+	if t.width < 60 || t.height < 16 {
+		return frame(t.tooSmall(), t.width, t.height)
+	}
+	var body string
+	switch {
+	case t.help:
+		body = t.helpText(t.width, t.bodyHeight())
+	case t.active == tabIdentity:
+		body = t.identityVP.View()
+	case t.active == tabConfig:
+		body = t.configVP.View()
+	case t.active == tabLayers:
+		body = t.layersBody()
+	case t.active == tabScan:
+		body = t.scanBody(t.width, t.bodyHeight())
+	}
+	body = clipLines(body, t.bodyHeight(), t.width)
+	raw := t.headerLine(t.width) + "\n" + t.tabLine(t.width) + "\n" + body + "\n" + t.footerLine(t.width)
+	return frame(raw, t.width, t.height)
+}
+
+func (t Model) layersBody() string {
+	if strings.HasPrefix(t.m.Format, "gguf") {
+		return "GGUF parsing is coming. model-inspector read file sizes only."
+	}
+	if len(t.m.Tensors) == 0 {
+		return "No tensors: this directory has no safetensors shards."
+	}
+	if t.detail != nil {
+		head := sanitize.From(fmt.Sprintf("%s · %d tensors · %s", t.detail.Key, len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))).String()
+		return head + "\n" + t.tensorTable.View()
+	}
+	return t.groupTable.View()
 }
 
 func kv(label string, value sanitize.Text) string {
@@ -220,51 +295,41 @@ func textf(format string, args ...any) sanitize.Text {
 	return sanitize.From(fmt.Sprintf(format, args...))
 }
 
-func renderIdentity(m *model.Model) string {
-	var b strings.Builder
-	b.WriteString(headingStyle.Render("Identity") + "\n")
-	b.WriteString(kv("Path", text(m.Dir)))
-	b.WriteString(kv("Repo id", text(orDash(m.RepoID))))
-	b.WriteString(kv("Revision", text(orDash(m.Revision))))
-	b.WriteString(kv("Format", text(m.Format)))
-	b.WriteString(kv("Size on disk (stat)", textf("%s (%d bytes)", model.HumanBytes(m.TotalSize), m.TotalSize)))
-	b.WriteString(kv("Files", textf("%d", len(m.Files))))
-	b.WriteString(kv("Safetensors shards", textf("%d", len(m.Shards))))
-	if m.Quant != nil {
-		b.WriteString("\n" + headingStyle.Render("Quantization") + "\n")
-		b.WriteString(kv("Source", text(m.Quant.Source)))
-		b.WriteString(kv("Bits / group size / mode", textf("%d / %d / %s", m.Quant.Bits, m.Quant.GroupSize, orDash(m.Quant.Mode))))
-		b.WriteString(kv("Per-module overrides", textf("%d", m.Quant.NumOverrides)))
-		for _, bits := range sortedInts(m.BitsHistogram) {
-			b.WriteString(kv(fmt.Sprintf("  %d-bit packed weights", bits), textf("%d", m.BitsHistogram[bits])))
-		}
+// renderConfig is the scrollable Config screen. Grouped layout is a later
+// change; this screen keeps the key fields and the sanitized JSON.
+// Missing, unreadable, and unparsed configs each get their own line.
+func renderConfig(m *model.Model, width int) string {
+	if width < 20 {
+		width = 20
 	}
-	b.WriteString("\n" + headingStyle.Render("Tensors (from headers)") + "\n")
-	b.WriteString(kv("Tensors", textf("%d", len(m.Tensors))))
-	b.WriteString(kv("Stored elements", text(model.HumanCount(m.TotalElements))))
-	b.WriteString(kv("Params (dequantized est.)", text(model.HumanCount(m.TotalLogicalParams))))
-	b.WriteString(kv("Tensor bytes", text(model.HumanBytes(m.TensorBytes))))
-	layers, experts := m.LayerCount()
-	b.WriteString(kv("Decoder layers", textf("%d (%d with routed experts)", layers, experts)))
-	for _, dt := range model.SortedKeys(m.DTypes) {
-		d := m.DTypes[dt]
-		b.WriteString(kv("  dtype "+dt, textf("%d tensors, %s elems, %s", d.Tensors, model.HumanCount(d.Elements), model.HumanBytes(d.Bytes))))
-	}
-	if len(m.Warnings) > 0 {
-		b.WriteString("\n" + warnStyle.Render("Warnings") + "\n")
-		for _, w := range m.Warnings {
-			b.WriteString("  " + sanitize.From(w).String() + "\n")
-		}
-	}
-	return b.String()
-}
-
-func renderConfig(m *model.Model) string {
 	if m.Config == nil {
-		if len(m.ConfigRaw) == 0 {
-			return "no config.json found"
+		msg := "No config.json."
+		switch {
+		case len(m.ConfigRaw) > 0:
+			msg = "config.json did not parse."
+			excerpt := string(m.ConfigRaw)
+			if len(excerpt) > 512 {
+				excerpt = excerpt[:512]
+			}
+			msg += "\n" + sanitize.From(excerpt).String()
+		case configUnreadable(m):
+			msg = "config.json is unreadable."
 		}
-		return "config.json could not be parsed\n" + sanitize.From(string(m.ConfigRaw)).String()
+		var b strings.Builder
+		b.WriteString(msg)
+		n := 0
+		for _, w := range m.Warnings {
+			if !strings.Contains(w, "config.json") {
+				continue
+			}
+			if n == 5 {
+				break
+			}
+			b.WriteByte('\n')
+			b.WriteString(sanitize.From(w).String())
+			n++
+		}
+		return cutBlock(b.String(), width)
 	}
 	var b strings.Builder
 	b.WriteString(headingStyle.Render("Key fields") + "\n")
@@ -286,22 +351,27 @@ func renderConfig(m *model.Model) string {
 	} else {
 		b.WriteString(pretty)
 	}
-	return b.String()
+	return cutBlock(b.String(), width)
 }
 
-func renderScan(r scan.Result) string {
-	var b strings.Builder
-	b.WriteString(scan.ChecksImplemented + "\n")
-	b.WriteString(warnStyle.Render("⚠ "+r.Disclaimer) + "\n\n")
-	b.WriteString(labelStyle.Render("Overall") + statusStyles[r.Overall].Render(strings.ToUpper(string(r.Overall))) + "\n")
-	for _, c := range r.Checks {
-		b.WriteString("\n" + statusStyles[c.Status].Render(fmt.Sprintf("[%s]", strings.ToUpper(string(c.Status)))) +
-			" " + headingStyle.Render(c.Name) + "\n  " + sanitize.From(c.Summary).String() + "\n")
-		for _, d := range c.Details {
-			b.WriteString("    - " + sanitize.From(d).String() + "\n")
+func configUnreadable(m *model.Model) bool {
+	for _, w := range m.Warnings {
+		if strings.Contains(w, "config.json") {
+			return true
 		}
 	}
-	return b.String()
+	return false
+}
+
+func cutBlock(s string, width int) string {
+	lines := strings.Split(s, "\n")
+	for i, ln := range lines {
+		if strings.Contains(ln, "\x1b") && lipgloss.Width(ln) > width {
+			ln = stripANSI(ln)
+		}
+		lines[i] = truncWidth(ln, width)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func groupColumns(width int) []table.Column {
@@ -372,15 +442,4 @@ func compact(v any) string {
 		return fmt.Sprint(v)
 	}
 	return string(b)
-}
-
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-	return s
-}
-
-func sortedInts(m map[int]int) []int {
-	return slices.Sorted(maps.Keys(m))
 }

@@ -1,0 +1,169 @@
+package tui
+
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+// frame makes s exactly width by height. Over-long lines are cut.
+// ANSI sequences are stripped before a cut so a truncated line cannot
+// contain a broken escape.
+func frame(s string, width, height int) string {
+	if width < 1 {
+		width = 1
+	}
+	if height < 1 {
+		height = 1
+	}
+	lines := strings.Split(s, "\n")
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	for i, ln := range lines {
+		lines[i] = fitLine(ln, width)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func fitLine(s string, width int) string {
+	if strings.Contains(s, "\x1b") && lipgloss.Width(s) > width {
+		s = stripANSI(s)
+	}
+	w := lipgloss.Width(s)
+	switch {
+	case w == width:
+		return s
+	case w < width:
+		return s + strings.Repeat(" ", width-w)
+	default:
+		return truncWidth(s, width)
+	}
+}
+
+func truncWidth(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+	ell := g.ellipsis
+	if g.ellipsis == "" {
+		ell = "..."
+	}
+	ew := lipgloss.Width(ell)
+	if width <= ew {
+		return truncRunes(ell, width)
+	}
+	budget := width - ew
+	var b strings.Builder
+	for _, r := range s {
+		next := b.String() + string(r)
+		if lipgloss.Width(next) > budget {
+			break
+		}
+		b.WriteRune(r)
+	}
+	return b.String() + ell
+}
+
+// middleTrunc keeps the tail of s, which is where tensor name suffixes live.
+func middleTrunc(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+	ell := g.ellipsis
+	if ell == "" {
+		ell = "..."
+	}
+	ew := lipgloss.Width(ell)
+	if width <= ew {
+		return truncRunes(s, width)
+	}
+	budget := width - ew
+	runes := []rune(s)
+	lo := 0
+	for lo < len(runes) {
+		tail := string(runes[lo:])
+		if lipgloss.Width(tail) <= budget {
+			break
+		}
+		lo++
+	}
+	return ell + string(runes[lo:])
+}
+
+func truncRunes(s string, width int) string {
+	var b strings.Builder
+	for _, r := range s {
+		next := b.String() + string(r)
+		if lipgloss.Width(next) > width {
+			break
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+func clipLines(s string, n, width int) string {
+	if n < 1 {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) > n {
+		lines = lines[:n]
+	}
+	for len(lines) < n {
+		lines = append(lines, "")
+	}
+	for i, ln := range lines {
+		lines[i] = fitLine(ln, width)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func stripANSI(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] != 0x1b {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		i++
+		if i < len(s) && s[i] == ']' {
+			for i < len(s) && s[i] != 0x07 {
+				if s[i] == 0x1b {
+					break
+				}
+				i++
+			}
+			if i < len(s) {
+				i++
+			}
+			continue
+		}
+		for i < len(s) {
+			c := s[i]
+			i++
+			if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') {
+				break
+			}
+		}
+	}
+	return b.String()
+}
+
+func padLabel(label string, n int) string {
+	if lipgloss.Width(label) >= n {
+		return truncWidth(label, n)
+	}
+	return label + strings.Repeat(" ", n-lipgloss.Width(label))
+}

@@ -4,14 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
 )
 
 func TestQA_PrintTextAndJSON(t *testing.T) {
@@ -23,19 +21,19 @@ func TestQA_PrintTextAndJSON(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte("{\x1b"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out, err := captureStdout(t, func() error { return run([]string{"inspect", dir}) })
-	if err != nil {
-		t.Fatal(err)
+	out, stderr, code := capture(t, func() int { return run([]string{"inspect", "--path", dir}) })
+	if code != 0 && code != 1 {
+		t.Fatalf("exit %d\n%s", code, stderr)
 	}
 	assertNoHostileRunes(t, "text", out)
-	for _, tok := range []string{"<U+001B>", "<U+009B>", "<U+202E>", scan.ChecksImplemented} {
+	for _, tok := range []string{"<U+001B>", "<U+009B>", "<U+202E>", "behavior scan"} {
 		if !strings.Contains(out, tok) {
 			t.Errorf("text missing %s\n%s", tok, out)
 		}
 	}
-	js, err := captureStdout(t, func() error { return run([]string{"inspect", dir, "--json"}) })
-	if err != nil {
-		t.Fatal(err)
+	js, stderr, code := capture(t, func() int { return run([]string{"inspect", "--path", dir, "--json"}) })
+	if code != 0 && code != 1 {
+		t.Fatalf("json exit %d\n%s", code, stderr)
 	}
 	assertNoHostileRunes(t, "json", js)
 	if !strings.Contains(js, `\u009b`) || !strings.Contains(js, `\u202e`) || !strings.Contains(js, `\u001b`) {
@@ -62,36 +60,20 @@ func TestQA_StderrAndWalkError(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(sub, 0o755) })
 
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
+	out, stderr, code := capture(t, func() int { return run([]string{"inspect", "--path", dir}) })
+	if code == 2 || code == 3 {
+		t.Fatalf("walk error aborted the load: exit %d\n%s", code, stderr)
 	}
-	orig := os.Stderr
-	os.Stderr = w
-	var errBuf bytes.Buffer
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		_, _ = io.Copy(&errBuf, r)
-	}()
-	out, runErr := captureStdout(t, func() error { return run([]string{"inspect", dir}) })
-	_ = w.Close()
-	os.Stderr = orig
-	<-done
-
-	if runErr != nil {
-		t.Fatalf("walk error aborted the load: %v", runErr)
-	}
-	assertNoHostileRunes(t, "stderr", errBuf.String())
+	assertNoHostileRunes(t, "stderr", stderr)
 	assertNoHostileRunes(t, "stdout", out)
 	if !strings.Contains(out, "<U+001B>") || !strings.Contains(out, "<U+0007>") {
 		t.Fatalf("stdout did not tokenize the directory name:\n%s", out)
 	}
-	if !strings.Contains(out, "scan:     fail") {
-		t.Fatalf("scan did not fail:\n%s", out)
+	if code != 1 || strings.Contains(out, "0 fail") {
+		t.Fatalf("scan did not fail (exit %d):\n%s", code, out)
 	}
-	if !strings.Contains(out, scan.ChecksImplemented) {
-		t.Fatalf("missing checks sentence:\n%s", out)
+	if !strings.Contains(out, "behavior scan") {
+		t.Fatalf("missing disclaimer:\n%s", out)
 	}
 }
 

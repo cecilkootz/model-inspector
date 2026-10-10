@@ -119,10 +119,10 @@ func TestQA_BracketedDirKeepsIndex(t *testing.T) {
 			if res.Overall == StatusPass {
 				t.Fatalf("%s PASS (%s)", sub, res.Checks[0].Summary)
 			}
-			if strings.Contains(res.Checks[0].Summary, "no index file") {
-				t.Fatalf("%s summary claims no index: %s", sub, res.Checks[0].Summary)
+			blob := checkBlob(res)
+			if strings.Contains(blob, "no index file") {
+				t.Fatalf("%s summary claims no index: %s", sub, blob)
 			}
-			blob := res.Checks[0].Summary + "\n" + strings.Join(res.Checks[0].Details, "\n")
 			if !strings.Contains(blob, "model-00002-of-00002.safetensors") {
 				t.Fatalf("%s did not report the missing shard:\n%s", sub, blob)
 			}
@@ -149,7 +149,22 @@ func TestQA_AbsoluteShardName(t *testing.T) {
 	if res.Overall == StatusPass {
 		t.Fatalf("PASS with absolute shard name: %s", res.Checks[0].Summary)
 	}
-	detailsContain(t, res.Checks[0], "not a local file name")
+	if !strings.Contains(checkBlob(res), "not a local file name") {
+		t.Fatalf("absolute shard name was not reported:\n%s", checkBlob(res))
+	}
+}
+
+func checkBlob(res Result) string {
+	var b strings.Builder
+	for _, c := range res.Checks {
+		b.WriteString(c.Summary)
+		b.WriteByte('\n')
+		for _, d := range c.Details {
+			b.WriteString(d)
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
 }
 
 func TestQA_DuplicateIndexKey(t *testing.T) {

@@ -1,250 +1,277 @@
 // Command model-inspector inspects local model weights (headers and small
-// JSON files only) in a terminal UI or as JSON.
+// JSON files only) in a terminal UI or as text or JSON.
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/mattn/go-isatty"
+
 	"origin.cursor.com/cecilkootz/model-inspector/internal/hfcache"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/report"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/tui"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/version"
 )
 
 const usage = `model-inspector: inspect local model weights without loading them.
 
 Usage:
-  model-inspector [tui] <path-or-repo>            interactive TUI
-  model-inspector inspect <path-or-repo> [--json]  headless summary
+  model-inspector [tui] (--path <dir> | --repo <id> | <target>)
+  model-inspector inspect (--path <dir> | --repo <id> | <target>) [--json]
+  model-inspector version
 
-<path-or-repo> is a model/snapshot directory, or an HF repo id (org/name[@ref])
-resolved through the Hugging Face hub cache.
+<target> is a model directory or an HF repo id (org/name, optionally @ref
+or @commit) resolved through the hub cache.
+
+A bare org/name that is also a directory in the current working directory
+is refused: it is not opened as a path and it is not looked up in the hub.
+Pass --path to read that directory, or --repo to read the hub cache.
+A path that is absolute, starts with ./ or ../, or has a trailing slash is
+always a directory and is never looked up in the hub, even when the hub
+has a repo of a similar name. A bare org/name that is not a local directory
+is a repo id.
+
+When stdout is not a terminal, the default command prints the text summary
+instead of opening the TUI. --json prints JSON instead of opening the TUI.
 
 Flags:
-  --json            print a JSON summary (inspect only)
+  --path <dir>      read this directory; never a hub lookup
+  --repo <id>       read this HF repo id; never the working directory
+  --json            print schema_version 1 JSON
+  --strict          treat scan warnings as failures (exit 1)
+  --no-color        disable color (same as NO_COLOR)
   --hub-dir <dir>   HF hub cache (default: $HF_HUB_CACHE, $HF_HOME/hub, ~/.cache/huggingface/hub)
+  --version         print the version
+  -h, --help        print this help
+
+--path, --repo, and a positional target are mutually exclusive.
+
+Exit codes:
+  0  inspected, and no check failed (warnings are fine unless --strict); the TUI always exits 0
+  1  inspected, and a check failed (or a warning under --strict); the summary is still printed
+  2  usage: bad flags, a missing target, an invalid repo id, or an ambiguous path/repo id
+  3  the target could not be inspected (missing, not a directory, GGUF-only, or no weights)
 `
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
-		writeError(os.Stderr, err)
-		os.Exit(1)
-	}
-}
-
-// writeError prints err to w with file-derived controls tokenized.
-func writeError(w io.Writer, err error) {
-	fmt.Fprintln(w, "model-inspector:", sanitize.From(err.Error()))
+	os.Exit(run(os.Args[1:]))
 }
 
 type options struct {
-	json   bool
-	hubDir string
-	target string
+	json    bool
+	strict  bool
+	noColor bool
+	version bool
+	hubDir  string
+	target  string
+	mode    hfcache.TargetMode
 }
 
-func run(args []string) error {
+func run(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprint(os.Stderr, usage)
-		return errors.New("missing model path or repo id")
+		return 2
+	}
+	if args[0] == "version" || args[0] == "--version" || args[0] == "-version" {
+		fmt.Printf("%s %s\n", version.Name, version.Version)
+		return 0
 	}
 	cmd := "tui"
 	switch args[0] {
 	case "-h", "--help", "help":
 		fmt.Print(usage)
-		return nil
+		return 0
 	case "inspect", "tui":
 		cmd, args = args[0], args[1:]
 	}
 	opts, err := parseArgs(args)
 	if err != nil {
-		return err
+		if errors.Is(err, errHelp) {
+			fmt.Print(usage)
+			return 0
+		}
+		fail(err)
+		return 2
+	}
+	if opts.version {
+		fmt.Printf("%s %s\n", version.Name, version.Version)
+		return 0
+	}
+	if opts.noColor {
+		tui.SetNoColor(true)
 	}
 	start := time.Now()
-	m, err := load(opts)
+	m, fromCache, err := load(opts)
 	if err != nil {
-		return err
+		return resolveExit(err)
 	}
-	res := scan.Run(m)
-	if cmd == "tui" {
-		return tui.Run(m, res)
-	}
-	s := buildSummary(m, res, time.Since(start))
-	if opts.json {
-		var buf bytes.Buffer
-		enc := json.NewEncoder(&buf)
-		enc.SetIndent("", "  ")
-		enc.SetEscapeHTML(false)
-		if err := enc.Encode(s); err != nil {
-			return err
+	res := scan.RunOptions(m, scan.Options{Strict: opts.strict})
+	doc := report.Build(m, res, fromCache, time.Since(start))
+	interactive := cmd == "tui" && !opts.json && isatty.IsTerminal(os.Stdout.Fd())
+	if interactive {
+		if err := tui.Run(m, res); err != nil {
+			fail(err)
+			return 1
 		}
-		// C0 is already \uXXXX. Escape C1, bidi, and other invisible runes too.
-		_, err := os.Stdout.Write(sanitize.EscapeJSON(buf.Bytes()))
-		return err
+		return 0
 	}
-	printText(s)
-	return nil
+	if opts.json {
+		b, err := report.Marshal(doc)
+		if err != nil {
+			fail(err)
+			return 3
+		}
+		if _, err := os.Stdout.Write(b); err != nil {
+			fail(err)
+			return 3
+		}
+	} else {
+		fmt.Fprint(os.Stdout, report.Text(doc))
+	}
+	if msg, blocked := report.Blocked(doc); blocked {
+		fail(errors.New(msg))
+		return 3
+	}
+	if res.Overall == scan.StatusFail {
+		return 1
+	}
+	return 0
 }
 
+var errHelp = errors.New("help")
+
 func parseArgs(args []string) (options, error) {
-	o := options{hubDir: hfcache.DefaultHubDir()}
+	o := options{hubDir: hfcache.DefaultHubDir(), mode: hfcache.TargetAuto}
 	var pos []string
+	var path, repo string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
 		case a == "--json" || a == "-json":
 			o.json = true
+		case a == "--strict":
+			o.strict = true
+		case a == "--no-color":
+			o.noColor = true
+		case a == "--version" || a == "-version":
+			o.version = true
+		case a == "-h" || a == "--help" || a == "help":
+			return o, errHelp
 		case a == "--hub-dir" || a == "-hub-dir":
-			if i+1 >= len(args) {
-				return o, errors.New("--hub-dir needs a value")
+			v, next, err := takeValue(args, i, "--hub-dir")
+			if err != nil {
+				return o, err
 			}
-			i++
-			o.hubDir = args[i]
+			i = next
+			o.hubDir = v
 		case strings.HasPrefix(a, "--hub-dir="):
 			o.hubDir = strings.TrimPrefix(a, "--hub-dir=")
+		case a == "--path":
+			v, next, err := takeValue(args, i, "--path")
+			if err != nil {
+				return o, err
+			}
+			i = next
+			path = v
+		case strings.HasPrefix(a, "--path="):
+			path = strings.TrimPrefix(a, "--path=")
+		case a == "--repo":
+			v, next, err := takeValue(args, i, "--repo")
+			if err != nil {
+				return o, err
+			}
+			i = next
+			repo = v
+		case strings.HasPrefix(a, "--repo="):
+			repo = strings.TrimPrefix(a, "--repo=")
 		case strings.HasPrefix(a, "-"):
 			return o, fmt.Errorf("unknown flag %s", a)
 		default:
 			pos = append(pos, a)
 		}
 	}
-	if len(pos) != 1 {
+	n := 0
+	if path != "" {
+		n++
+	}
+	if repo != "" {
+		n++
+	}
+	if len(pos) > 1 {
 		return o, fmt.Errorf("expected exactly one model path or repo id, got %d", len(pos))
 	}
-	o.target = pos[0]
+	if len(pos) == 1 {
+		n++
+	}
+	if n == 0 {
+		return o, errors.New("missing model path or repo id")
+	}
+	if n > 1 {
+		return o, errors.New("pass only one of a positional target, --path, or --repo")
+	}
+	switch {
+	case path != "":
+		o.mode = hfcache.TargetPath
+		o.target = path
+	case repo != "":
+		o.mode = hfcache.TargetRepo
+		o.target = repo
+	default:
+		o.target = pos[0]
+	}
 	return o, nil
 }
 
-func load(o options) (*model.Model, error) {
-	r, err := hfcache.Resolve(o.target, o.hubDir)
+func takeValue(args []string, i int, name string) (string, int, error) {
+	if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+		return "", i, fmt.Errorf("%s needs a value", name)
+	}
+	return args[i+1], i + 1, nil
+}
+
+func load(o options) (*model.Model, bool, error) {
+	r, err := hfcache.ResolveTarget(o.target, o.hubDir, o.mode)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	m, err := model.Load(r.Dir)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	m.RepoID, m.Revision = r.RepoID, r.Revision
-	return m, nil
+	return m, r.FromCache, nil
 }
 
-type summary struct {
-	Identity     identity                    `json:"identity"`
-	Config       map[string]any              `json:"config"`
-	LayerTypes   map[string]int              `json:"layer_types,omitempty"`
-	Quantization *model.Quantization         `json:"quantization,omitempty"`
-	Layers       layerSummary                `json:"layers"`
-	Tensors      tensorSummary               `json:"tensors"`
-	DTypes       map[string]*model.DTypeStat `json:"dtypes"`
-	QuantBits    map[string]int              `json:"quant_bits_histogram,omitempty"`
-	Scan         scan.Result                 `json:"scan"`
-	Warnings     []string                    `json:"warnings,omitempty"`
-	ElapsedMS    int64                       `json:"elapsed_ms"`
+func resolveExit(err error) int {
+	msg := err.Error()
+	code := 3
+	if errors.Is(err, hfcache.ErrAmbiguousTarget) || usageResolve(msg) {
+		code = 2
+	}
+	fail(err)
+	if strings.Contains(msg, "not found in HF cache") {
+		fmt.Fprintln(os.Stderr, "(try --hub-dir or a local path)")
+	}
+	return code
 }
 
-type identity struct {
-	Path              string `json:"path"`
-	RepoID            string `json:"repo_id,omitempty"`
-	Revision          string `json:"revision,omitempty"`
-	Format            string `json:"format"`
-	TotalSizeBytes    int64  `json:"total_size_bytes"`
-	TotalSizeHuman    string `json:"total_size_human"`
-	FileCount         int    `json:"file_count"`
-	SafetensorsShards int    `json:"safetensors_shards"`
+func usageResolve(msg string) bool {
+	return strings.Contains(msg, "neither a directory nor") || strings.Contains(msg, "invalid ref")
 }
 
-type groupSummary struct {
-	Name    string `json:"name"`
-	Tensors int    `json:"tensors"`
-	Params  int64  `json:"params_est"`
-	Bytes   int64  `json:"bytes"`
+func fail(err error) {
+	writeError(os.Stderr, err)
 }
 
-type layerSummary struct {
-	Count       int            `json:"count"`
-	WithExperts int            `json:"with_routed_experts"`
-	OtherGroups []groupSummary `json:"other_groups"`
-}
-
-type tensorSummary struct {
-	Count          int    `json:"count"`
-	StoredElements int64  `json:"stored_elements"`
-	ParamsEst      int64  `json:"params_est"`
-	ParamsEstHuman string `json:"params_est_human"`
-	ParamsNote     string `json:"params_note"`
-	Bytes          int64  `json:"bytes"`
-	BytesHuman     string `json:"bytes_human"`
-	IndexTotalSize int64  `json:"index_total_size,omitempty"`
-}
-
-func buildSummary(m *model.Model, res scan.Result, elapsed time.Duration) summary {
-	s := summary{
-		Identity: identity{
-			Path: m.Dir, RepoID: m.RepoID, Revision: m.Revision, Format: m.Format,
-			TotalSizeBytes: m.TotalSize, TotalSizeHuman: model.HumanBytes(m.TotalSize),
-			FileCount: len(m.Files), SafetensorsShards: len(m.Shards),
-		},
-		Config:       map[string]any{},
-		LayerTypes:   m.LayerTypeCounts(),
-		Quantization: m.Quant,
-		Tensors: tensorSummary{
-			Count: len(m.Tensors), StoredElements: m.TotalElements,
-			ParamsEst: m.TotalLogicalParams, ParamsEstHuman: model.HumanCount(m.TotalLogicalParams),
-			ParamsNote: "packed quantized weights counted at dequantized size; quantization scales/biases excluded",
-			Bytes:      m.TensorBytes, BytesHuman: model.HumanBytes(m.TensorBytes),
-		},
-		DTypes:    m.DTypes,
-		Scan:      res,
-		Warnings:  m.Warnings,
-		ElapsedMS: elapsed.Milliseconds(),
-	}
-	if m.Index != nil {
-		s.Tensors.IndexTotalSize = m.Index.TotalSize
-	}
-	for _, kv := range m.KeyConfig() {
-		s.Config[kv.Path] = kv.Value
-	}
-	s.Layers.Count, s.Layers.WithExperts = m.LayerCount()
-	for _, g := range m.Groups {
-		if g.Kind != model.KindLayer {
-			s.Layers.OtherGroups = append(s.Layers.OtherGroups, groupSummary{g.Key, len(g.Tensors), g.LogicalParams, g.Bytes})
-		}
-	}
-	if len(m.BitsHistogram) > 0 {
-		s.QuantBits = map[string]int{}
-		for b, n := range m.BitsHistogram {
-			s.QuantBits[strconv.Itoa(b)] = n
-		}
-	}
-	return s
-}
-
-func printText(s summary) {
-	name := s.Identity.RepoID
-	if name == "" {
-		name = s.Identity.Path
-	}
-	fmt.Printf("%s @ %s\n", sanitize.From(name), sanitize.From(s.Identity.Revision))
-	fmt.Printf("  format:   %s\n", sanitize.From(s.Identity.Format))
-	fmt.Printf("  on disk:  %s in %d files (%d shards)\n", s.Identity.TotalSizeHuman, s.Identity.FileCount, s.Identity.SafetensorsShards)
-	fmt.Printf("  tensors:  %d, %s params (est), %s\n", s.Tensors.Count, sanitize.From(s.Tensors.ParamsEstHuman), s.Tensors.BytesHuman)
-	fmt.Printf("  layers:   %d (%d with routed experts)\n", s.Layers.Count, s.Layers.WithExperts)
-	for _, g := range s.Layers.OtherGroups {
-		fmt.Printf("  %-10s %d tensors, %s\n", sanitize.From(g.Name).String()+":", g.Tensors, model.HumanBytes(g.Bytes))
-	}
-	fmt.Printf("  scan:     %s\n", s.Scan.Overall)
-	fmt.Printf("  checks:   %s\n", scan.ChecksImplemented)
-	fmt.Printf("  note:     %s\n", s.Scan.Disclaimer)
-	for _, w := range s.Warnings {
-		fmt.Printf("  warning:  %s\n", sanitize.From(w))
-	}
+// writeError prints err to w with file-derived controls tokenized.
+func writeError(w io.Writer, err error) {
+	fmt.Fprintln(w, "model-inspector:", sanitize.From(err.Error()))
 }

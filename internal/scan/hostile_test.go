@@ -32,16 +32,18 @@ func TestEmptyIndexDoesNotPass(t *testing.T) {
 		t.Fatalf("IndexErr = %v", m.IndexErr)
 	}
 	res := Run(m)
-	if res.Overall == StatusPass || res.Checks[0].Status == StatusSkip {
-		t.Fatalf("overall %s check %+v", res.Overall, res.Checks[0])
+	idx := findCheck(t, res, CheckIndex)
+	if res.Overall == StatusPass || idx.Status == StatusSkip {
+		t.Fatalf("overall %s check %+v", res.Overall, idx)
 	}
-	if strings.Contains(res.Checks[0].Summary, "unreadable") {
-		t.Fatalf("empty index called unreadable: %s", res.Checks[0].Summary)
+	if strings.Contains(idx.Summary, "unreadable") {
+		t.Fatalf("empty index called unreadable: %s", idx.Summary)
 	}
-	if !strings.Contains(res.Checks[0].Summary, "missing or empty weight_map") {
-		t.Fatalf("summary %s", res.Checks[0].Summary)
+	if !strings.Contains(idx.Summary, "missing or empty weight_map") {
+		t.Fatalf("summary %s", idx.Summary)
 	}
-	detailsContain(t, res.Checks[0], "missing or empty weight_map", "model.safetensors: unreadable:")
+	detailsContain(t, idx, "missing or empty weight_map")
+	detailsContain(t, findCheck(t, res, CheckHeader), "model.safetensors: unreadable:")
 }
 
 func TestMultipleIndexesAreNotPicked(t *testing.T) {
@@ -113,10 +115,14 @@ func TestIndexDotDotShard(t *testing.T) {
 		t.Fatal("non-local shard name was dropped")
 	}
 	res := Run(m)
-	if res.Overall != StatusFail || res.Checks[0].Status != StatusFail {
-		t.Fatalf("overall %s check %+v", res.Overall, res.Checks[0])
+	if res.Overall != StatusFail {
+		t.Fatalf("overall %s", res.Overall)
 	}
-	detailsContain(t, res.Checks[0], "non-local", "../outside.safetensors", "model-00001.safetensors")
+	var all []string
+	for _, c := range res.Checks {
+		all = append(all, c.Details...)
+	}
+	detailsContain(t, Check{Details: all}, "non-local", "../outside.safetensors", "model-00001.safetensors")
 }
 
 func TestUnreferencedShardIsChecked(t *testing.T) {
@@ -131,13 +137,14 @@ func TestUnreferencedShardIsChecked(t *testing.T) {
 	if len(m.Shards) != 2 {
 		t.Fatalf("shards %+v", shardNames(m))
 	}
-	c := check(t, m)
+	c := checkID(t, m, CheckFiles)
 	if c.Status != StatusWarn && c.Status != StatusFail {
 		t.Fatalf("unreferenced shard ignored: %+v", c)
 	}
 	detailsContain(t, c, "model-00002-of-00002.safetensors: safetensors file is not referenced by the index")
-	if !strings.Contains(strings.Join(c.Details, "\n"), "model.extra.weight") && c.Status == StatusPass {
-		t.Fatal("extra tensor was not examined")
+	bounds := checkID(t, m, CheckOffsets)
+	if bounds.Status == StatusSkip {
+		t.Fatal("extra shard was not examined")
 	}
 }
 

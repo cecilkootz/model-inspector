@@ -27,8 +27,6 @@ sanitized text (plus one ellipsis rune when the value is truncated), not
 4096 bytes. `--json` keeps parsed values, and encodes C1, bidi, and other
 invisible characters in those strings as `\uXXXX` escapes.
 
-Text output and the TUI scan screen state that 1 of 4 checks is implemented.
-
 It never writes into the Hugging Face cache. Inspecting a ~106 GiB model takes
 ~15 ms and ~11 MB RSS.
 
@@ -64,53 +62,95 @@ downloaded checkpoint.
 
 ## Run
 
-`<path-or-repo>` is a model/snapshot directory, or an HF repo id
-(`org/name`, optionally `@ref` or `@commit`) resolved through the hub cache
-(`$HF_HUB_CACHE`, `$HF_HOME/hub`, or `~/.cache/huggingface/hub`;
-override with `--hub-dir`).
+A target is a model directory or an HF repo id (`org/name`, optionally
+`@ref` or `@commit`) resolved through the hub cache (`$HF_HUB_CACHE`,
+`$HF_HOME/hub`, or `~/.cache/huggingface/hub`; override with `--hub-dir`).
 
 ```sh
-# Interactive TUI
-bin/model-inspector Vontra/Qwen3.8-Flash-Next-MLX-4bit-MTP
+# Interactive TUI. A bare org/name that is also a local directory is refused.
+bin/model-inspector --repo Vontra/Qwen3.8-Flash-Next-MLX-4bit-MTP
 
-# Headless summary
-bin/model-inspector inspect Vontra/Qwen3.8-Flash-Next-MLX-4bit-MTP
-bin/model-inspector inspect /path/to/snapshot --json
+# Headless text, or schema_version 1 JSON
+bin/model-inspector inspect --repo Vontra/Qwen3.8-Flash-Next-MLX-4bit-MTP
+bin/model-inspector inspect --path /path/to/snapshot --json
 ```
 
-Keys: `tab`/`shift+tab`, `←`/`→` or `1`-`4` switch screens; `↑`/`↓` scroll or select;
-`enter` drills into a layer group, `esc` goes back; `q` quits.
+When stdout is not a terminal, the default command prints the text summary
+instead of opening the TUI. `--json` prints JSON instead of opening the TUI.
+`NO_COLOR` or `--no-color` disables TUI color. A locale whose `LC_ALL` (or
+`LANG`, when `LC_ALL` is unset) is set and is not UTF-8 uses ASCII glyphs;
+an empty locale stays Unicode.
+
+### Path or repo
+
+`--path` always reads a directory and never consults the hub. `--repo`
+always reads an HF repo id and never stats the working directory. The two
+flags cannot be combined with each other or with a positional target.
+
+A bare `org/name` that is also a directory in the current working directory
+is ambiguous. The command exits 2 and does not open either one. Pass
+`--path` or `--repo` to say which you mean. An absolute path, a `./` or
+`../` prefix, or a trailing slash is a directory even when the string looks
+like a repo id, and a missing directory does not fall through to the hub.
+A bare `org/name` that is not a local directory is still a repo id.
+
+The library helper `hfcache.Resolve` still prefers an existing directory.
+The CLI does not use it for user input; it uses `hfcache.ResolveTarget`.
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Inspected, and no check failed. Warnings are fine unless `--strict`. The TUI always exits 0. |
+| 1 | Inspected, and a check failed, or a warning under `--strict`. The summary is still printed. |
+| 2 | Usage: unknown flag, missing target, invalid repo id, or an ambiguous path/repo id. |
+| 3 | Could not inspect: not found, not a directory, GGUF-only, or no weight files. GGUF and empty directories still print a summary. |
+
+### Keys
+
+`tab` / `shift+tab`, `←` / `→`, `h` / `l`, or `1`-`4` switch screens.
+`↑` / `↓` scroll or select. On Layers, `enter` opens a group and `esc` or
+backspace goes back. `esc` never quits: it closes help, then leaves a
+drill-down, then does nothing. `?` opens the key list; `q` quits.
+`ctrl+c` always quits. On Scan, `c` shows a footer notice that code and
+pickle contents arrive in a later version. Filter, sort, and raw-JSON keys
+are listed in help as later and do nothing. The window must be at least
+60×16; below that the screen says so and only `q` works.
 
 ### Screens
 
-1. **Identity**: path, repo id + revision, format, on-disk size, file/shard
-   count, quantization (bits, group size, inferred bits per packed weight),
-   dtype breakdown.
-2. **Config**: key architecture/MoE/MTP fields (root or `text_config`) plus
-   the raw `config.json` in a scrollable viewport.
+The header is the model name, format, on-disk size, estimated params, and
+quantization. A partial or unreadable shard marks the size incomplete.
+GGUF replaces the format and params with "not supported yet". The active
+tab is bracketed. The Scan tab badge follows the overall result.
+
+1. **Identity**: repo and revision (or the directory, with an explicit
+   empty revision), architecture, MoE, on-disk size, estimated params,
+   quantization, a storage bar, a weights-only memory estimate, callouts,
+   then the dtype table. A lookup-table memory line appears when those
+   tables are at least 1 GiB. This is not a load of the weights.
+2. **Config**: key architecture, attention, MoE, and MTP fields (root or
+   `text_config`) plus the sanitized `config.json`. A missing file, an
+   unreadable file, and a file that did not parse each get their own line.
 3. **Layers**: tensors grouped by decoder layer (`...layers.N.`) plus
    embeddings, ngram (the PLE n-gram table, even when stored under
    `layers.N.ple.ple_embedding`), norms, hyper_connection (the model-level
-   mixer, including `hc_norm`), lm_head, mtp, vision, and other. Per group:
-   tensor count, params, bytes, whether routed experts are present. Enter
+   mixer, including `hc_norm`), lm_head, mtp, vision, and other. Enter
    shows each tensor's name, dtype, shape, bytes, and role (`q4`, `qscales`,
-   `qbiases`).
-4. **Scan**: structural checks. **This is not a malware scan.** 1 of 4 checks
-   is implemented. Implemented:
-   an unreadable index fails the check; a missing or empty weight_map fails
-   it without being called unreadable; every tensor in the index exists in
-   the referenced shard header; shard names must be local files; every
-   `.safetensors` file on disk is checked, including ones the index omits;
-   every header byte range is valid, matches dtype×shape, starts at offset 0,
-   has no gaps or overlaps, and ends at the data section. Planned: hash vs
-   pinned revision, metadata sanity, behavior probes.
+   `qbiases`). The Layers column layout itself is unchanged in this version.
+4. **Scan**: structural checks, with a one-line reason on expand.
+   **This is not a malware or behavior scan.** The disclaimer says so.
+   Checks: shard headers parse; files present (including a shard the index
+   does not name); offsets and sizes (bounds, dtype×shape, overlap, gaps,
+   trailing bytes); index matches headers; code-executing formats by name
+   only (warn, or fail under `--strict`); code and pickle contents (not
+   run); hashes vs revision (planned); config vs tensor shapes (planned).
+   Skip and planned do not turn a pass into a failure. An empty directory
+   or GGUF-only directory is not reported as a pass.
 
-"Params" counts MLX packed quantized weights at their dequantized size and
-excludes quantization scales/biases; "stored elements" is the raw count.
-
-A relative model path is resolved against the process working directory.
-An entry on that relative path can shadow the directory you meant. That
-case is not handled in this PR; UX PR1's `--path` / `--repo` flags will own it.
+"Params" counts packed quantized weights at their dequantized size and
+excludes quantization scales and biases. The JSON document is described in
+[docs/json-schema.md](docs/json-schema.md).
 
 ## Layout
 
@@ -121,14 +161,18 @@ internal/safetensors    header reader
 internal/safeopen       single-fd regular-file reads with a size cap
 internal/sanitize       terminal-safe text for file-derived strings
 internal/model          loader, grouping, quant inference, config fields
+internal/report         schema_version 1 JSON and the text summary
 internal/scan           structural checks (+ planned stubs)
 internal/tui            Bubble Tea screens
+internal/version        tool name and version written into JSON
 ```
 
 ## Roadmap
 
 - GGUF support (header + tensor info parsing)
 - Hash / provenance verification against the HF commit (LFS sha256)
-- Behavior probes against a served copy
+- Code and pickle contents (names are flagged today; contents are not read)
+- Config vs tensor-shape checks
+- Behavior probes against a served copy (not a scan check)
 - Agent / tool config inspection (chat template, tool-call format, generation config)
 - Offload planner: given a VRAM/unified-memory size, plan which layers/experts fit

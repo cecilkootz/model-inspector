@@ -16,6 +16,34 @@ func HumanBytes(n int64) string {
 	return fmt.Sprintf("%.2f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
+// HumanDecimalGB formats n as decimal gigabytes (10^9), for readers
+// comparing a figure with a GPU spec sheet.
+func HumanDecimalGB(n int64) string {
+	return fmt.Sprintf("%.1f GB", float64(n)/1e9)
+}
+
+// Comma inserts thousands separators into n.
+func Comma(n int64) string {
+	if n < 0 {
+		return "-" + Comma(-n)
+	}
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+	var b []byte
+	lead := len(s) % 3
+	if lead == 0 {
+		lead = 3
+	}
+	b = append(b, s[:lead]...)
+	for i := lead; i < len(s); i += 3 {
+		b = append(b, ',')
+		b = append(b, s[i:i+3]...)
+	}
+	return string(b)
+}
+
 // HumanCount formats a parameter count (K/M/B/T).
 func HumanCount(n int64) string {
 	switch {

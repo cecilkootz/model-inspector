@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "tool": {
+    "name": "model-inspector",
+    "version": "0.1.0"
+  },
+  "options": {
+    "strict": false,
+    "code": false
+  },
+  "source": {
+    "path": "DIR",
+    "repo_id": null,
+    "revision": null,
+    "revision_source": "none"
+  },
+  "format": {
+    "name": "safetensors",
+    "variant": "",
+    "supported": true
+  },
+  "files": {
+    "count": 5,
+    "total_bytes": 400,
+    "shard_count": 1,
+    "index_file": "model.safetensors.index.json",
+    "shards": [
+      {
+        "name": "model.safetensors",
+        "bytes": 108,
+        "readable": true,
+        "error": null
+      }
+    ]
+  },
+  "architecture": {
+    "model_type": "demo",
+    "layer_count": 1,
+    "layers_with_routed_experts": 0,
+    "layer_type_counts": [
+      {
+        "type": "full_attention",
+        "count": 1
+      }
+    ],
+    "routed_experts": null,
+    "experts_per_token": null,
+    "has_mtp": false,
+    "has_vision": false
+  },
+  "config": {
+    "present": true,
+    "fields": [
+      {
+        "key": "model_type",
+        "path": "model_type",
+        "group": "architecture",
+        "value": "demo"
+      }
+    ]
+  },
+  "quantization": null,
+  "tensors": {
+    "count": 1,
+    "stored_elements": 2,
+    "params_est": 2,
+    "params_note": "packed quantized weights counted at dequantized size; quantization scales/biases excluded",
+    "bytes": 4,
+    "index_total_size_bytes": 4
+  },
+  "dtypes": [
+    {
+      "dtype": "BF16",
+      "tensors": 1,
+      "elements": 2,
+      "bytes": 4
+    }
+  ],
+  "storage": [
+    {
+      "class": "plain_bf16",
+      "bytes": 4,
+      "pct": 100
+    }
+  ],
+  "memory": {
+    "weights_bytes": 4,
+    "text_only_bytes": 4,
+    "host_capable_bytes": 0,
+    "accelerator_min_bytes": 4,
+    "unified_memory": false,
+    "note": "weights only; excludes KV cache, activations, runtime overhead",
+    "host_capable_note": "heuristic lookup_table_v1; runtime support varies; no saving on unified memory"
+  },
+  "groups": [
+    {
+      "key": "layer 0",
+      "kind": "layer",
+      "layer": 0,
+      "attention_type": "full_attention",
+      "tensors": 1,
+      "params_est": 2,
+      "bytes": 4,
+      "pct_bytes": 100,
+      "storage": "bf16",
+      "has_routed_experts": false,
+      "routed_experts": null,
+      "outliers": [],
+      "host_capable_bytes": 0
+    }
+  ],
+  "host_capable_tensors": [],
+  "callouts": [
+    {
+      "kind": "big_tensor",
+      "group": "layer 0",
+      "tensor": "model.layers.0.self_attn.q_proj.weight",
+      "message": "self_attn.q_proj.weight is 4 B, 100.0% of weights"
+    }
+  ],
+  "scan": {
+    "strict": false,
+    "overall": "warn",
+    "disclaimer": "Structural integrity checks only: file completeness, header well-formedness and internal consistency. Not a malware or behavior scan; does not establish what the weights do or who produced them.",
+    "counts": {
+      "pass": 4,
+      "warn": 1,
+      "fail": 0,
+      "skip": 1,
+      "planned": 2
+    },
+    "checks": [
+      {
+        "id": "header-parse",
+        "name": "Shard headers parse",
+        "status": "pass",
+        "effective_status": "pass",
+        "summary": "1/1 headers read (length + JSON)",
+        "details": []
+      },
+      {
+        "id": "file-presence",
+        "name": "Files present",
+        "status": "pass",
+        "effective_status": "pass",
+        "summary": "1/1 indexed shards exist, 0 broken links",
+        "details": []
+      },
+      {
+        "id": "offsets-bounds",
+        "name": "Offsets & sizes",
+        "status": "pass",
+        "effective_status": "pass",
+        "summary": "1 ranges in-bounds, = dtype×shape, no overlaps",
+        "details": []
+      },
+      {
+        "id": "index-shard-consistency",
+        "name": "Index matches headers",
+        "status": "pass",
+        "effective_status": "pass",
+        "summary": "1/1 index entries found in shard headers",
+        "details": []
+      },
+      {
+        "id": "code-exec-formats",
+        "name": "Code-executing formats",
+        "status": "warn",
+        "effective_status": "warn",
+        "summary": "3 name matches (pickle-family, .py, or auto_map)",
+        "details": [
+          "config.json auto_map AutoModelForCausalLM -> modeling_demo.DemoForCausalLM",
+          "modeling_demo.py",
+          "weights.bin"
+        ]
+      },
+      {
+        "id": "code-content",
+        "name": "Code & pickle contents",
+        "status": "skip",
+        "effective_status": "skip",
+        "summary": "not run (open Code & pickles, or pass --code)",
+        "details": []
+      },
+      {
+        "id": "hash-vs-revision",
+        "name": "Hashes vs revision",
+        "status": "planned",
+        "effective_status": "planned",
+        "summary": "not run: needs a full read of 400 B",
+        "details": []
+      },
+      {
+        "id": "metadata-sanity",
+        "name": "Config vs tensor shapes",
+        "status": "planned",
+        "effective_status": "planned",
+        "summary": "not run: planned",
+        "details": []
+      }
+    ]
+  },
+  "code": null,
+  "load_warnings": [],
+  "elapsed_ms": 0
+}

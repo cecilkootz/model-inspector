@@ -1,0 +1,521 @@
+{
+  "schema_version": 1,
+  "tool": {
+    "name": "model-inspector",
+    "version": "0.1.0"
+  },
+  "options": {
+    "strict": false,
+    "code": false
+  },
+  "source": {
+    "path": "DIR",
+    "repo_id": null,
+    "revision": null,
+    "revision_source": "none"
+  },
+  "format": {
+    "name": "safetensors",
+    "variant": "mlx",
+    "supported": true
+  },
+  "files": {
+    "count": 4,
+    "total_bytes": 6169,
+    "shard_count": 2,
+    "index_file": "model.safetensors.index.json",
+    "shards": [
+      {
+        "name": "model-00001-of-00002.safetensors",
+        "bytes": 2176,
+        "readable": true,
+        "error": null
+      },
+      {
+        "name": "model-00002-of-00002.safetensors",
+        "bytes": 752,
+        "readable": true,
+        "error": null
+      }
+    ]
+  },
+  "architecture": {
+    "model_type": "qwen3_5",
+    "layer_count": 2,
+    "layers_with_routed_experts": 1,
+    "layer_type_counts": [
+      {
+        "type": "full_attention",
+        "count": 1
+      },
+      {
+        "type": "linear_attention",
+        "count": 1
+      }
+    ],
+    "routed_experts": 4,
+    "experts_per_token": 2,
+    "has_mtp": true,
+    "has_vision": true
+  },
+  "config": {
+    "present": true,
+    "fields": [
+      {
+        "key": "model_type",
+        "path": "model_type",
+        "group": "architecture",
+        "value": "qwen3_5"
+      },
+      {
+        "key": "architectures",
+        "path": "architectures",
+        "group": "architecture",
+        "value": [
+          "Qwen3_5ForConditionalGeneration"
+        ]
+      },
+      {
+        "key": "num_hidden_layers",
+        "path": "text_config.num_hidden_layers",
+        "group": "architecture",
+        "value": 2
+      },
+      {
+        "key": "hidden_size",
+        "path": "text_config.hidden_size",
+        "group": "architecture",
+        "value": 8
+      },
+      {
+        "key": "intermediate_size",
+        "path": "text_config.intermediate_size",
+        "group": "architecture",
+        "value": 16
+      },
+      {
+        "key": "num_attention_heads",
+        "path": "text_config.num_attention_heads",
+        "group": "attention",
+        "value": 2
+      },
+      {
+        "key": "num_key_value_heads",
+        "path": "text_config.num_key_value_heads",
+        "group": "attention",
+        "value": 1
+      },
+      {
+        "key": "head_dim",
+        "path": "text_config.head_dim",
+        "group": "attention",
+        "value": 4
+      },
+      {
+        "key": "vocab_size",
+        "path": "text_config.vocab_size",
+        "group": "architecture",
+        "value": 32
+      },
+      {
+        "key": "max_position_embeddings",
+        "path": "text_config.max_position_embeddings",
+        "group": "architecture",
+        "value": 128
+      },
+      {
+        "key": "tie_word_embeddings",
+        "path": "text_config.tie_word_embeddings",
+        "group": "architecture",
+        "value": false
+      },
+      {
+        "key": "torch_dtype",
+        "path": "torch_dtype",
+        "group": "architecture",
+        "value": "bfloat16"
+      },
+      {
+        "key": "num_experts",
+        "path": "text_config.num_experts",
+        "group": "moe",
+        "value": 4
+      },
+      {
+        "key": "num_experts_per_tok",
+        "path": "text_config.num_experts_per_tok",
+        "group": "moe",
+        "value": 2
+      },
+      {
+        "key": "moe_intermediate_size",
+        "path": "text_config.moe_intermediate_size",
+        "group": "moe",
+        "value": 8
+      },
+      {
+        "key": "shared_expert_intermediate_size",
+        "path": "text_config.shared_expert_intermediate_size",
+        "group": "moe",
+        "value": 8
+      },
+      {
+        "key": "mtp_num_hidden_layers",
+        "path": "text_config.mtp_num_hidden_layers",
+        "group": "mtp_vision",
+        "value": 1
+      },
+      {
+        "key": "vision.depth",
+        "path": "vision_config.depth",
+        "group": "mtp_vision",
+        "value": 1
+      },
+      {
+        "key": "vision.hidden_size",
+        "path": "vision_config.hidden_size",
+        "group": "mtp_vision",
+        "value": 8
+      },
+      {
+        "key": "vision.num_heads",
+        "path": "vision_config.num_heads",
+        "group": "mtp_vision",
+        "value": 2
+      },
+      {
+        "key": "vision.patch_size",
+        "path": "vision_config.patch_size",
+        "group": "mtp_vision",
+        "value": 14
+      }
+    ]
+  },
+  "quantization": {
+    "config_key": "text_config.quantization_config",
+    "bits": 4,
+    "group_size": 32,
+    "mode": "mlx",
+    "override_count": 0,
+    "bits_histogram": [
+      {
+        "bits": 4,
+        "tensors": 1
+      }
+    ]
+  },
+  "tensors": {
+    "count": 25,
+    "stored_elements": 60,
+    "params_est": 86,
+    "params_note": "packed quantized weights counted at dequantized size; quantization scales/biases excluded",
+    "bytes": 152,
+    "index_total_size_bytes": 152
+  },
+  "dtypes": [
+    {
+      "dtype": "BF16",
+      "tensors": 22,
+      "elements": 52,
+      "bytes": 104
+    },
+    {
+      "dtype": "I64",
+      "tensors": 2,
+      "elements": 4,
+      "bytes": 32
+    },
+    {
+      "dtype": "U32",
+      "tensors": 1,
+      "elements": 4,
+      "bytes": 16
+    }
+  ],
+  "storage": [
+    {
+      "class": "plain_bf16",
+      "bytes": 100,
+      "pct": 65.8
+    },
+    {
+      "class": "plain_i64",
+      "bytes": 32,
+      "pct": 21.1
+    },
+    {
+      "class": "q4_packed",
+      "bytes": 16,
+      "pct": 10.5
+    },
+    {
+      "class": "q_scales_biases",
+      "bytes": 4,
+      "pct": 2.6
+    }
+  ],
+  "memory": {
+    "weights_bytes": 152,
+    "text_only_bytes": 128,
+    "host_capable_bytes": 0,
+    "accelerator_min_bytes": 152,
+    "unified_memory": true,
+    "note": "weights only; excludes KV cache, activations, runtime overhead",
+    "host_capable_note": "heuristic lookup_table_v1; runtime support varies; no saving on unified memory"
+  },
+  "groups": [
+    {
+      "key": "embeddings",
+      "kind": "embeddings",
+      "layer": null,
+      "attention_type": null,
+      "tensors": 3,
+      "params_est": 32,
+      "bytes": 20,
+      "pct_bytes": 13.2,
+      "storage": "q4",
+      "has_routed_experts": false,
+      "routed_experts": null,
+      "outliers": [],
+      "host_capable_bytes": 0
+    },
+    {
+      "key": "ngram",
+      "kind": "embeddings",
+      "layer": null,
+      "attention_type": null,
+      "tensors": 3,
+      "params_est": 6,
+      "bytes": 36,
+      "pct_bytes": 23.7,
+      "storage": "i64",
+      "has_routed_experts": false,
+      "routed_experts": null,
+      "outliers": [],
+      "host_capable_bytes": 0
+    },
+    {
+      "key": "layer 0",
+      "kind": "layer",
+      "layer": 0,
+      "attention_type": "linear_attention",
+      "tensors": 6,
+      "params_est": 12,
+      "bytes": 24,
+      "pct_bytes": 15.8,
+      "storage": "bf16",
+      "has_routed_experts": true,
+      "routed_experts": null,
+      "outliers": [],
+      "host_capable_bytes": 0
+    },
+    {
+      "key": "layer 1",
+      "kind": "layer",
+      "layer": 1,
+      "attention_type": "full_attention",
+      "tensors": 2,
+      "params_est": 4,
+      "bytes": 8,
+      "pct_bytes": 5.3,
+      "storage": "bf16",
+      "has_routed_experts": false,
+      "routed_experts": null,
+      "outliers": [],
+      "host_capable_bytes": 0
+    },
+    {
+      "key": "norms",
+      "kind": "norms",
+      "layer": null,
+      "attention_type": null,
+      "tensors": 1,
+      "params_est": 4,
+      "bytes": 8,
+      "pct_bytes": 5.3,
+      "storage": "bf16",
+      "has_routed_experts": false,
+      "routed_experts": null,
+      "outliers": [],
+      "host_capable_bytes": 0
+    },
+    {
+      "key": "hyper_connection",
+      "kind": "hyper",
+      "layer": null,
+      "attention_type": null,
+      "tensors": 3,
+      "params_est": 12,
+      "bytes": 24,
+      "pct_bytes": 15.8,
+      "storage": "bf16",
+      "has_routed_experts": false,
+      "routed_experts": null,
+      "outliers": [],
+      "host_capable_bytes": 0
+    },
+    {
+      "key": "lm_head",
+      "kind": "lm_head",
+      "layer": null,
+      "attention_type": null,
+      "tensors": 1,
+      "params_est": 4,
+      "bytes": 8,
+      "pct_bytes": 5.3,
+      "storage": "bf16",
+      "has_routed_experts": false,
+      "routed_experts": null,
+      "outliers": [],
+      "host_capable_bytes": 0
+    },
+    {
+      "key": "mtp",
+      "kind": "mtp",
+      "layer": null,
+      "attention_type": null,
+      "tensors": 4,
+      "params_est": 8,
+      "bytes": 16,
+      "pct_bytes": 10.5,
+      "storage": "bf16",
+      "has_routed_experts": false,
+      "routed_experts": null,
+      "outliers": [
+        "structural"
+      ],
+      "host_capable_bytes": 0
+    },
+    {
+      "key": "vision",
+      "kind": "vision",
+      "layer": null,
+      "attention_type": null,
+      "tensors": 2,
+      "params_est": 4,
+      "bytes": 8,
+      "pct_bytes": 5.3,
+      "storage": "bf16",
+      "has_routed_experts": false,
+      "routed_experts": null,
+      "outliers": [
+        "structural"
+      ],
+      "host_capable_bytes": 0
+    }
+  ],
+  "host_capable_tensors": [],
+  "callouts": [
+    {
+      "kind": "big_tensor",
+      "group": "embeddings",
+      "tensor": "language_model.model.embed_tokens.weight",
+      "message": "language_model.model.embed_tokens.weight is 16 B, 10.5% of weights"
+    },
+    {
+      "kind": "big_tensor",
+      "group": "ngram",
+      "tensor": "language_model.model.layers.1.ple.ple_embedding.ngram_heads_offsets",
+      "message": "ple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% of weights"
+    },
+    {
+      "kind": "big_tensor",
+      "group": "ngram",
+      "tensor": "language_model.model.layers.1.ple.ple_embedding.ngram_heads_vocab_sizes",
+      "message": "ple.ple_embedding.ngram_heads_vocab_sizes is 16 B, 10.5% of weights"
+    },
+    {
+      "kind": "structural",
+      "group": "mtp",
+      "tensor": null,
+      "message": "MTP layer present (16 B): used only for speculative decoding"
+    },
+    {
+      "kind": "structural",
+      "group": "vision",
+      "tensor": null,
+      "message": "vision tower present (8 B)"
+    }
+  ],
+  "scan": {
+    "strict": false,
+    "overall": "pass",
+    "disclaimer": "Structural integrity checks only: file completeness, header well-formedness and internal consistency. Not a malware or behavior scan; does not establish what the weights do or who produced them.",
+    "counts": {
+      "pass": 5,
+      "warn": 0,
+      "fail": 0,
+      "skip": 1,
+      "planned": 2
+    },
+    "checks": [
+      {
+        "id": "header-parse",
+        "name": "Shard headers parse",
+        "status": "pass",
+        "effective_status": "pass",
+        "summary": "2/2 headers read (length + JSON)",
+        "details": []
+      },
+      {
+        "id": "file-presence",
+        "name": "Files present",
+        "status": "pass",
+        "effective_status": "pass",
+        "summary": "2/2 indexed shards exist, 0 broken links",
+        "details": []
+      },
+      {
+        "id": "offsets-bounds",
+        "name": "Offsets & sizes",
+        "status": "pass",
+        "effective_status": "pass",
+        "summary": "25 ranges in-bounds, = dtype×shape, no overlaps",
+        "details": []
+      },
+      {
+        "id": "index-shard-consistency",
+        "name": "Index matches headers",
+        "status": "pass",
+        "effective_status": "pass",
+        "summary": "25/25 index entries found in shard headers",
+        "details": []
+      },
+      {
+        "id": "code-exec-formats",
+        "name": "Code-executing formats",
+        "status": "pass",
+        "effective_status": "pass",
+        "summary": "none: weights are safetensors, no .py",
+        "details": []
+      },
+      {
+        "id": "code-content",
+        "name": "Code & pickle contents",
+        "status": "skip",
+        "effective_status": "skip",
+        "summary": "nothing to read (no flagged files)",
+        "details": []
+      },
+      {
+        "id": "hash-vs-revision",
+        "name": "Hashes vs revision",
+        "status": "planned",
+        "effective_status": "planned",
+        "summary": "not run: needs a full read of 6.02 KiB",
+        "details": []
+      },
+      {
+        "id": "metadata-sanity",
+        "name": "Config vs tensor shapes",
+        "status": "planned",
+        "effective_status": "planned",
+        "summary": "not run: planned",
+        "details": []
+      }
+    ]
+  },
+  "code": null,
+  "load_warnings": [],
+  "elapsed_ms": 0
+}

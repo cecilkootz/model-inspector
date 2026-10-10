@@ -4,6 +4,7 @@
 package hfcache
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,22 @@ import (
 	"strings"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
+)
+
+// ErrAmbiguousTarget is returned when a bare argument is both an HF repo id
+// and an existing directory. Callers must not pick one.
+var ErrAmbiguousTarget = errors.New("ambiguous model argument")
+
+// TargetMode selects how a user argument is interpreted.
+type TargetMode int
+
+const (
+	// TargetAuto refuses the case where a relative repo id is also a directory.
+	TargetAuto TargetMode = iota
+	// TargetPath is always a filesystem directory, never a hub lookup.
+	TargetPath
+	// TargetRepo is always an HF repo id, never a cwd-relative directory.
+	TargetRepo
 )
 
 // MaxRefBytes is the most that will be read from a refs/ file.
@@ -53,23 +70,100 @@ func RepoFolderName(id string) string { return "models--" + strings.ReplaceAll(i
 // Resolve accepts a directory path, or "org/name" optionally suffixed with
 // "@ref" or "@commit", looked up under hubDir.
 //
+// A relative directory wins over a repo id of the same string. The CLI does
+// not call Resolve for user input; it calls ResolveTarget, which refuses
+// that ambiguous case. Resolve remains for callers that already know the
+// argument is a directory or that a missing path should fall through to the hub.
+//
 // A ref name's segments must not contain "..". The commit ultimately used,
 // whether it came from refs/<name> or from @<commit>, must match commitRe.
 // The resolved snapshot path has to stay under snapshots/.
 func Resolve(arg, hubDir string) (Resolved, error) {
 	if fi, err := os.Stat(arg); err == nil && fi.IsDir() {
-		abs, err := filepath.Abs(arg)
-		if err != nil {
-			return Resolved{}, err
-		}
-		real, err := filepath.EvalSymlinks(abs)
-		if err != nil {
-			return Resolved{}, err
-		}
-		r := Resolved{Dir: real}
-		r.RepoID, r.Revision = InferFromPath(real)
-		return r, nil
+		return resolveExistingDir(arg)
 	}
+	return resolveRepo(arg, hubDir)
+}
+
+// ResolveTarget applies the CLI rule for a model argument.
+//
+//   - TargetPath never consults the hub. A missing path is an error.
+//   - TargetRepo never stats the working directory.
+//   - TargetAuto treats an absolute path, a "./" or "../" prefix, a trailing
+//     separator, or anything that is not org/name[@ref] as a path.
+//     A bare org/name[@ref] that does not exist as a directory is a repo id.
+//     A bare org/name[@ref] that is also a directory is ErrAmbiguousTarget.
+func ResolveTarget(arg, hubDir string, mode TargetMode) (Resolved, error) {
+	switch mode {
+	case TargetPath:
+		return resolvePath(arg)
+	case TargetRepo:
+		return resolveRepo(arg, hubDir)
+	default:
+		if explicitPath(arg) || !repoShaped(arg) {
+			return resolvePath(arg)
+		}
+		fi, err := os.Stat(arg)
+		switch {
+		case err == nil && fi.IsDir():
+			return Resolved{}, fmt.Errorf("%w: %q matches an HF repo id and an existing directory; pass --repo to read the hub cache, or --path to read that directory", ErrAmbiguousTarget, arg)
+		case err == nil:
+			return resolveRepo(arg, hubDir)
+		case os.IsNotExist(err):
+			return resolveRepo(arg, hubDir)
+		default:
+			return Resolved{}, fmt.Errorf("%q: stat: %v; pass --path or --repo", arg, err)
+		}
+	}
+}
+
+func explicitPath(arg string) bool {
+	if arg == "." || arg == ".." || filepath.IsAbs(arg) {
+		return true
+	}
+	if strings.HasPrefix(arg, "./") || strings.HasPrefix(arg, "../") {
+		return true
+	}
+	if strings.HasSuffix(arg, "/") || strings.HasSuffix(arg, string(filepath.Separator)) {
+		return true
+	}
+	return strings.Count(filepath.ToSlash(arg), "/") > 1
+}
+
+func repoShaped(arg string) bool {
+	id, _, _ := strings.Cut(arg, "@")
+	return repoIDRe.MatchString(id)
+}
+
+func resolvePath(arg string) (Resolved, error) {
+	fi, err := os.Stat(arg)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return Resolved{}, fmt.Errorf("path %s not found", arg)
+		}
+		return Resolved{}, err
+	}
+	if !fi.IsDir() {
+		return Resolved{}, fmt.Errorf("%s is not a directory", arg)
+	}
+	return resolveExistingDir(arg)
+}
+
+func resolveExistingDir(arg string) (Resolved, error) {
+	abs, err := filepath.Abs(arg)
+	if err != nil {
+		return Resolved{}, err
+	}
+	real, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return Resolved{}, err
+	}
+	r := Resolved{Dir: real}
+	r.RepoID, r.Revision = InferFromPath(real)
+	return r, nil
+}
+
+func resolveRepo(arg, hubDir string) (Resolved, error) {
 	id, rev, _ := strings.Cut(arg, "@")
 	if !repoIDRe.MatchString(id) {
 		return Resolved{}, fmt.Errorf("%q is neither a directory nor an org/name repo id", arg)
