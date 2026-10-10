@@ -1,6 +1,7 @@
 package jsonx
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -52,14 +53,23 @@ func TestUnmarshalRejectsTrailingDataAndDepth(t *testing.T) {
 	}
 }
 
-func TestUnmarshalTruncatesHugeNumber(t *testing.T) {
+func TestUnmarshalKeepsHugeNumber(t *testing.T) {
 	const tail = "9876543210"
 	digits := strings.Repeat("1", 8000) + tail
-	_, err := Unmarshal([]byte(digits))
-	if err == nil {
-		t.Fatal("accepted")
+	v, err := Unmarshal([]byte(digits))
+	if err != nil {
+		t.Fatal(err)
 	}
-	msg := err.Error()
+	n, ok := v.(json.Number)
+	if !ok || n.String() != digits {
+		t.Fatalf("got %#v", v)
+	}
+	if _, ok := FitFloat(v); ok {
+		t.Fatal("huge integer fit in float64")
+	}
+	// The value keeps the literal. Text that prints it is clipped, so the
+	// tail of an untrusted number cannot land in a warning.
+	msg := fileerr.String("out of range: " + digits)
 	if utf8.RuneCountInString(msg) > fileerr.MaxRunes {
 		t.Fatalf("runes %d", utf8.RuneCountInString(msg))
 	}

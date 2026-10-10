@@ -13,6 +13,14 @@ import (
 // are ASCII and contain no escapes; anything else is parsed by the decoder.
 var errFallback = errors.New("jsonx: scan fallback")
 
+// errNonFinite is a NaN or Infinity token. It is an error node, not a
+// reason to abandon the scan.
+var errNonFinite = errors.New("jsonx: non-finite")
+
+// errHtabFull means the open-addressed key table has no empty slot.
+// The probe must stop instead of spinning.
+var errHtabFull = errors.New("jsonx: key table full")
+
 type scanner struct {
 	raw   []byte
 	i     int
@@ -97,9 +105,22 @@ func (s *scanner) value(parent, index int32, udepth, display int, afterKey bool)
 			return -1, err
 		}
 		return s.add(KindNull, parent, index, display, off, "null")
+	case 'N':
+		if err := s.word("NaN"); err != nil {
+			return -1, err
+		}
+		return s.add(KindError, parent, index, display, off, "NaN")
+	case 'I':
+		if err := s.word("Infinity"); err != nil {
+			return -1, err
+		}
+		return s.add(KindError, parent, index, display, off, "Infinity")
 	default:
 		if s.raw[s.i] == '-' || (s.raw[s.i] >= '0' && s.raw[s.i] <= '9') {
 			a, b, err := s.parseNumber()
+			if err == errNonFinite {
+				return s.add(KindError, parent, index, display, off, alias(s.raw[a:b]))
+			}
 			if err != nil {
 				return -1, err
 			}
@@ -138,7 +159,11 @@ func (s *scanner) object(parent, index int32, depth, display int, off int64) (in
 		if id >= 0 {
 			dup := false
 			if ht != nil {
-				dup = ht.add(s.raw, a, b)
+				var herr error
+				dup, herr = ht.add(s.raw, a, b)
+				if herr != nil {
+					return -1, &LocatedError{Msg: "key table is full", Off: koff}
+				}
 			} else if s.dup(id, key, nil) {
 				dup = true
 			}
@@ -277,7 +302,7 @@ func (s *scanner) tableFor(id int32, ea, eb int) *htab {
 	for c := s.nodes[id].First; c >= 0; c = s.nodes[c].Next {
 		h.addStr(s.raw, s.nodes[c].Key)
 	}
-	h.add(s.raw, ea, eb)
+	_, _ = h.add(s.raw, ea, eb)
 	return h
 }
 
@@ -377,13 +402,14 @@ func (s *scanner) parseString() (int, int, error) {
 }
 
 // stringWordDirty reports whether any byte is a quote, backslash, ASCII
-// control, or has the high bit set. High bytes can false-positive; the
-// byte loop decides.
+// control, or has the high bit set. Non-ASCII has to fall back so invalid
+// UTF-8 becomes U+FFFD the way encoding/json does.
 func stringWordDirty(v uint64) bool {
 	const quote = 0x2222222222222222
 	const slash = 0x5c5c5c5c5c5c5c5c
 	const e0 = 0xE0E0E0E0E0E0E0E0
-	return hasZero(v^quote) || hasZero(v^slash) || hasZero(v&e0)
+	const high = 0x8080808080808080
+	return hasZero(v^quote) || hasZero(v^slash) || hasZero(v&e0) || v&high != 0
 }
 
 func hasZero(v uint64) bool {
@@ -393,6 +419,10 @@ func hasZero(v uint64) bool {
 func (s *scanner) parseNumber() (int, int, error) {
 	a := s.i
 	if s.raw[s.i] == '-' {
+		if hasWord(s.raw, s.i, "-Infinity") {
+			s.i += len("-Infinity")
+			return a, s.i, errNonFinite
+		}
 		s.i++
 		if s.i >= len(s.raw) || s.raw[s.i] < '0' || s.raw[s.i] > '9' {
 			return 0, 0, errFallback
@@ -477,7 +507,7 @@ func (s *scanner) skipSpace() {
 
 func isValueStart(c byte) bool {
 	switch c {
-	case '{', '[', '"', 't', 'f', 'n', '-':
+	case '{', '[', '"', 't', 'f', 'n', 'N', 'I', '-':
 		return true
 	default:
 		return c >= '0' && c <= '9'
@@ -495,6 +525,8 @@ type htab struct {
 	slot []slot
 	mask int
 	n    int
+	// max is the slot cap. Zero means 1<<22 (4,194,304).
+	max int
 }
 
 // Slots store a byte range in the input, not a string, so inserts do not
@@ -505,19 +537,39 @@ type slot struct {
 	n    uint32
 }
 
+func (h *htab) cap() int {
+	if h.max > 0 {
+		return h.max
+	}
+	return 1 << 22
+}
+
 func newHtab(hint int) *htab {
+	h := &htab{}
 	sz := 32
-	for sz < hint*2 && sz < 1<<22 {
+	for sz < hint*2 && sz < h.cap() {
 		sz *= 2
 	}
-	return &htab{slot: make([]slot, sz), mask: sz - 1}
+	if sz > h.cap() {
+		sz = h.cap()
+	}
+	h.slot = make([]slot, sz)
+	h.mask = sz - 1
+	return h
 }
 
 // add records the raw[a:b] key and reports whether it was already present.
-// One probe covers both the duplicate check and the insert.
-func (h *htab) add(raw []byte, a, b int) bool {
-	if h.n*2 >= len(h.slot) && len(h.slot) < 1<<22 {
+// One probe covers both the duplicate check and the insert. The probe
+// stops after one pass so a full table cannot spin.
+func (h *htab) add(raw []byte, a, b int) (bool, error) {
+	if len(h.slot) == 0 {
+		return false, errHtabFull
+	}
+	if h.n*2 >= len(h.slot) && len(h.slot) < h.cap() {
 		h.rehash()
+	}
+	if h.n >= len(h.slot) {
+		return false, errHtabFull
 	}
 	n := b - a
 	if n < 0 {
@@ -526,23 +578,24 @@ func (h *htab) add(raw []byte, a, b int) bool {
 	}
 	hash := hashBytes(raw[a:b])
 	i := int(hash) & h.mask
-	for {
+	for probes := 0; probes < len(h.slot); probes++ {
 		sl := h.slot[i]
 		if sl.hash == 0 {
 			h.slot[i] = slot{hash: hash, off: uint32(a), n: uint32(n)}
 			h.n++
-			return false
+			return false, nil
 		}
 		if sl.hash == hash && int(sl.n) == n && bytes.Equal(raw[int(sl.off):int(sl.off)+int(sl.n)], raw[a:b]) {
-			return true
+			return true, nil
 		}
 		i = (i + 1) & h.mask
 	}
+	return false, errHtabFull
 }
 
 func (h *htab) addStr(raw []byte, key string) {
 	if key == "" {
-		h.add(raw, 0, 0)
+		_, _ = h.add(raw, 0, 0)
 		return
 	}
 	p := unsafe.StringData(key)
@@ -554,14 +607,17 @@ func (h *htab) addStr(raw []byte, key string) {
 		// alias still collides on its own bytes.
 		return
 	}
-	h.add(raw, off, off+len(key))
+	_, _ = h.add(raw, off, off+len(key))
 }
 
 func (h *htab) rehash() {
 	old := h.slot
 	n := len(old) * 2
-	if n > 1<<22 {
-		n = 1 << 22
+	if n > h.cap() {
+		n = h.cap()
+	}
+	if n < 1 {
+		return
 	}
 	h.slot = make([]slot, n)
 	h.mask = len(h.slot) - 1
@@ -571,11 +627,19 @@ func (h *htab) rehash() {
 			continue
 		}
 		i := int(sl.hash) & h.mask
-		for h.slot[i].hash != 0 {
+		placed := false
+		for probes := 0; probes < len(h.slot); probes++ {
+			if h.slot[i].hash == 0 {
+				h.slot[i] = sl
+				h.n++
+				placed = true
+				break
+			}
 			i = (i + 1) & h.mask
 		}
-		h.slot[i] = sl
-		h.n++
+		if !placed {
+			return
+		}
 	}
 }
 

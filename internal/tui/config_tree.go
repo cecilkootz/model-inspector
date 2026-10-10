@@ -850,6 +850,8 @@ func (c *configState) scalarText(id int32) string {
 		return `"` + c.litText(id).String() + `"`
 	case jsonx.KindNumber, jsonx.KindBool, jsonx.KindNull:
 		return c.litText(id).String()
+	case jsonx.KindError:
+		return c.litText(id).String() + " !"
 	default:
 		return ""
 	}

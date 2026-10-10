@@ -70,6 +70,7 @@ type Model struct {
 	detail      *model.Group
 
 	mouse          bool
+	noClipboard    bool
 	motion         bool
 	motionFrame    int
 	blurred        bool
@@ -100,11 +101,13 @@ type palState struct {
 }
 
 // Options configures a TUI session. A nil Mouse keeps the default
-// (on, unless MODEL_INSPECTOR_MOUSE=0).
+// (on, unless MODEL_INSPECTOR_MOUSE=0). NoClipboard turns OSC 52 off
+// for the session; MODEL_INSPECTOR_NO_OSC52=1 does the same.
 type Options struct {
-	Mouse  *bool
-	Motion *bool
-	Now    func() time.Time
+	Mouse       *bool
+	Motion      *bool
+	NoClipboard bool
+	Now         func() time.Time
 }
 
 // Run starts the TUI in the alternate screen.
@@ -141,7 +144,7 @@ func New(m *model.Model, res scan.Result) Model {
 	}
 	t := Model{
 		m: m, scan: res, width: 100, height: 30, scanOpen: map[string]bool{},
-		mouse: mouseDefault(), motion: motion, motionFrame: frame,
+		mouse: mouseDefault(), noClipboard: osc52EnvOff(), motion: motion, motionFrame: frame,
 		ratio: 55, derived: &d, cache: &frameCache{}, zones: &ui.Zones{},
 		now: time.Now, cfg: newConfigState(),
 	}

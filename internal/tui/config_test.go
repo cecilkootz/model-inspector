@@ -422,6 +422,61 @@ func oscPayload(b []byte) string {
 	return string(dec)
 }
 
+func TestControlCountGrapheme(t *testing.T) {
+	if controlCount("\x1b\x1b") != 2 {
+		t.Fatalf("two ESC graphemes: %d", controlCount("\x1b\x1b"))
+	}
+	if controlCount("\u202e") != 1 {
+		t.Fatalf("one bidi rune: %d", controlCount("\u202e"))
+	}
+	// Base + variation selector is one cluster, not two runes.
+	if got := controlCount("A\uFE0F"); got != 1 {
+		t.Fatalf("variation selector cluster: %d", got)
+	}
+	// Two controls inside one ZWJ sequence count once.
+	seq := "\u200D\uFE0F"
+	if got := controlCount(seq); got != 1 {
+		t.Fatalf("zwj cluster: %d", got)
+	}
+	if controlCount("plain") != 0 {
+		t.Fatal("plain text counted")
+	}
+}
+
+func TestNoClipboardFlag(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("LC_ALL", "C.UTF-8")
+	t.Setenv("TMUX", "")
+	t.Setenv("TERM", "xterm-256color")
+	t.Setenv("MODEL_INSPECTOR_NO_OSC52", "1")
+	ui := bootConfig(t, loadCfg(t, fixture.ConfigQwenLike()), 140, 40)
+	var buf bytes.Buffer
+	yes := true
+	ui.cfg.copyTTY = &yes
+	ui.cfg.copyTo = &buf
+	var x tea.Model = ui
+	x, _ = x.Update(keyMsg("w"))
+	x, _ = x.Update(keyMsg("y"))
+	mm := x.(Model)
+	if buf.Len() != 0 || !strings.Contains(mm.notice, "OSC 52 disabled") {
+		t.Fatalf("env notice %q buf %d", mm.notice, buf.Len())
+	}
+
+	t.Setenv("MODEL_INSPECTOR_NO_OSC52", "")
+	ui = bootConfig(t, loadCfg(t, fixture.ConfigQwenLike()), 140, 40)
+	ui.noClipboard = true
+	ui.cfg.copyTTY = &yes
+	ui.cfg.copyTo = &buf
+	buf.Reset()
+	x = ui
+	x, _ = x.Update(keyMsg("w"))
+	x, _ = x.Update(keyMsg("y"))
+	mm = x.(Model)
+	if buf.Len() != 0 || !strings.Contains(mm.notice, "OSC 52 disabled") {
+		t.Fatalf("flag notice %q buf %d", mm.notice, buf.Len())
+	}
+}
+
 func loadCfg(t testing.TB, raw []byte) *model.Model {
 	t.Helper()
 	dir := t.TempDir()

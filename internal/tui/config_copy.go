@@ -5,6 +5,9 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/rivo/uniseg"
 
 	"github.com/aymanbagabas/go-osc52/v2"
 	"github.com/muesli/termenv"
@@ -37,6 +40,10 @@ func (t *Model) copyConfig(value bool) {
 		t.notice = fmt.Sprintf("too large to copy (%d KiB); press r for the raw view", kb)
 		return
 	}
+	if t.clipboardOff() {
+		t.notice = "not copied (OSC 52 disabled); select it from the value strip"
+		return
+	}
 	n := controlCount(payload)
 	text := payload
 	if n > 0 {
@@ -56,7 +63,22 @@ func (t *Model) copyConfig(value bool) {
 	writeOSC(t.copyWriter(), text)
 }
 
+func (t Model) clipboardOff() bool {
+	if t.noClipboard {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("MODEL_INSPECTOR_NO_OSC52"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func (t Model) canCopy() bool {
+	if t.clipboardOff() {
+		return false
+	}
 	if os.Getenv("TERM") == "dumb" {
 		return false
 	}
@@ -89,12 +111,30 @@ func writeOSC(w io.Writer, payload string) {
 	termenv.NewOutput(w).Copy(payload)
 }
 
+// controlCount counts grapheme clusters whose sanitized form differs from
+// the cluster. A multi-rune cluster (base + variation selector, ZWJ
+// sequence) is one count, and a lone invalid byte is one count. Counting
+// runes inflated a single cluster that held more than one control.
 func controlCount(s string) int {
 	n := 0
-	for _, r := range s {
-		if sanitize.From(string(r)).String() != string(r) {
+	state := -1
+	rest := s
+	for rest != "" {
+		cluster, next, _, st := uniseg.FirstGraphemeClusterInString(rest, state)
+		if cluster == "" {
+			_, size := utf8.DecodeRuneInString(rest)
+			if size < 1 {
+				size = 1
+			}
+			cluster = rest[:size]
+			next = rest[size:]
+			st = -1
+		}
+		if sanitize.From(cluster).String() != cluster {
 			n++
 		}
+		rest = next
+		state = st
 	}
 	return n
 }
@@ -159,7 +199,7 @@ func nodeValue(c *configState, id int32) string {
 	switch n.Kind {
 	case jsonx.KindString:
 		return n.Lit
-	case jsonx.KindNumber, jsonx.KindBool, jsonx.KindNull:
+	case jsonx.KindNumber, jsonx.KindBool, jsonx.KindNull, jsonx.KindError:
 		return n.Lit
 	default:
 		return compactJSON(c, id, configCopyMax+1)
@@ -180,7 +220,7 @@ func writeCompact(b *strings.Builder, c *configState, id int32, limit int) {
 	switch n.Kind {
 	case jsonx.KindString:
 		b.WriteString(strconvQuote(n.Lit))
-	case jsonx.KindNumber, jsonx.KindBool, jsonx.KindNull:
+	case jsonx.KindNumber, jsonx.KindBool, jsonx.KindNull, jsonx.KindError:
 		if n.Lit == "" {
 			b.WriteString("null")
 		} else {

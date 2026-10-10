@@ -183,7 +183,8 @@ On Config, `space` toggles the selected node, `p` jumps to its parent,
 close one depth. `/` searches keys and values (`k:` or `v:` to limit
 which), `tab` inside that input switches to filter, and `n` / `N` step
 through matches. `y` copies the jq path and `Y` copies the value, both
-through OSC 52. `r` toggles the sanitized raw text.
+through OSC 52. `--no-clipboard` or `MODEL_INSPECTOR_NO_OSC52=1` turns
+those sequences off. `r` toggles the sanitized raw text.
 `↑` / `↓` scroll or select. On Layers, `enter` opens a group and `esc` or
 backspace goes back. `esc` never quits: it closes help, the command palette,
 or a disclosure, then leaves a drill-down. `?` opens the key list. `q`
@@ -192,6 +193,8 @@ closes help when help is open, and otherwise quits. `ctrl+c` always quits.
 `<` and `>` resize the split, `z` zooms the focused pane, and `m` toggles
 the mouse. The mouse is on unless you pass `--no-mouse` or set
 `MODEL_INSPECTOR_MOUSE=0`. Hold Shift to select text while the mouse is on.
+OSC 52 copy is on unless you pass `--no-clipboard` or set
+`MODEL_INSPECTOR_NO_OSC52=1`.
 On Scan, `c` asks before reading file contents. That reader is not in this
 version, and the status line says code and pickle contents arrive in a
 later version. The window must be at least 60×16; below that the screen

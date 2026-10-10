@@ -25,6 +25,15 @@ func mouseDefault() bool {
 	return os.Getenv("MODEL_INSPECTOR_MOUSE") != "0"
 }
 
+func osc52EnvOff() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("MODEL_INSPECTOR_NO_OSC52"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func motionDefault() bool {
 	if os.Getenv("MODEL_INSPECTOR_MOTION") == "0" || os.Getenv("TERM") == "dumb" {
 		return false
@@ -35,6 +44,9 @@ func motionDefault() bool {
 func (t *Model) apply(o Options) {
 	if o.Mouse != nil {
 		t.mouse = *o.Mouse
+	}
+	if o.NoClipboard {
+		t.noClipboard = true
 	}
 	if o.Motion != nil {
 		t.motion = *o.Motion

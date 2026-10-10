@@ -157,6 +157,10 @@ func (t Model) pickedFrom(id int32) picked {
 				p.bad = true
 			}
 		}
+	case jsonx.KindError:
+		p.bad = true
+		p.lit = n.Lit
+		p.text = n.Lit
 	case jsonx.KindString, jsonx.KindBool, jsonx.KindNull:
 	default:
 		p.bad = true
@@ -246,6 +250,9 @@ func (p picked) showNum(wantNum bool) (string, bool) {
 	}
 	if p.kind == jsonx.KindNumber && p.isInt {
 		return model.Comma(p.num), false
+	}
+	if p.bad && p.kind == jsonx.KindNumber {
+		return p.text + " ! out of range", true
 	}
 	return p.text, p.bad
 }

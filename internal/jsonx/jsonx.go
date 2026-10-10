@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 )
@@ -15,7 +16,10 @@ import (
 const MaxDepth = 32
 
 // Unmarshal decodes one JSON value. Objects become map[string]any, arrays
-// []any, and numbers float64. A second occurrence of an object key is an error.
+// []any, and numbers float64 when they fit. A number whose literal does not
+// fit in float64 is kept as json.Number so the document still parses; callers
+// that need a float must treat that as out of range. A second occurrence of
+// an object key is an error.
 func Unmarshal(data []byte) (any, error) {
 	v, err := unmarshal(data)
 	return v, fileerr.Error(err)
@@ -60,8 +64,10 @@ func readValue(dec *json.Decoder, depth int) (any, error) {
 		return t, nil
 	case json.Number:
 		f, err := t.Float64()
-		if err != nil {
-			return nil, fmt.Errorf("number %s: %w", t, err)
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+			// Keep the literal. Rejecting it dropped the rest of the config
+			// while the tree still showed the number.
+			return t, nil
 		}
 		return f, nil
 	default:
@@ -122,4 +128,29 @@ func readArray(dec *json.Decoder, depth int) ([]any, error) {
 		return nil, fmt.Errorf("expected end of array")
 	}
 	return a, nil
+}
+
+// FitFloat reports whether v is a finite float64. json.Number is accepted
+// only when Float64 succeeds and the result is finite. A failure means the
+// literal is out of range and must not be used as a magnitude.
+func FitFloat(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		if math.IsNaN(n) || math.IsInf(n, 0) {
+			return 0, false
+		}
+		return n, true
+	case json.Number:
+		f, err := n.Float64()
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+			return 0, false
+		}
+		return f, true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	default:
+		return 0, false
+	}
 }
