@@ -205,6 +205,43 @@ func assertFrame(t *testing.T, view string, width, height int) {
 	}
 }
 
+func TestShardedNgramIdentity(t *testing.T) {
+	files, err := fixture.ShardedNgram()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := fixture.Materialize(dir, files); err != nil {
+		t.Fatal(err)
+	}
+	m, err := model.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldLC, oldLang := os.Getenv("LC_ALL"), os.Getenv("LANG")
+	if err := os.Setenv("LC_ALL", "C.UTF-8"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("LC_ALL", oldLC)
+		_ = os.Setenv("LANG", oldLang)
+		configure()
+	})
+	configure()
+	view := renderIdentity(m, 160)
+	for _, want := range []string{
+		"⌂ of which 29.80 GiB are lookup tables that can stay in CPU RAM",
+		"(heuristic) → ≥",
+		"on the GPU/accelerator",
+		"n-gram embedding table 29.80 GiB can stay in CPU RAM (heuristic)",
+		"~51.20B-param n-gram embedding table",
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("identity missing %q\n%s", want, view)
+		}
+	}
+}
+
 func TestASCIILocaleHasNoUnicodeGlyphs(t *testing.T) {
 	t.Setenv("LC_ALL", "C")
 	t.Setenv("LANG", "C")

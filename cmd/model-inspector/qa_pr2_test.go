@@ -22,8 +22,8 @@ func TestQA_PrintTextAndJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, stderr, code := capture(t, func() int { return run([]string{"inspect", "--path", dir}) })
-	if code != 0 && code != 1 {
-		t.Fatalf("exit %d\n%s", code, stderr)
+	if code != 1 {
+		t.Fatalf("exit %d, want 1 (unparsed config must not pass)\n%s\n%s", code, stderr, out)
 	}
 	assertNoHostileRunes(t, "text", out)
 	for _, tok := range []string{"<U+001B>", "<U+009B>", "<U+202E>", "behavior scan"} {
@@ -32,8 +32,8 @@ func TestQA_PrintTextAndJSON(t *testing.T) {
 		}
 	}
 	js, stderr, code := capture(t, func() int { return run([]string{"inspect", "--path", dir, "--json"}) })
-	if code != 0 && code != 1 {
-		t.Fatalf("json exit %d\n%s", code, stderr)
+	if code != 1 {
+		t.Fatalf("json exit %d, want 1 (unparsed config must not pass)\n%s\n%s", code, stderr, js)
 	}
 	assertNoHostileRunes(t, "json", js)
 	if !strings.Contains(js, `\u009b`) || !strings.Contains(js, `\u202e`) || !strings.Contains(js, `\u001b`) {

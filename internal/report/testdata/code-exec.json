@@ -202,5 +202,6 @@
   },
   "code": null,
   "load_warnings": [],
+  "partial": false,
   "elapsed_ms": 0
 }

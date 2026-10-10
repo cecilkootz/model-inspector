@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,6 +41,7 @@ type Document struct {
 	Scan               scanDoc      `json:"scan"`
 	Code               *struct{}    `json:"code"`
 	LoadWarnings       []string     `json:"load_warnings"`
+	Partial            bool         `json:"partial"`
 	ElapsedMS          int64        `json:"elapsed_ms"`
 }
 
@@ -153,6 +155,9 @@ type memoryDoc struct {
 	UnifiedMemory       bool   `json:"unified_memory"`
 	Note                string `json:"note"`
 	HostCapableNote     string `json:"host_capable_note"`
+	// HostPartial qualifies the text memory line. It is not a JSON field;
+	// partial on the document is the inspection flag.
+	HostPartial bool `json:"-"`
 }
 
 type groupDoc struct {
@@ -250,6 +255,7 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 			WeightsBytes: mem.WeightsBytes, TextOnlyBytes: mem.TextOnlyBytes,
 			HostCapableBytes: mem.HostCapableBytes, AcceleratorMinBytes: mem.AcceleratorMinBytes,
 			UnifiedMemory: mem.UnifiedMemory, Note: mem.Note, HostCapableNote: mem.HostCapableNote,
+			HostPartial: mem.HostCapablePartial,
 		},
 		Groups: []groupDoc{}, HostCapableTensors: []hostDoc{}, Callouts: []calloutDoc{},
 		Scan: scanDoc{
@@ -257,6 +263,7 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 			Counts: res.Count(), Checks: []checkDoc{},
 		},
 		LoadWarnings: append([]string{}, m.Warnings...),
+		Partial:      m.Partial,
 		ElapsedMS:    elapsed.Milliseconds(),
 	}
 	if d.LoadWarnings == nil {
@@ -302,7 +309,7 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 	}
 	hostByGroup := map[string]int64{}
 	for _, h := range host {
-		hostByGroup[h.Group] += h.Bytes
+		addGroupHost(m, hostByGroup, h.Group, h.Bytes)
 		d.HostCapableTensors = append(d.HostCapableTensors, hostDoc{
 			Name: h.Name, Group: h.Group, Bytes: h.Bytes, ParamsEst: h.ParamsEst, Rule: h.Rule,
 		})
@@ -353,7 +360,51 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 			EffectiveStatus: string(c.EffectiveStatus), Summary: c.Summary, Details: details,
 		})
 	}
+	// Summing host bytes can overflow after the caller already scanned.
+	// Re-run the checks so partial, the printed scan, and the exit code
+	// describe the same inspection.
+	if m.Partial && d.Scan.Overall != string(scan.StatusFail) {
+		d.Scan = scanDocument(scan.RunOptions(m, scan.Options{Strict: res.Strict}))
+	}
 	return d
+}
+
+func scanDocument(res scan.Result) scanDoc {
+	d := scanDoc{
+		Strict: res.Strict, Overall: string(res.Overall), Disclaimer: res.Disclaimer,
+		Counts: res.Count(), Checks: []checkDoc{},
+	}
+	for _, c := range res.Checks {
+		details := c.Details
+		if details == nil {
+			details = []string{}
+		}
+		d.Checks = append(d.Checks, checkDoc{
+			ID: c.ID, Name: c.Name, Status: string(c.Status),
+			EffectiveStatus: string(c.EffectiveStatus), Summary: c.Summary, Details: details,
+		})
+	}
+	return d
+}
+
+// addGroupHost adds n into the per-group host total without wrapping.
+// A sum that does not fit marks the inspection partial.
+func addGroupHost(m *model.Model, acc map[string]int64, key string, n int64) {
+	v := acc[key]
+	if n < 0 || v < 0 || v > math.MaxInt64-n {
+		if m != nil {
+			m.Partial = true
+			const msg = "displayed size overflowed int64 and was not accumulated"
+			for _, w := range m.Warnings {
+				if w == msg {
+					return
+				}
+			}
+			m.Warnings = append(m.Warnings, msg)
+		}
+		return
+	}
+	acc[key] = v + n
 }
 
 // Marshal encodes the document with stable indentation.
@@ -478,10 +529,20 @@ func intPtr(n int) *int { return &n }
 func int64Ptr(n int64) *int64 { return &n }
 
 func pct(part, total int64) float64 {
-	if total <= 0 {
+	if total <= 0 || part <= 0 {
 		return 0
 	}
-	return float64(int(float64(part)/float64(total)*1000+0.5)) / 10
+	if part >= total {
+		return 100
+	}
+	v := math.Round(float64(part)/float64(total)*1000) / 10
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
 }
 
 func appendUnique(ss []string, s string) []string {

@@ -172,7 +172,9 @@ are listed in help as later and do nothing. The window must be at least
 ### Screens
 
 The header is the model name, format, on-disk size, estimated params, and
-quantization. A partial or unreadable shard marks the size incomplete.
+quantization. A missing or unreadable shard sets the same incomplete flag
+as a bad config: the header, the text summary, JSON `partial`, and the
+inspect exit code all follow it.
 GGUF replaces the format and params with "not supported yet". The active
 tab is bracketed. The Scan tab badge follows the overall result.
 
@@ -180,7 +182,13 @@ tab is bracketed. The Scan tab badge follows the overall result.
    empty revision), architecture, MoE, on-disk size, estimated params,
    quantization, a storage bar, a weights-only memory estimate, callouts,
    then the dtype table. A lookup-table memory line appears when those
-   tables are at least 1 GiB. This is not a load of the weights.
+   tables are at least 1 GiB. A PLE n-gram table split across
+   `.shard_N` weights (plus each piece's scales and biases) is one logical
+   table for that line and for the n-gram callout. Pieces must share a dtype
+   and a column count, and `shard_01` is the same piece as `shard_1`. The
+   Params line sums those pieces before deciding whether one table is at
+   least 10% of the estimate. An incomplete inspection marks the memory
+   line and the n-gram callout as incomplete. This is not a load of the weights.
 2. **Config**: key architecture, attention, MoE, and MTP fields (root or
    `text_config`) plus the sanitized `config.json`. A missing file, an
    unreadable file, and a file that did not parse each get their own line.
@@ -195,8 +203,8 @@ tab is bracketed. The Scan tab badge follows the overall result.
    Checks: shard headers parse; files present (including a shard the index
    does not name); offsets and sizes (bounds, dtype×shape, overlap, gaps,
    trailing bytes); index matches headers; code-executing formats by file
-   name (including `.h5`, `.keras`, `.nemo`, `.dill`, `.mar`, and compound
-   suffixes such as `.bin.gz`) and by top-level `auto_map` read from
+   name (including `.h5`, `.keras`, `.nemo`, `.dill`, `.mar`, `.tar`, `.tgz`, and compound
+   suffixes such as `.bin.gz`, `.tar.gz`, `.pt.zip`, `.ckpt.zip`, `.pth.zip`, `.bin.zip`, and `.pth.tar`) and by top-level `auto_map` read from
    config files (warn, or fail under `--strict`; a config file that exists
    but cannot be read or parsed warns instead of passing as none); code and pickle contents (not
    run); hashes vs revision (planned); config vs tensor shapes (planned).

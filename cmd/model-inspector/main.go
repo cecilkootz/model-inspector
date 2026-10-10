@@ -143,7 +143,10 @@ func run(args []string) int {
 		fail(errors.New(msg))
 		return 3
 	}
-	if res.Overall == scan.StatusFail {
+	// The document's scan is the source of truth: Build re-runs the checks
+	// when a total overflowed while the summary was assembled, so partial
+	// and the exit code cannot disagree with the printed result.
+	if doc.Scan.Overall == string(scan.StatusFail) {
 		return 1
 	}
 	return 0

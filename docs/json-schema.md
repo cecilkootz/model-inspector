@@ -14,6 +14,14 @@ terminal sanitizer, so a machine still sees the original characters after
 `json.Unmarshal`. `encoding/json` writes C0 as `\uXXXX`. `sanitize.EscapeJSON`
 does the same for C1, bidi, and other invisible characters inside strings.
 `elapsed_ms` is the wall time of the inspection and is not stable across runs.
+`partial` is true when the inspection did not finish: a walk cap, a per-entry
+walk error, an unreadable or unparseable config, an index directory that
+could not be listed, a display counter that overflowed, an index
+`metadata.total_size` that is not a non-negative int64, or a shard that is
+missing, unreadable, or not a local file name. The same flag drives the
+TUI "(incomplete)" marker, the text summary, and a failing scan (exit 1).
+It is false when the inspection completed. The field is additive, so
+`schema_version` stays 1.
 
 ## Top level
 
@@ -38,6 +46,7 @@ does the same for C1, bidi, and other invisible characters inside strings.
 | `scan` | object | Structural checks. |
 | `code` | null | Reserved for code and pickle contents. |
 | `load_warnings` | array of string | Loader warnings. Empty when there are none. |
+| `partial` | bool | True when the inspection is incomplete. Schema version stays `1`; this field is additive. |
 | `elapsed_ms` | number | Milliseconds spent loading and scanning. |
 
 ## `source`
@@ -104,7 +113,9 @@ counted at their dequantized size. Scales and biases are excluded from
 ## `storage`, `memory`, `groups`
 
 `storage[]` is `{class, bytes, pct}`. Classes look like `q4_packed`,
-`q_scales_biases`, `plain_bf16`, and `other`. `pct` is one decimal.
+`q_scales_biases`, `plain_bf16`, and `other`. `pct` is one decimal, clamped
+to the closed range 0 through 100. A saturated byte total cannot push a
+class, or the storage legend, past 100%.
 
 `memory` is weights only: `weights_bytes`, `text_only_bytes`,
 `host_capable_bytes`, `accelerator_min_bytes`, `unified_memory`, `note`,
@@ -113,7 +124,8 @@ is true for an MLX variant or for darwin/arm64.
 
 `groups[]` is `{key, kind, layer, attention_type, tensors, params_est,
 bytes, pct_bytes, storage, has_routed_experts, routed_experts, outliers,
-host_capable_bytes}`. `layer` and `attention_type` are null for non-layer
+host_capable_bytes}`. `pct_bytes` is one decimal, clamped to 0 through 100.
+`layer` and `attention_type` are null for non-layer
 groups. `outliers` is a subset of `size`, `precision`, `structural`.
 `routed_experts` is null.
 
@@ -121,8 +133,20 @@ groups. `outliers` is a subset of `size`, `precision`, `structural`.
 
 A host-capable tensor is a 2-D table with at least 1024 rows whose name
 matches `lookup_table_v1` (embed-style names, including n-gram tables, and
-not projections, norms, or heads). Tied token embeddings are excluded when
-`tie_word_embeddings` is true and there is no `lm_head`.
+not projections, norms, or heads). The match folds ASCII case only;
+`strings.ToLower` is not used to slice a tensor name, because some runes
+change length when lowercased. Tied token embeddings are excluded when
+`tie_word_embeddings` is true and there is no `lm_head`. Pieces named
+`stem.shard_<N>` (the PLE n-gram table is `...ngram_embedding.shard_0`
+through `shard_127`) are one logical table when they share a dtype and a
+column count: each piece is tested for the row rule, then bytes (including
+that piece's `.scales` and `.biases`) and dequantized params are summed.
+Shard indexes are numeric, so `shard_01` and `shard_1` are one piece.
+Orphan `.scales` and `.biases` are not tables, and each tensor is counted
+once. Pieces that disagree in dtype or column count are not merged.
+One `host_capable_tensors` entry is emitted, named with the shared stem.
+When `partial` is true, or the index names a piece that was not loaded,
+the ⌂ memory line and the n-gram callouts say the figure is incomplete.
 
 `callouts[]` is `{kind, group, tensor, message}`. `group` and `tensor` are
 null when they do not apply. `kind` is `size_outlier`, `host_capable`,
@@ -151,7 +175,7 @@ Check ids, in order:
 | `file-presence` | Missing, unreadable, or non-local shards, an incomplete inspection (`Partial`), and `.safetensors` files the index does not name. |
 | `offsets-bounds` | `safetensors.CheckLayout`: bounds, dtype×shape, overlap, gaps, trailing bytes. |
 | `index-shard-consistency` | Index against shard headers. |
-| `code-exec-formats` | File names (`.bin`, `.pt`, `.pth`, `.ckpt`, `.pkl`, `.pickle`, `.joblib`, `.npy`, `.pyc`, `.py`, `.h5`, `.keras`, `.nemo`, `.dill`, `.mar`, and `.bin.gz` / `.pt.gz` / `.pkl.gz`) and top-level `auto_map` read from `config.json`, `tokenizer_config.json`, `processor_config.json`, and `preprocessor_config.json`. Warns. `--strict` makes that a failure. A file that exists but cannot be read or parsed warns `could not check auto_map in <file>` and does not pass as none. The check does not import or execute anything. |
+| `code-exec-formats` | File names (`.bin`, `.pt`, `.pth`, `.ckpt`, `.pkl`, `.pickle`, `.joblib`, `.npy`, `.pyc`, `.py`, `.h5`, `.keras`, `.nemo`, `.dill`, `.mar`, `.tar`, `.tgz`, and `.bin.gz` / `.pt.gz` / `.pkl.gz` / `.tar.gz` / `.pt.zip` / `.ckpt.zip` / `.pth.zip` / `.bin.zip` / `.pth.tar`) and top-level `auto_map` read from `config.json`, `tokenizer_config.json`, `processor_config.json`, and `preprocessor_config.json`. Warns. `--strict` makes that a failure. A file that exists but cannot be read or parsed warns `could not check auto_map in <file>` and does not pass as none. The check does not import or execute anything. |
 | `code-content` | Always `skip`. |
 | `hash-vs-revision` | Always `planned`. |
 | `metadata-sanity` | Always `planned`. |

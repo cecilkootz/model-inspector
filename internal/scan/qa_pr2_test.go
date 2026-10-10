@@ -130,6 +130,10 @@ func TestQA_BracketedDirKeepsIndex(t *testing.T) {
 			if !strings.Contains(blob, "model-00002-of-00002.safetensors") {
 				t.Fatalf("%s did not report the missing shard:\n%s", sub, blob)
 			}
+			files := findCheck(t, res, CheckFiles)
+			if files.Status == StatusPass {
+				t.Fatalf("%s file-presence passed: %+v", sub, files)
+			}
 		})
 	}
 }
@@ -156,6 +160,10 @@ func TestQA_AbsoluteShardName(t *testing.T) {
 	// Pinned to the index check. Checks[0] is header-parse, which does not
 	// carry shard-name findings.
 	detailsContain(t, findCheck(t, res, CheckIndex), "not a local file name")
+	files := findCheck(t, res, CheckFiles)
+	if files.Status == StatusPass {
+		t.Fatalf("file-presence passed with an absolute shard name: %+v", files)
+	}
 }
 
 func TestQA_DuplicateIndexKey(t *testing.T) {
