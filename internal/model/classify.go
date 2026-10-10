@@ -59,9 +59,11 @@ func Classify(name string) (key, kind string, layer int) {
 	}
 	if m := layerRe.FindStringSubmatch(name); m != nil {
 		n, err := strconv.Atoi(m[1])
-		// A value that does not fit in int must not collapse to layer 0.
+		// A value that does not fit in int must not collapse to layer 0,
+		// and it must not be reported as MaxLayerIndex+1: that number is a
+		// real decoder index (layers.4097) and would share its group.
 		if err != nil || n < 0 {
-			return "layer overflow", KindLayer, MaxLayerIndex + 1
+			return "layer overflow", KindLayer, -1
 		}
 		return fmt.Sprintf("layer %d", n), KindLayer, n
 	}
@@ -83,24 +85,62 @@ func Classify(name string) (key, kind string, layer int) {
 	return "other", KindOther, -1
 }
 
+// DroppedLayerWarning is the load warning for a decoder index the heatmap
+// leaves out. A negative index means the digits did not fit in int, so the
+// warning does not invent a layer number.
+func DroppedLayerWarning(index int) string {
+	if index < 0 {
+		return fmt.Sprintf("layer index exceeds %d; dropped", MaxLayerIndex)
+	}
+	return fmt.Sprintf("layer index %d exceeds %d; dropped", index, MaxLayerIndex)
+}
+
+// IsDroppedLayerWarning reports a warning produced by DroppedLayerWarning.
+func IsDroppedLayerWarning(s string) bool {
+	return strings.HasPrefix(s, "layer index ") && strings.Contains(s, "exceeds ") && strings.HasSuffix(s, "; dropped")
+}
+
 // NoteAbsurdLayers marks the inspection partial when a tensor or group
-// carries a decoder index above MaxLayerIndex. The heatmap then omits it.
+// carries a decoder index above MaxLayerIndex, or an index that did not
+// fit in int. Each distinct index is recorded once as a load warning.
+// The heatmap then omits it.
 func (m *Model) NoteAbsurdLayers() {
 	if m == nil {
 		return
 	}
 	for _, t := range m.Tensors {
-		if t != nil && t.Layer > MaxLayerIndex {
-			m.Partial = true
-			return
+		if t == nil {
+			continue
+		}
+		switch {
+		case t.Layer > MaxLayerIndex:
+			m.noteDroppedLayer(t.Layer)
+		case t.Group == "layer overflow":
+			m.noteDroppedLayer(-1)
 		}
 	}
 	for _, g := range m.Groups {
-		if g != nil && g.Layer > MaxLayerIndex {
-			m.Partial = true
+		if g == nil {
+			continue
+		}
+		switch {
+		case g.Layer > MaxLayerIndex:
+			m.noteDroppedLayer(g.Layer)
+		case g.Key == "layer overflow":
+			m.noteDroppedLayer(-1)
+		}
+	}
+}
+
+func (m *Model) noteDroppedLayer(index int) {
+	m.Partial = true
+	msg := DroppedLayerWarning(index)
+	for _, w := range m.Warnings {
+		if w == msg {
 			return
 		}
 	}
+	m.warnf("%s", msg)
 }
 
 func hasSeg(segs []string, f func(string) bool) bool {

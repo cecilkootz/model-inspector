@@ -17,14 +17,14 @@ SIZE ON DISK           PARAMETERS             QUANT                  LAYERS     
 ██████████████████████████████████████████████████████      [⌂ HOST] n-gram embedding table 32.00 KiB can stay in CPU RAM (heuristic)       
 █ plain bf16 100%                                                                                                                           
                                                                                                                                             
-BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2× · per-layer totals differ by <U+003C>1%                    
+BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2× · per-layer totals differ by <1%                           
             ○ ○ ●  ●                                                                                                                        
 attention   ··░░·· ··  16 B  flat                                                                                                           
 router      ······ ··  ·                                                                                                                    
 shared exp  ······ ··  ·                                                                                                                    
 routed exp  ······ ··  ·                                                                                                                    
 norms       ······ ··  ·                                                                                                                    
-16 B  <64K ▒ <4M ▓ <256M █  32 B  ○ linear  ● full  per-layer totals differ by <U+003C>1%                                                   
+16 B  <64K ▒ <4M ▓ <256M █  32 B  ○ linear  ● full  per-layer totals differ by <1%                                                          
 excludes ple 32.00 KiB · other 32 B not in the grid                                                                                         
 Memory  weights ≥ 32.17 KiB (0.0 GB)                                                                                                        
   weights only: no KV cache, activations or runtime overhead                                                                                

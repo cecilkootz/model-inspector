@@ -90,6 +90,32 @@ func TestIdxOnlyNoOOM(t *testing.T) {
 	if !m.Partial {
 		t.Fatal("absurd layer index did not mark the load partial")
 	}
+	joined := strings.Join(m.Warnings, "\n")
+	if !strings.Contains(joined, "layer index 99999999 exceeds 4096; dropped") {
+		t.Fatalf("load warnings %q", joined)
+	}
+	res := scan.Run(m)
+	var files, layer scan.Check
+	var sawLayer bool
+	for _, c := range res.Checks {
+		switch c.ID {
+		case scan.CheckFiles:
+			files = c
+		case scan.CheckMetadata:
+			layer = c
+			sawLayer = true
+		}
+	}
+	if files.Name != "Files present" || files.Status != scan.StatusPass {
+		t.Fatalf("files %+v", files)
+	}
+	if !sawLayer || layer.Name != "Layer index" || layer.Status != scan.StatusFail {
+		t.Fatalf("layer check %+v", layer)
+	}
+	blob := layer.Summary + "\n" + strings.Join(layer.Details, "\n")
+	if !strings.Contains(blob, "layer index 99999999 exceeds 4096; dropped") {
+		t.Fatalf("layer check did not carry the warning: %s", blob)
+	}
 	ui := New(m, scan.Result{})
 	if ui.derived == nil {
 		t.Fatal("no derived grid")

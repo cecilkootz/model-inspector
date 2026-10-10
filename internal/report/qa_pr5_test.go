@@ -1,6 +1,7 @@
 package report
 
 import (
+	"encoding/json"
 	"math"
 	"strings"
 	"testing"
@@ -104,5 +105,41 @@ func TestQA5_OverflowRefreshesScan(t *testing.T) {
 	out := Text(doc)
 	if !strings.Contains(out, "(incomplete)") {
 		t.Fatalf("text omitted incomplete:\n%s", out)
+	}
+}
+
+func TestOverflowLayerJSONNull(t *testing.T) {
+	m := &model.Model{
+		Dir: "/model", Format: "safetensors",
+		Groups: []*model.Group{
+			{Key: "layer overflow", Kind: model.KindLayer, Layer: -1},
+			{Key: "layer 4097", Kind: model.KindLayer, Layer: 4097},
+		},
+	}
+	doc := Build(m, scan.Result{}, false, 0)
+	b, err := Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed struct {
+		Groups []struct {
+			Key   string `json:"key"`
+			Layer *int   `json:"layer"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(b, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	for _, g := range parsed.Groups {
+		switch g.Key {
+		case "layer overflow":
+			if g.Layer != nil {
+				t.Fatalf("overflow layer = %d, want null", *g.Layer)
+			}
+		case "layer 4097":
+			if g.Layer == nil || *g.Layer != 4097 {
+				t.Fatalf("real 4097 layer = %v", g.Layer)
+			}
+		}
 	}
 }

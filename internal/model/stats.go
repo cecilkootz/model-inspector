@@ -811,7 +811,7 @@ func (m *Model) layerTypeList() []string {
 			continue
 		}
 		if len(lt) > MaxLayerIndex+1 {
-			m.Partial = true
+			m.noteDroppedLayer(MaxLayerIndex + 1)
 			lt = lt[:MaxLayerIndex+1]
 		}
 		out := make([]string, 0, len(lt))
@@ -830,7 +830,7 @@ func (m *Model) clampLayerSlots(n int) int {
 		return 0
 	}
 	if n > MaxLayerIndex+1 {
-		m.Partial = true
+		m.noteDroppedLayer(n)
 		return MaxLayerIndex + 1
 	}
 	return n

@@ -89,7 +89,7 @@ func RunOptions(m *model.Model, opt Options) Result {
 		codeExecFormats(m),
 		codeContent(m),
 		plannedHash(m),
-		plannedMetadata(),
+		plannedMetadata(m),
 	}
 	for i := range checks {
 		checks[i].EffectiveStatus = checks[i].Status
@@ -144,7 +144,7 @@ func Why(id string) string {
 	case CheckHash:
 		return "A hash would show whether the bytes match the revision. It is not run, because it would read every weight byte."
 	case CheckMetadata:
-		return "Comparing config fields with tensor shapes is planned for a later version."
+		return "Comparing config fields with tensor shapes is planned for a later version. A decoder index above 4096 is reported here, not as a missing file."
 	default:
 		return ""
 	}
@@ -218,7 +218,9 @@ func headerParse(m *model.Model) Check {
 func filePresence(m *model.Model) Check {
 	c := Check{ID: CheckFiles, Name: "Files present"}
 	var problems, warnings []string
-	if m.Partial {
+	// A dropped decoder index marks the inspection partial, but the shard
+	// is on disk. That warning belongs to the layer-index check.
+	if m.Partial && !layerDropsOnly(m) {
 		problems = append(problems, incompleteInspection)
 	}
 	files := filesByName(m)
@@ -263,7 +265,7 @@ func filePresence(m *model.Model) Check {
 		return c
 	case len(problems) > 0:
 		c.Status = StatusFail
-		if m.Partial && missing == 0 && broken == 0 && escapes == 0 {
+		if m.Partial && !layerDropsOnly(m) && missing == 0 && broken == 0 && escapes == 0 {
 			c.Summary = incompleteInspection
 		} else {
 			c.Summary = fmt.Sprintf("%d missing, %d broken, %d path escapes", missing, broken, escapes)
@@ -449,11 +451,48 @@ func plannedHash(m *model.Model) Check {
 	}
 }
 
-func plannedMetadata() Check {
-	return Check{
+func plannedMetadata(m *model.Model) Check {
+	c := Check{
 		ID: CheckMetadata, Name: "Config vs tensor shapes", Status: StatusPlanned,
 		Summary: "not run: planned",
 	}
+	if m == nil {
+		return c
+	}
+	var drops []string
+	for _, w := range m.Warnings {
+		if model.IsDroppedLayerWarning(w) {
+			drops = append(drops, w)
+		}
+	}
+	if len(drops) == 0 {
+		return c
+	}
+	// The files are present. The index itself is what the inspection dropped.
+	c.Name = "Layer index"
+	c.Status = StatusFail
+	if len(drops) == 1 {
+		c.Summary = drops[0]
+	} else {
+		c.Summary = fmt.Sprintf("%d layer indices exceed %d; dropped", len(drops), model.MaxLayerIndex)
+	}
+	c.Details = capDetails(drops)
+	return c
+}
+
+// layerDropsOnly reports a partial inspection whose warnings are all
+// dropped decoder indices. File presence still fails when a shard is
+// missing or some other warning made the walk incomplete.
+func layerDropsOnly(m *model.Model) bool {
+	if m == nil || !m.Partial || len(m.Warnings) == 0 {
+		return false
+	}
+	for _, w := range m.Warnings {
+		if !model.IsDroppedLayerWarning(w) {
+			return false
+		}
+	}
+	return true
 }
 
 func filesByName(m *model.Model) map[string]model.File {
