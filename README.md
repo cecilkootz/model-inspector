@@ -60,9 +60,12 @@ same stamp. A binary with no VCS stamp prints `unknown`. `--version` runs
 the version and the commit through the terminal sanitizer.
 
 `VERSION`, `COMMIT`, `FUZZTIME`, and `BIN` may be set in the environment or
-on the make command line. A command-line assignment wins. `VERSION` and
-`COMMIT` must match `^[0-9A-Za-z.+_-]+$`; any other value fails the build
-before the linker runs. `FUZZTIME` uses that same character set.
+on the make command line. A command-line assignment wins. An empty
+`VERSION` or `COMMIT`, or one that is only spaces and tabs, is treated as
+unset. A set value must match `^[0-9A-Za-z][0-9A-Za-z.+_-]*$` (a letter or
+digit, then those characters, `.`, `+`, `_`, or `-`). Any other value fails
+the build before the linker runs. `FUZZTIME` matches `^[0-9A-Za-z.+_-]+$`.
+The C `LDFLAGS` variable is left alone.
 
 Go's default `-buildvcs=auto` records the git repository that contains the
 main module, the current directory, and the main package. A checkout with
@@ -73,10 +76,11 @@ stamps that outer revision. A tree that is not inside any repository, or a
 build with `-buildvcs=false`, prints `unknown`.
 
 `BIN` defaults to `bin/model-inspector` (paths with spaces are quoted).
-`make clean` removes `coverage.out`, that binary when the path stays inside
-this repository, and a real `bin/` directory. An absolute `BIN`, a `BIN`
-containing `..`, or a path that resolves outside the repository is refused.
-`bin/` is gitignored. Recipes call `go` on `PATH` and honor
+`make clean` removes `coverage.out` first, then that path when it stays
+inside this repository (a directory `BIN` is removed as a directory), and a
+real `bin/` directory. An absolute `BIN`, a `..` path segment, or a path
+that resolves outside the repository is refused. A name such as `bin/v1..2`
+is allowed. `bin/` is gitignored. Recipes call `go` on `PATH` and honor
 `GOTOOLCHAIN=local` (no toolchain download).
 
 `go install origin.cursor.com/cecilkootz/model-inspector/cmd/model-inspector@latest`
