@@ -1,10 +1,90 @@
 # Directory that contains this Makefile, captured while the file is parsed
-# and before any include. Recipes cd here and refuse any other pwd -P, so
-# `make -f /path/to/Makefile` does not use the caller's working directory.
-# override blocks a command-line or environment MI_ROOT from retargeting that.
-override MI_ROOT := $(patsubst %/,%,$(dir $(realpath $(lastword $(MAKEFILE_LIST)))))
-ifeq ($(MI_ROOT),)
-$(error cannot locate the directory containing this Makefile)
+# and before any include. $(value) keeps '$' in the path from being expanded.
+# Whitespace is rejected before dir/patsubst, which split arguments on spaces
+# and would otherwise point MI_ROOT at a different directory. The directory
+# must match [A-Za-z0-9._/+-] (no quotes, '$', backticks, or glob characters).
+# Recipes never interpolate the path: they use the exported "$$MI_ROOT".
+override space := $(subst ,, )
+override MI_MAKEFILE := $(realpath $(value MAKEFILE_LIST))
+ifneq ($(words $(MI_MAKEFILE)),1)
+$(error refusing Makefile path)
+endif
+override MI_ROOT := $(patsubst %/,%,$(dir $(MI_MAKEFILE)))
+override _mi := $(MI_ROOT)
+override _mi := $(subst 0,,$(_mi))
+override _mi := $(subst 1,,$(_mi))
+override _mi := $(subst 2,,$(_mi))
+override _mi := $(subst 3,,$(_mi))
+override _mi := $(subst 4,,$(_mi))
+override _mi := $(subst 5,,$(_mi))
+override _mi := $(subst 6,,$(_mi))
+override _mi := $(subst 7,,$(_mi))
+override _mi := $(subst 8,,$(_mi))
+override _mi := $(subst 9,,$(_mi))
+override _mi := $(subst A,,$(_mi))
+override _mi := $(subst B,,$(_mi))
+override _mi := $(subst C,,$(_mi))
+override _mi := $(subst D,,$(_mi))
+override _mi := $(subst E,,$(_mi))
+override _mi := $(subst F,,$(_mi))
+override _mi := $(subst G,,$(_mi))
+override _mi := $(subst H,,$(_mi))
+override _mi := $(subst I,,$(_mi))
+override _mi := $(subst J,,$(_mi))
+override _mi := $(subst K,,$(_mi))
+override _mi := $(subst L,,$(_mi))
+override _mi := $(subst M,,$(_mi))
+override _mi := $(subst N,,$(_mi))
+override _mi := $(subst O,,$(_mi))
+override _mi := $(subst P,,$(_mi))
+override _mi := $(subst Q,,$(_mi))
+override _mi := $(subst R,,$(_mi))
+override _mi := $(subst S,,$(_mi))
+override _mi := $(subst T,,$(_mi))
+override _mi := $(subst U,,$(_mi))
+override _mi := $(subst V,,$(_mi))
+override _mi := $(subst W,,$(_mi))
+override _mi := $(subst X,,$(_mi))
+override _mi := $(subst Y,,$(_mi))
+override _mi := $(subst Z,,$(_mi))
+override _mi := $(subst a,,$(_mi))
+override _mi := $(subst b,,$(_mi))
+override _mi := $(subst c,,$(_mi))
+override _mi := $(subst d,,$(_mi))
+override _mi := $(subst e,,$(_mi))
+override _mi := $(subst f,,$(_mi))
+override _mi := $(subst g,,$(_mi))
+override _mi := $(subst h,,$(_mi))
+override _mi := $(subst i,,$(_mi))
+override _mi := $(subst j,,$(_mi))
+override _mi := $(subst k,,$(_mi))
+override _mi := $(subst l,,$(_mi))
+override _mi := $(subst m,,$(_mi))
+override _mi := $(subst n,,$(_mi))
+override _mi := $(subst o,,$(_mi))
+override _mi := $(subst p,,$(_mi))
+override _mi := $(subst q,,$(_mi))
+override _mi := $(subst r,,$(_mi))
+override _mi := $(subst s,,$(_mi))
+override _mi := $(subst t,,$(_mi))
+override _mi := $(subst u,,$(_mi))
+override _mi := $(subst v,,$(_mi))
+override _mi := $(subst w,,$(_mi))
+override _mi := $(subst x,,$(_mi))
+override _mi := $(subst y,,$(_mi))
+override _mi := $(subst z,,$(_mi))
+override _mi := $(subst .,,$(_mi))
+override _mi := $(subst _,,$(_mi))
+override _mi := $(subst /,,$(_mi))
+override _mi := $(subst +,,$(_mi))
+override _mi := $(subst -,,$(_mi))
+override _mi := $(subst $(space),x,$(_mi))
+ifneq ($(strip $(_mi)),)
+$(error refusing Makefile path)
+endif
+override MI_MAKEFILE_CHECK := $(realpath $(MI_ROOT)/Makefile)
+ifneq ($(MI_MAKEFILE),$(MI_MAKEFILE_CHECK))
+$(error refusing Makefile path)
 endif
 export MI_ROOT
 
@@ -44,7 +124,6 @@ override COMMIT_RAW := $(value COMMIT)
 override FUZZTIME_RAW := $(value FUZZTIME)
 override BIN_RAW := $(value BIN)
 
-override space := $(subst ,, )
 override alnum := 0 1 2 3 4 5 6 7 8 9 A B C D E F G H I J K L M N O P Q R S T U V W X Y Z a b c d e f g h i j k l m n o p q r s t u v w x y z
 override ok_chars := $(alnum) . + _ -
 override remain = $(if $(2),$(call remain,$(subst $(firstword $(2)),,$(1)),$(wordlist 2,200,$(2))),$(1))
@@ -94,7 +173,7 @@ test: check-overrides
 	@$(enter_root); go vet ./...
 	@$(enter_root); go test -race -count=1 ./...
 	@$(enter_root); \
-	stamp="$${TMPDIR:-/tmp}/model-inspector.artifacts.$(subst /,-,$(MI_ROOT))"; \
+	stamp=bin/.mi-artifact-stamp; \
 	if [ ! -f "$$stamp" ]; then echo "make test: missing artifact stamp" >&2; exit 1; fi; \
 	{ IFS= read -r bin_state; IFS= read -r bin_sum; IFS= read -r bin_id; IFS= read -r bin_x; IFS= read -r cov_state; IFS= read -r cov_sum; IFS= read -r cov_id; } < "$$stamp"; \
 	rm -f "$$stamp"; \
@@ -449,6 +528,44 @@ check-overrides:
 	fi; \
 	assert_survives "caller during directory coverage.out" "$$scratch/caller"; \
 	assert_real_untouched "directory coverage.out"; \
+	mkdir -p "$$scratch/p6x/a b/bin" "$$scratch/p6x b/bin" "$$scratch/cwd"; \
+	printf KEEP_DECOY > "$$scratch/p6x b/bin/model-inspector"; \
+	printf KEEP_DECOY > "$$scratch/p6x b/coverage.out"; \
+	printf KEEP_REPO > "$$scratch/p6x/a b/bin/model-inspector"; \
+	printf KEEP_REPO > "$$scratch/p6x/a b/coverage.out"; \
+	cp "$$MI_ROOT/Makefile" "$$scratch/p6x/a b/Makefile"; \
+	dollar='d$$(touch$${IFS}PWNED_BY_PATH)'; \
+	mkdir -p "$$scratch/$$dollar"; \
+	cp "$$MI_ROOT/Makefile" "$$scratch/$$dollar/Makefile"; \
+	refuse_path() { \
+	  label=$$1; dir=$$2; goal=$$3; from=$$4; \
+	  if env -u BIN -u VERSION -u COMMIT -u FUZZTIME \
+	      -u VERSION_RAW -u COMMIT_RAW -u FUZZTIME_RAW -u BIN_RAW \
+	      -u MI_LDFLAGS -u LDFLAGS \
+	      MAKEFLAGS= MAKEOVERRIDES= \
+	      $(MAKE) -C "$$from" -f "$$dir/Makefile" -s --no-print-directory "$$goal" >"$$tmp.out" 2>&1; then \
+	    echo "$$label $$goal was accepted" >&2; cat "$$tmp.out" >&2; exit 1; \
+	  fi; \
+	  if ! grep -q 'refusing Makefile path' "$$tmp.out"; then \
+	    echo "$$label $$goal was not a clean refusal" >&2; cat "$$tmp.out" >&2; exit 1; \
+	  fi; \
+	}; \
+	refuse_path space "$$scratch/p6x/a b" clean "$$scratch/p6x/a b"; \
+	refuse_path space "$$scratch/p6x/a b" test "$$scratch/cwd"; \
+	if [ "$$(cat "$$scratch/p6x b/bin/model-inspector")" != KEEP_DECOY ] \
+	    || [ "$$(cat "$$scratch/p6x b/coverage.out")" != KEEP_DECOY ] \
+	    || [ "$$(cat "$$scratch/p6x/a b/bin/model-inspector")" != KEEP_REPO ] \
+	    || [ "$$(cat "$$scratch/p6x/a b/coverage.out")" != KEEP_REPO ]; then \
+	  echo "space path changed bin/ or coverage.out" >&2; exit 1; \
+	fi; \
+	refuse_path 'dollar' "$$scratch/$$dollar" test "$$scratch/$$dollar"; \
+	refuse_path 'dollar' "$$scratch/$$dollar" test "$$scratch/cwd"; \
+	for pwn in "$$scratch/PWNED_BY_PATH" "$$scratch/cwd/PWNED_BY_PATH" \
+	    "$$scratch/$$dollar/PWNED_BY_PATH" "$$scratch/p6x/a b/PWNED_BY_PATH" \
+	    /tmp/PWNED_BY_PATH "$$MI_ROOT/PWNED_BY_PATH"; do \
+	  if [ -e "$$pwn" ]; then echo "hostile path created $$pwn" >&2; exit 1; fi; \
+	done; \
+	assert_real_untouched "hostile path"; \
 	if ! command -v git >/dev/null 2>&1; then \
 	  echo "skipping clean self-test: git is not available" >&2; \
 	elif [ ! -e .git ] || ! git rev-parse --verify --quiet HEAD >/dev/null 2>&1; then \
@@ -520,5 +637,5 @@ check-overrides:
 	done; \
 	fi; \
 	assert_real_untouched "end of clean self-test"; \
-	stamp="$${TMPDIR:-/tmp}/model-inspector.artifacts.$(subst /,-,$(MI_ROOT))"; \
-	printf '%s\n' "$$bin_state" "$$bin_sum" "$$bin_id" "$$bin_x" "$$cov_state" "$$cov_sum" "$$cov_id" > "$$stamp"
+	mkdir -p bin; \
+	printf '%s\n' "$$bin_state" "$$bin_sum" "$$bin_id" "$$bin_x" "$$cov_state" "$$cov_sum" "$$cov_id" > bin/.mi-artifact-stamp

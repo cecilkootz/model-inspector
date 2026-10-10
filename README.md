@@ -79,7 +79,8 @@ build with `-buildvcs=false`, prints `unknown`.
 `build`, `test`, `cover`, `fuzz`, and `clean` run in the directory that
 contains the Makefile, not the caller's working directory, so
 `make -f /path/to/Makefile` from another directory still reads and writes
-this checkout. `make clean` deletes only `coverage.out` (when it is a
+this checkout. That directory must match `[A-Za-z0-9._/+-]`; a space or
+any other character makes `make` stop before it runs a recipe. `make clean` deletes only `coverage.out` (when it is a
 regular file or a symlink) and this checkout's `bin/` directory. It does
 not remove `BIN`. That variable is also read from the environment, and
 using it as a delete path removed `.git` and tracked files. A binary
