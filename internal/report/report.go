@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
@@ -477,18 +477,11 @@ func configIntPtr(m *model.Model, keys ...string) *int {
 }
 
 func asFloat(v any) float64 {
-	switch n := v.(type) {
-	case float64:
-		return n
-	case int:
-		return float64(n)
-	case json.Number:
-		f, _ := n.Float64()
-		return f
-	default:
-		f, _ := strconv.ParseFloat(fmt.Sprint(v), 64)
-		return f
+	f, ok := jsonx.FitFloat(v)
+	if !ok {
+		return 0
 	}
+	return f
 }
 
 func layerTypeDocs(m *model.Model) []layerTypeDoc {

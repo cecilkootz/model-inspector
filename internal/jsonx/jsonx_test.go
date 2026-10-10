@@ -1,6 +1,7 @@
 package jsonx
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -38,6 +39,67 @@ func TestUnmarshalRejectsDuplicateKeys(t *testing.T) {
 	}
 }
 
+func TestUnderflowToZero(t *testing.T) {
+	keep := []string{"1e-400", "-1e-400", "10e-400", "1e-324", "1e400"}
+	zero := []string{"0e-400", "-0e-400", "0", "-0", "0.0", "0.00e-10"}
+	finite := []string{"1.5", "5e-324", "1e-323", "1"}
+	for _, lit := range keep {
+		v, err := Unmarshal([]byte(lit))
+		if err != nil {
+			t.Fatalf("%s: %v", lit, err)
+		}
+		n, ok := v.(json.Number)
+		if !ok || n.String() != lit {
+			t.Fatalf("%s: got %#v, want json.Number", lit, v)
+		}
+		if _, ok := FitFloat(v); ok {
+			t.Fatalf("%s fits float64", lit)
+		}
+		if _, ok := NumberFits(lit); ok {
+			t.Fatalf("%s NumberFits", lit)
+		}
+		tree, err := ParseTree([]byte(lit), Limits{})
+		if err != nil || tree.Nodes[0].Kind != KindNumber || tree.Nodes[0].Lit != lit {
+			t.Fatalf("%s tree %v", lit, err)
+		}
+		if !sameValue(v, tree, 0) {
+			t.Fatalf("%s disagree", lit)
+		}
+	}
+	for _, lit := range zero {
+		v, err := Unmarshal([]byte(lit))
+		if err != nil {
+			t.Fatalf("%s: %v", lit, err)
+		}
+		f, ok := v.(float64)
+		if !ok || f != 0 {
+			t.Fatalf("%s: got %#v, want 0", lit, v)
+		}
+		if _, ok := FitFloat(v); !ok {
+			t.Fatalf("%s rejected", lit)
+		}
+		if g, ok := FitFloat(json.Number(lit)); !ok || g != 0 {
+			t.Fatalf("%s number fit %#v %v", lit, g, ok)
+		}
+		if g, ok := NumberFits(lit); !ok || g != 0 {
+			t.Fatalf("%s NumberFits %#v %v", lit, g, ok)
+		}
+	}
+	for _, lit := range finite {
+		v, err := Unmarshal([]byte(lit))
+		if err != nil {
+			t.Fatalf("%s: %v", lit, err)
+		}
+		f, ok := v.(float64)
+		if !ok || f == 0 {
+			t.Fatalf("%s: got %#v, want a non-zero float", lit, v)
+		}
+		if _, ok := FitFloat(v); !ok {
+			t.Fatalf("%s rejected", lit)
+		}
+	}
+}
+
 func TestUnmarshalRejectsTrailingDataAndDepth(t *testing.T) {
 	if _, err := Unmarshal([]byte(`{"a":1} {}`)); err == nil || !strings.Contains(err.Error(), "trailing") {
 		t.Fatalf("trailing: %v", err)
@@ -52,14 +114,23 @@ func TestUnmarshalRejectsTrailingDataAndDepth(t *testing.T) {
 	}
 }
 
-func TestUnmarshalTruncatesHugeNumber(t *testing.T) {
+func TestUnmarshalKeepsHugeNumber(t *testing.T) {
 	const tail = "9876543210"
 	digits := strings.Repeat("1", 8000) + tail
-	_, err := Unmarshal([]byte(digits))
-	if err == nil {
-		t.Fatal("accepted")
+	v, err := Unmarshal([]byte(digits))
+	if err != nil {
+		t.Fatal(err)
 	}
-	msg := err.Error()
+	n, ok := v.(json.Number)
+	if !ok || n.String() != digits {
+		t.Fatalf("got %#v", v)
+	}
+	if _, ok := FitFloat(v); ok {
+		t.Fatal("huge integer fit in float64")
+	}
+	// The value keeps the literal. Text that prints it is clipped, so the
+	// tail of an untrusted number cannot land in a warning.
+	msg := fileerr.String("out of range: " + digits)
 	if utf8.RuneCountInString(msg) > fileerr.MaxRunes {
 		t.Fatalf("runes %d", utf8.RuneCountInString(msg))
 	}

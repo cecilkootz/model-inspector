@@ -25,6 +25,15 @@ func mouseDefault() bool {
 	return os.Getenv("MODEL_INSPECTOR_MOUSE") != "0"
 }
 
+func osc52EnvOff() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("MODEL_INSPECTOR_NO_OSC52"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func motionDefault() bool {
 	if os.Getenv("MODEL_INSPECTOR_MOTION") == "0" || os.Getenv("TERM") == "dumb" {
 		return false
@@ -35,6 +44,9 @@ func motionDefault() bool {
 func (t *Model) apply(o Options) {
 	if o.Mouse != nil {
 		t.mouse = *o.Mouse
+	}
+	if o.NoClipboard {
+		t.noClipboard = true
 	}
 	if o.Motion != nil {
 		t.motion = *o.Motion
@@ -54,7 +66,9 @@ func (t Model) clock() time.Time {
 	return time.Now()
 }
 
-func (t Model) treeFocused() bool { return false }
+func (t Model) treeFocused() bool {
+	return t.active == tabConfig && t.treePane()
+}
 
 func (t Model) identityBody() string {
 	d := derived{}
@@ -85,12 +99,12 @@ func (t Model) frameKey() string {
 	if t.detail != nil {
 		detail = t.detail.Key
 	}
-	return fmt.Sprintf("%d %d %d %v %v %s %d %v %q %v %d %v %v %d %v %v %s %d %d %s %v %d %d",
+	return fmt.Sprintf("%d %d %d %v %v %s %d %v %q %v %d %v %v %d %v %v %s %d %d %s %v %d %d %s",
 		t.width, t.height, t.active, t.help, t.palette.open, t.palette.query, t.palette.cursor,
 		t.disclosure, t.notice, t.mouse, t.motionFrame, t.focusSecondary, t.zoom, t.ratio, t.drill,
 		t.blurred, detail, t.scanCursor, t.scanScroll, strings.Join(open, ","),
 		t.identityVP.YOffset+t.configVP.YOffset,
-		t.groupTable.Cursor(), t.tensorTable.Cursor())
+		t.groupTable.Cursor(), t.tensorTable.Cursor(), t.cfg.framePart())
 }
 
 func (t Model) renderFrame() string {
@@ -119,7 +133,7 @@ func (t Model) bodyView() string {
 		}
 		return t.identityVP.View()
 	case tabConfig:
-		return t.configVP.View()
+		return t.configBody()
 	case tabLayers:
 		return t.layersBody()
 	case tabScan:
@@ -261,11 +275,40 @@ func (t Model) commands() []ui.Match {
 		{"lfilt", "Layers: filter by type", "/", "in Layers", true},
 		{"csort", "Config: filter keys", "/", "in Config", false},
 	}
-	out := make([]ui.Match, len(list))
+	var out []ui.Match
 	for i, c := range list {
-		out[i] = ui.Match{
+		if t.active == tabConfig && c.id == "csort" {
+			continue
+		}
+		out = append(out, ui.Match{
 			ID: c.id, Title: ui.S(sanitize.From(c.title)), Key: ui.S(sanitize.From(c.key)),
 			Where: ui.S(sanitize.From(c.where)), Order: i, Enable: c.enable,
+		})
+	}
+	if t.active == tabConfig && t.cfg != nil && t.m != nil {
+		t.prepareConfig()
+		for _, c := range []struct{ id, title, key string }{
+			{"cfg-expand", "Config: expand all", "e"},
+			{"cfg-collapse", "Config: collapse all", "E"},
+			{"cfg-search", "Config: search", "/"},
+			{"cfg-path", "Config: copy path", "y"},
+			{"cfg-value", "Config: copy value", "Y"},
+			{"cfg-raw", "Config: toggle raw", "r"},
+			{"cfg-jump", "Config: jump to field…", ""},
+		} {
+			out = append(out, ui.Match{
+				ID: c.id, Title: ui.S(sanitize.From(c.title)), Key: ui.S(sanitize.From(c.key)),
+				Where: ui.S(ui.L("in Config")), Order: len(out), Enable: true,
+			})
+		}
+		for i, ln := range t.fieldLines() {
+			if ln.kind != fieldRow {
+				continue
+			}
+			out = append(out, ui.Match{
+				ID: fmt.Sprintf("cfg-field:%d", i), Title: ui.S(sanitize.From("Config: " + ln.label)),
+				Where: ui.S(ui.L("in Config")), Order: len(out), Enable: true,
+			})
 		}
 	}
 	return out
@@ -307,8 +350,48 @@ func (t *Model) runCommand(id string) tea.Cmd {
 	case "lsort", "lfilt":
 		t.active = tabLayers
 		t.notice = "that command arrives with the Layers tree"
-	case "csort":
+	case "cfg-expand":
 		t.active = tabConfig
+		t.focusSecondary = true
+		if t.cfg != nil {
+			t.cfg.drill = true
+			t.configExpandAll()
+		}
+	case "cfg-collapse":
+		t.active = tabConfig
+		if t.cfg != nil {
+			t.configCollapseAll()
+		}
+	case "cfg-search":
+		t.active = tabConfig
+		t.openSearch()
+	case "cfg-path":
+		t.active = tabConfig
+		t.copyConfig(false)
+	case "cfg-value":
+		t.active = tabConfig
+		t.copyConfig(true)
+	case "cfg-raw":
+		t.active = tabConfig
+		if t.cfg != nil {
+			t.cfg.raw = !t.cfg.raw
+			t.cfg.rawReady = false
+			t.touchConfig()
+		}
+	case "cfg-jump":
+		t.active = tabConfig
+		t.focusSecondary = false
+	default:
+		if strings.HasPrefix(id, "cfg-field:") {
+			var i int
+			fmt.Sscanf(id, "cfg-field:%d", &i)
+			t.active = tabConfig
+			t.focusSecondary = false
+			if t.cfg != nil {
+				t.cfg.fieldCur = i
+				t.jumpField(i)
+			}
+		}
 	}
 	return nil
 }
@@ -410,9 +493,9 @@ func (t Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
-		return t.scrollAt(msg.Y, -3), nil
+		return t.scrollAt(msg.X, msg.Y, -3), nil
 	case tea.MouseButtonWheelDown:
-		return t.scrollAt(msg.Y, 3), nil
+		return t.scrollAt(msg.X, msg.Y, 3), nil
 	case tea.MouseButtonLeft:
 	default:
 		return t, nil
@@ -452,6 +535,8 @@ func (t Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		if double {
 			return t.updateScan(tea.KeyMsg{Type: tea.KeyEnter})
 		}
+	case strings.HasPrefix(z.ID, "cfg:"):
+		return t.configClick(z.ID, double), nil
 	case strings.HasPrefix(z.ID, "palette:row:"):
 		var i int
 		fmt.Sscanf(z.ID, "palette:row:%d", &i)
@@ -463,7 +548,7 @@ func (t Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return t, nil
 }
 
-func (t Model) scrollAt(y, d int) tea.Model {
+func (t Model) scrollAt(x, y, d int) tea.Model {
 	if y >= t.height-1 {
 		return t
 	}
@@ -474,10 +559,12 @@ func (t Model) scrollAt(y, d int) tea.Model {
 			t.identityVP.YOffset = 0
 		}
 	case tabConfig:
-		t.configVP.YOffset += d
-		if t.configVP.YOffset < 0 {
-			t.configVP.YOffset = 0
+		tree := t.treePane()
+		if br := ui.Breakpoint(t.width, t.height); br == "M" || br == "L" {
+			rects := ui.Layout(t.width, t.height, t.configRatio(), t.zoom, t.focusSecondary)
+			tree = rects.Split && x >= rects.Secondary.X
 		}
+		t.configMove(d, tree)
 	case tabScan:
 		t.scanCursor += d
 		if t.scanCursor < 0 {
@@ -509,7 +596,11 @@ func (t Model) fillZones() {
 	}
 	t.zones.Add("status:mouse", ui.Rect{X: max(0, t.width-14), Y: 0, W: 14, H: 1})
 	br := ui.Breakpoint(t.width, t.height)
-	rects := ui.Layout(t.width, t.height, t.ratio, t.zoom, t.focusSecondary)
+	ratio := t.ratio
+	if t.active == tabConfig {
+		ratio = t.configRatio()
+	}
+	rects := ui.Layout(t.width, t.height, ratio, t.zoom, t.focusSecondary)
 	if br == "M" || br == "L" {
 		t.zones.Add("pane:primary", rects.Primary)
 		if rects.Split {
@@ -525,6 +616,11 @@ func (t Model) fillZones() {
 	}
 	if t.palette.open {
 		t.addPaletteZones()
+	}
+	if t.active == tabConfig && t.cfg != nil {
+		for _, h := range t.cfg.hits {
+			t.zones.Add(h.id, ui.Rect{X: h.x, Y: h.y, W: h.w, H: h.h})
+		}
 	}
 }
 
@@ -550,6 +646,60 @@ func (t Model) addPaletteZones() {
 		y := 2 + lay.Y + lay.ContentTop + rowsAfterContent + i
 		t.zones.Add(fmt.Sprintf("palette:row:%d", i), ui.Rect{X: lay.X, Y: y, W: lay.W, H: 1})
 	}
+}
+
+func (t Model) configClick(id string, double bool) tea.Model {
+	if t.cfg == nil {
+		return t
+	}
+	switch {
+	case strings.HasPrefix(id, "cfg:field:"):
+		var i int
+		fmt.Sscanf(id, "cfg:field:%d", &i)
+		t.cfg.fieldCur = i
+		t.focusSecondary = false
+		if double {
+			t.jumpField(i)
+		}
+		t.touchConfig()
+	case strings.HasPrefix(id, "cfg:exp:"):
+		var n int
+		fmt.Sscanf(id, "cfg:exp:%d", &n)
+		t.cfg.cursor = int32(n)
+		t.focusSecondary = true
+		t.cfg.ensureRows()
+		t.cfg.row = t.cfg.indexOfCursor()
+		t.configToggle()
+	case strings.HasPrefix(id, "cfg:node:"):
+		var n int
+		fmt.Sscanf(id, "cfg:node:%d", &n)
+		t.cfg.cursor = int32(n)
+		t.focusSecondary = true
+		if t.configBreak() == "S" || t.configBreak() == "XS" {
+			t.cfg.drill = true
+		}
+		t.cfg.ensureRows()
+		t.cfg.row = t.cfg.indexOfCursor()
+		if double {
+			t.configEnter(false)
+		}
+		t.touchConfig()
+	case strings.HasPrefix(id, "cfg:more:"):
+		var n int
+		fmt.Sscanf(id, "cfg:more:%d", &n)
+		t.cfg.ensureRows()
+		for _, row := range t.cfg.rows {
+			if row.more && int(row.id) == n {
+				t.showMore(row, false)
+				break
+			}
+		}
+	case strings.HasPrefix(id, "cfg:crumb:"):
+		var depth int
+		fmt.Sscanf(id, "cfg:crumb:%d", &depth)
+		t.crumbClick(depth)
+	}
+	return t
 }
 
 func (t Model) topRow() string {
@@ -649,11 +799,19 @@ func (t Model) statusRow() string {
 	}
 	hint := ui.HintLine(t.treeFocused())
 	hintKeep := false
+	var hintSegs []ui.StatusSeg
 	if t.notice != "" {
 		hint = t.notice
 		// A transient notice replaces the hint and has to stay visible.
 		// The existing scan test reads it at 80 columns.
 		hintKeep = true
+		hintSegs = []ui.StatusSeg{{Text: ui.S(sanitize.From(hint)), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: true}}
+	} else if t.active == tabConfig {
+		for i, h := range t.configHintSegs() {
+			hintSegs = append(hintSegs, ui.StatusSeg{Text: ui.S(sanitize.From(h)), Pri: 5 + i, FG: ui.TextSecondary, BG: ui.SurfaceSeg})
+		}
+	} else {
+		hintSegs = []ui.StatusSeg{{Text: ui.S(sanitize.From(hint)), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep}}
 	}
 	format := ""
 	size := ""
@@ -673,8 +831,8 @@ func (t Model) statusRow() string {
 	left := []ui.StatusSeg{
 		{Text: seg(mode), Pri: 1, FG: ui.TextInk, BG: ui.FillPink, Bold: true, Keep: true},
 		{Text: seg(name), Pri: 3, FG: ui.TextPrimary, BG: ui.SurfaceSeg2, Min: 16, Shrink: true},
-		{Text: seg(hint), Pri: 5, FG: ui.TextSecondary, BG: ui.SurfaceSeg, Keep: hintKeep},
 	}
+	left = append(left, hintSegs...)
 	right := []ui.StatusSeg{
 		{Text: seg(format), Pri: 4, FG: ui.TextSecondary, BG: ui.SurfaceSeg},
 		{Text: seg(size), Pri: 2, FG: ui.TextPrimary, BG: ui.SurfaceSeg2},
@@ -704,7 +862,7 @@ func (t Model) modeName() string {
 	}
 	switch t.active {
 	case tabConfig:
-		return "CONFIG"
+		return t.configMode()
 	case tabLayers:
 		return "LAYERS"
 	case tabScan:
