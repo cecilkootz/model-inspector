@@ -85,12 +85,12 @@ func (t Model) frameKey() string {
 	if t.detail != nil {
 		detail = t.detail.Key
 	}
-	return fmt.Sprintf("%d %d %d %v %v %s %d %v %q %v %d %v %v %d %v %v %s %d %d %s %v %d %d",
+	return fmt.Sprintf("%d %d %d %v %v %s %d %v %q %v %d %v %v %d %v %v %s %d %d %s %v %d %d %d %d",
 		t.width, t.height, t.active, t.help, t.palette.open, t.palette.query, t.palette.cursor,
 		t.disclosure, t.notice, t.mouse, t.motionFrame, t.focusSecondary, t.zoom, t.ratio, t.drill,
 		t.blurred, detail, t.scanCursor, t.scanScroll, strings.Join(open, ","),
 		t.identityVP.YOffset+t.configVP.YOffset,
-		t.groupTable.Cursor(), t.tensorTable.Cursor())
+		t.groupTable.Cursor(), t.tensorTable.Cursor(), t.groupY, t.tensorY)
 }
 
 func (t Model) renderFrame() string {

@@ -43,32 +43,90 @@ type Note struct{ msg string }
 // Error returns the formatted sentence.
 func (n Note) Error() string { return n.msg }
 
+// formatLit is unexported so a caller can pass only an untyped string
+// constant. A string variable does not convert to formatLit, which keeps a
+// non-constant format from compiling. Inside this package an explicit
+// conversion still compiles; the AST test rejects that.
+type formatLit string
+
 // Notef formats a program sentence. The format string is trusted and must be
-// a constant literal. Every argument is formatted and then passed through
-// From, except numbers and bools, which stay raw so verbs such as %d keep
-// working. %c is untrusted even for a number: the character is sanitized.
-// A width or precision star stays a raw integer, which is what fmt requires.
-func Notef(format string, args ...any) error {
-	roles := scanFormat(format)
+// a constant literal. Arguments that implement fmt.Stringer, error,
+// fmt.Formatter, or fmt.GoStringer are sanitized even when the underlying
+// kind is numeric or bool, because fmt will call the method and print its
+// text. Other numbers and bools stay raw so verbs such as %d keep working.
+// %c is untrusted even for a number: the character is sanitized. A width or
+// precision star stays a raw integer, which is what fmt requires.
+// Text, including Program, is already safe and is not passed through From
+// again. A nil argument is left for fmt, which prints "<nil>".
+func Notef(format formatLit, args ...any) error {
+	spec := string(format)
+	roles := scanFormat(spec)
 	safe := make([]any, len(args))
 	for i, a := range args {
-		switch {
-		case roles.star[i]:
-			safe[i] = a
-		case roles.char[i] || !isNumberOrBool(a):
-			safe[i] = sanitized{a}
-		default:
-			safe[i] = a
-		}
+		safe[i] = safeArg(a, roles.star[i], roles.char[i])
 	}
-	return Note{msg: fmt.Sprintf(format, safe...)}
+	return Note{msg: fmt.Sprintf(spec, safe...)}
+}
+
+func safeArg(a any, star, char bool) any {
+	switch {
+	case star:
+		return a
+	case isText(a):
+		return a
+	case formatsItself(a):
+		return sanitized{a}
+	case isNilLike(a):
+		return a
+	case char || !isNumberOrBool(a):
+		return sanitized{a}
+	default:
+		return a
+	}
+}
+
+func isText(a any) bool {
+	_, ok := a.(Text)
+	return ok
+}
+
+// formatsItself is true when fmt will print a method's text instead of the
+// underlying number or bool.
+func formatsItself(a any) bool {
+	switch a.(type) {
+	case fmt.Stringer, error, fmt.Formatter, fmt.GoStringer:
+		return true
+	default:
+		return false
+	}
+}
+
+// isNilLike reports values fmt prints as "<nil>", "[]", or "map[]" with no
+// user bytes. A typed nil that implements Stringer or error is handled
+// earlier, so its method text is still sanitized.
+func isNilLike(a any) bool {
+	if a == nil {
+		return true
+	}
+	v := reflect.ValueOf(a)
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func, reflect.Interface:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // sanitized prints v with the verb fmt selected, then tokenizes that text.
+// fmt's own "<nil>" (a nil pointer whose method panics) is left as written.
 type sanitized struct{ v any }
 
 func (s sanitized) Format(f fmt.State, verb rune) {
 	formatted := fmt.Sprintf(fmt.FormatString(f, verb), s.v)
+	if strings.TrimSpace(formatted) == "<nil>" {
+		_, _ = io.WriteString(f, formatted)
+		return
+	}
 	_, _ = io.WriteString(f, From(formatted).String())
 }
 
