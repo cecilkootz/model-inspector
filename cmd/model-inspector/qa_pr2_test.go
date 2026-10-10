@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 func TestQA_PrintTextAndJSON(t *testing.T) {
@@ -74,6 +75,22 @@ func TestQA_StderrAndWalkError(t *testing.T) {
 	}
 	if !strings.Contains(out, "behavior scan") {
 		t.Fatalf("missing disclaimer:\n%s", out)
+	}
+}
+
+func TestWriteErrorPrintsNoteOnce(t *testing.T) {
+	var buf bytes.Buffer
+	writeError(&buf, sanitize.Notef("pass org/name@<commit> (%s)", "a<b\x1b"))
+	got := buf.String()
+	assertNoHostileRunes(t, "writeError note", got)
+	if !strings.Contains(got, "org/name@<commit>") {
+		t.Fatalf("placeholder: %q", got)
+	}
+	if strings.Contains(got, "<U+003C>commit") || strings.Contains(got, "a<b") {
+		t.Fatalf("got %q", got)
+	}
+	if !strings.Contains(got, "<U+003C>b") || !strings.Contains(got, "<U+001B>") {
+		t.Fatalf("argument: %q", got)
 	}
 }
 

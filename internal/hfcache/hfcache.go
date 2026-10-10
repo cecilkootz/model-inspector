@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 // ErrAmbiguousTarget is returned when a bare argument is both an HF repo id
@@ -265,7 +266,7 @@ func readCommit(id, ref, rev, refPath, refsRoot string) (string, error) {
 	case os.IsNotExist(err) && rev != "" && commitRe.MatchString(rev):
 		return rev, nil
 	case os.IsNotExist(err) && rev == "":
-		return "", fmt.Errorf("repo %s has no refs/main; pass org/name@<commit>", id)
+		return "", sanitize.Notef("repo %s has no refs/main; pass org/name@<commit>", id)
 	case os.IsNotExist(err):
 		return "", fmt.Errorf("repo %s: ref %q is not a commit hash and refs/%s is missing", id, rev, ref)
 	default:

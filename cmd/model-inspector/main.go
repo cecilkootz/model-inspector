@@ -307,5 +307,14 @@ func fail(err error) {
 
 // writeError prints err to w with file-derived controls tokenized.
 func writeError(w io.Writer, err error) {
+	if err == nil {
+		return
+	}
+	// A Note already sanitized its untrusted arguments. Running From on it
+	// would turn a static "<commit>" into a token.
+	if n, ok := err.(sanitize.Note); ok {
+		fmt.Fprintln(w, "model-inspector:", n.Error())
+		return
+	}
 	fmt.Fprintln(w, "model-inspector:", sanitize.From(err.Error()))
 }
