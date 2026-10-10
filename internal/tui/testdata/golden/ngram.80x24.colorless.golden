@@ -4,15 +4,11 @@ model-inspector  [1 Identity] 2 Config 3 Layers 4 Scan ✓              m mouse 
                                                                                 
 SIZE ON DISK    PARAMETERS      QUANT           LAYERS          EXPERTS         
 33.30 KiB       ~16.5K          bf16            3               —               
-3 files|1 shard 6 tensors                       ○2 lin · ●1 ful                 
+3 files · 1 sha 6 tensors                       ○2 lin · ●1 ful                 
                                                                                 
 STORAGE  33.30 KiB on disk                                                      
 ████████████████████████████████████████████████████████████████████████████    
 █ plain bf16 100%                                                               
-Memory  weights ≥ 32.17 KiB (0.0 GB)                                            
-  weights only: no KV cache, activations or runtime overhead                    
-  weights only; excludes KV cache, activations, runtime overhead                
-  heuristic lookup_table_v1; runtime support varies; no saving on unified memory
                                                                                 
 CALLOUTS  2 notable                                                             
 [▲] layer 1 is 32.02 KiB, 99.5% of weights: ~16.4K-param n-gram embedding tab…  
@@ -21,4 +17,8 @@ CALLOUTS  2 notable
 BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2×
             ○○● ●                                                               
 routed exp  ··· ·  ·                                                            
+16 B  <64K ▒ <4M ▓ <256M █  32 B  ○ linear  ● full  per-layer totals differ by <
+flat  attention 16 B  flat · router · · shared exp · · norms ·                  
+excludes ple 32.00 KiB · other 32 B not in the grid                             
+Memory  weights ≥ 32.17 KiB (0.0 GB)                                            
 IDENTITY │ /model            33.30 KiB │ bf16 │ ✓ structure 5/8 │ – headers-only

@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/lucasb-eyer/go-colorful"
 	"github.com/muesli/termenv"
+
+	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 func TestTokenContrast(t *testing.T) {
@@ -123,17 +125,18 @@ func TestHeatBucketsAndDomain(t *testing.T) {
 func TestSegmentsDropOrder(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	lipgloss.SetColorProfile(termenv.Ascii)
+	txt := func(s string) Safe { return S(sanitize.From(s)) }
 	left := []StatusSeg{
-		{Text: "IDENTITY", Pri: 1, Keep: true},
-		{Text: "a-very-long-model-name-here", Pri: 3, Min: 16, Shrink: true},
-		{Text: "hints that take a lot of room and should drop first", Pri: 5},
+		{Text: txt("IDENTITY"), Pri: 1, Keep: true},
+		{Text: txt("a-very-long-model-name-here"), Pri: 3, Min: 16, Shrink: true},
+		{Text: txt("hints that take a lot of room and should drop first"), Pri: 5},
 	}
 	right := []StatusSeg{
-		{Text: "safetensors", Pri: 4},
-		{Text: "1.00 GiB", Pri: 2},
-		{Text: "q4", Pri: 2},
-		{Text: "PASS", Pri: 1, Keep: true},
-		{Text: "headers-only", Pri: 1, Keep: true},
+		{Text: txt("safetensors"), Pri: 4},
+		{Text: txt("1.00 GiB"), Pri: 2},
+		{Text: txt("q4"), Pri: 2},
+		{Text: txt("PASS"), Pri: 1, Keep: true},
+		{Text: txt("headers-only"), Pri: 1, Keep: true},
 	}
 	for _, w := range []int{60, 80, 100, 140} {
 		s := Strip(Segments(append([]StatusSeg(nil), left...), append([]StatusSeg(nil), right...), w))
@@ -176,15 +179,15 @@ func TestKeymapNoConflicts(t *testing.T) {
 
 func TestPaletteMatcher(t *testing.T) {
 	items := []Match{
-		{Title: "Quit", Order: 0},
-		{Title: "Go to Layers", Order: 1},
-		{Title: "Layers: sort by size", Order: 2},
+		{Title: S(sanitize.From("Quit")), Order: 0},
+		{Title: S(sanitize.From("Go to Layers")), Order: 1},
+		{Title: S(sanitize.From("Layers: sort by size")), Order: 2},
 	}
 	ranked := Rank("lay", items)
 	if len(ranked) != 2 {
 		t.Fatalf("hits %d", len(ranked))
 	}
-	if ranked[0].Title != "Layers: sort by size" {
+	if ranked[0].Title.String() != "Layers: sort by size" {
 		t.Fatalf("order %+v", ranked)
 	}
 	if ranked[0].Score < ranked[1].Score {

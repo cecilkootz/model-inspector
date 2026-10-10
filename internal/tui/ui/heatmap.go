@@ -2,27 +2,61 @@ package ui
 
 import (
 	"math"
+	"sort"
 	"strings"
 )
 
 // HeatRow is one component across decoder layers, plus an optional MTP column.
 type HeatRow struct {
-	Label  string
+	Label  Safe
 	Cells  []int64 // 0 means absent
 	MTP    int64
 	HasMTP bool
+
+	spread string
+	flat   bool
+	ready  bool
 }
 
 // HeatGrid is the bytes-per-layer grid. Values are on-disk bytes.
 type HeatGrid struct {
 	Rows    []HeatRow
 	Full    []bool // full attention per decoder column
-	Caption string
-	Note    string // shown beside the legend, for example an estimate marker
+	Caption Safe
+	Note    Safe // shown beside the legend, for example an estimate marker
+}
+
+// Prepare caches each row's spread so a frame does not sort the cells again.
+func (h *HeatGrid) Prepare() {
+	if h == nil {
+		return
+	}
+	for i := range h.Rows {
+		h.Rows[i].prepare()
+	}
+}
+
+func (r *HeatRow) prepare() {
+	if r == nil || r.ready {
+		return
+	}
+	r.spread, r.flat = spreadParts(r.Cells)
+	r.ready = true
+}
+
+// Cached reports whether the row's spread was computed ahead of drawing.
+func (r HeatRow) Cached() bool { return r.ready }
+
+func (r HeatRow) spreadLine() (string, bool) {
+	if r.ready {
+		return r.spread, r.flat
+	}
+	return spreadParts(r.Cells)
 }
 
 // Heatmap renders the grid at width. One log2 scale is shared by every row.
 func Heatmap(h HeatGrid, width int, large bool) []string {
+	h.Prepare()
 	if width < 1 {
 		return nil
 	}
@@ -46,8 +80,8 @@ func Heatmap(h HeatGrid, width int, large bool) []string {
 	}
 	lo, hi := heatDomain(h)
 	title := "BYTES" + SepWord() + "LAYER " + Times() + " COMPONENT  log2 scale shared by all rows" + SepWord() + "each colour step = 2" + Times()
-	if h.Note != "" {
-		title += SepWord() + h.Note
+	if !h.Note.Empty() {
+		title += SepWord() + h.Note.String()
 	}
 	var lines []string
 	lines = append(lines, Fit(title, width))
@@ -65,28 +99,29 @@ func Heatmap(h HeatGrid, width int, large bool) []string {
 	if !large {
 		for _, r := range h.Rows {
 			if !keepRow(r) {
-				folded = append(folded, r.Label+" "+spreadText(r.Cells))
+				text, _ := r.spreadLine()
+				folded = append(folded, r.Label.String()+" "+text)
 			}
 		}
 	}
 	for _, r := range show {
 		lines = append(lines, Fit(heatRow(r, cols, pool, cw, labelW, spreadW, lo, hi, gl), width))
 	}
-	lines = append(lines, Fit(heatLegend(lo, hi, gl, h.Note), width))
+	lines = append(lines, Fit(heatLegend(lo, hi, gl, h.Note.String()), width))
 	if len(folded) > 0 {
 		lines = append(lines, Fit("flat  "+strings.Join(folded, SepWord()), width))
 	}
-	if h.Caption != "" {
-		lines = append(lines, Fit(h.Caption, width))
+	if !h.Caption.Empty() {
+		lines = append(lines, Fit(h.Caption.String(), width))
 	}
 	return lines
 }
 
 func keepRow(r HeatRow) bool {
-	if strings.Contains(r.Label, "routed") {
+	if strings.Contains(r.Label.String(), "routed") {
 		return true
 	}
-	_, flat := spreadParts(r.Cells)
+	_, flat := r.spreadLine()
 	return !flat
 }
 
@@ -199,7 +234,7 @@ func heatHeader(n, cols, pool, cw, labelW int, full []bool, gl Glyphs) string {
 
 func heatRow(r HeatRow, cols, pool, cw, labelW, spreadW, lo, hi int, gl Glyphs) string {
 	var b strings.Builder
-	lab := r.Label
+	lab := r.Label.String()
 	if Width(lab) > labelW-1 {
 		lab = Trunc(lab, labelW-1, "")
 	}
@@ -215,7 +250,7 @@ func heatRow(r HeatRow, cols, pool, cw, labelW, spreadW, lo, hi int, gl Glyphs) 
 	}
 	b.WriteString(heatCell(mtp, cw, lo, hi, gl))
 	b.WriteString("  ")
-	sp := spreadText(r.Cells)
+	sp, _ := r.spreadLine()
 	b.WriteString(Trunc(sp, spreadW, ""))
 	return b.String()
 }
@@ -289,6 +324,10 @@ func bucket(b int64) int {
 		m4   = 4 * 1024 * 1024
 		m256 = 256 * 1024 * 1024
 	)
+	// A negative size is a saturated overflow, not a tiny tensor.
+	if b < 0 {
+		return 3
+	}
 	switch {
 	case b < k64:
 		return 0
@@ -301,9 +340,21 @@ func bucket(b int64) int {
 	}
 }
 
+// pow2 is 2^exp, clamped to the uint64 powers of two. A signed shift of 63
+// is MinInt64, which the byte formatter cannot negate.
+func pow2(exp int) uint64 {
+	if exp <= 0 {
+		return 1
+	}
+	if exp >= 63 {
+		return 1 << 63
+	}
+	return 1 << uint(exp)
+}
+
 func heatLegend(lo, hi int, gl Glyphs, note string) string {
-	loB := int64(1) << lo
-	hiB := int64(1) << hi
+	loB := pow2(lo)
+	hiB := pow2(hi)
 	if ColorOff() || Profile() == "ansi16" {
 		edges := "<64K " + gl.Heat[1] + " <4M " + gl.Heat[2] + " <256M " + gl.Heat[3]
 		s := humanPow(loB) + "  " + edges + "  " + humanPow(hiB)
@@ -321,11 +372,11 @@ func heatLegend(lo, hi int, gl Glyphs, note string) string {
 	return humanPow(loB) + " " + ramp.String() + " " + humanPow(hiB) + "  " + gl.Linear + " linear  " + gl.Full + " full"
 }
 
-func humanPow(n int64) string {
+func humanPow(n uint64) string {
 	if n < 1024 {
-		return itoa(int(n)) + " B"
+		return itoaU(n) + " B"
 	}
-	units := []string{"KiB", "MiB", "GiB", "TiB"}
+	units := []string{"KiB", "MiB", "GiB", "TiB", "PiB", "EiB"}
 	v := float64(n)
 	u := -1
 	for v >= 1024 && u < len(units)-1 {
@@ -333,9 +384,26 @@ func humanPow(n int64) string {
 		u++
 	}
 	if v >= 10 {
-		return itoa(int(math.Round(v))) + " " + units[u]
+		rounded := uint64(math.Round(v))
+		return itoaU(rounded) + " " + units[u]
 	}
 	return sprintf1(v) + " " + units[u]
+}
+
+func itoaU(n uint64) string {
+	if n > uint64(^uint(0)>>1) {
+		// Wider than int. Format without passing through a signed value.
+		var buf [32]byte
+		i := len(buf)
+		u := n
+		for u > 0 {
+			i--
+			buf[i] = byte('0' + u%10)
+			u /= 10
+		}
+		return string(buf[i:])
+	}
+	return itoa(int(n))
 }
 
 func spreadText(cells []int64) string {
@@ -370,7 +438,7 @@ func spreadParts(cells []int64) (string, bool) {
 	med := median(pos)
 	gl := G()
 	if med > 0 && float64(max-min)/float64(med) < 0.01 {
-		return humanPow(med) + "  flat", true
+		return humanPow(uint64(med)) + "  flat", true
 	}
 	pct := 0
 	if med > 0 {
@@ -381,7 +449,7 @@ func spreadParts(cells []int64) (string, bool) {
 		mark = " " + gl.Full
 	}
 	// Percent first so a narrow spread column keeps the figure.
-	return "+" + itoa(pct) + "%" + mark + " " + humanPow(min) + "-" + humanPow(max), false
+	return "+" + itoa(pct) + "%" + mark + " " + humanPow(uint64(min)) + "-" + humanPow(uint64(max)), false
 }
 
 func median(v []int64) int64 {
@@ -389,18 +457,16 @@ func median(v []int64) int64 {
 		return 0
 	}
 	s := append([]int64(nil), v...)
-	for i := 1; i < len(s); i++ {
-		j := i
-		for j > 0 && s[j] < s[j-1] {
-			s[j], s[j-1] = s[j-1], s[j]
-			j--
-		}
-	}
+	sort.Slice(s, func(i, j int) bool { return s[i] < s[j] })
 	mid := len(s) / 2
 	if len(s)%2 == 1 {
 		return s[mid]
 	}
-	return (s[mid-1] + s[mid]) / 2
+	return avg2(s[mid-1], s[mid])
+}
+
+func avg2(a, b int64) int64 {
+	return a/2 + b/2 + (a%2+b%2)/2
 }
 
 // LogDomain returns the shared log2 floor and ceil for tests.

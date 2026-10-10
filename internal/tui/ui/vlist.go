@@ -8,7 +8,7 @@ import (
 
 // VList is a window over a row slice. Only the visible rows are rendered.
 type VList struct {
-	Rows   []string
+	Rows   []Safe
 	Cursor int
 	Offset int
 	Height int
@@ -60,7 +60,7 @@ func (v *VList) View(width int, focused bool) string {
 		idx := v.Offset + i
 		var text string
 		if idx >= 0 && idx < len(v.Rows) {
-			text = v.Rows[idx]
+			text = v.Rows[idx].String()
 		}
 		sel := idx == v.Cursor && len(v.Rows) > 0
 		lines = append(lines, rowLine(text, width, sel, focused, gl))
@@ -122,7 +122,7 @@ func rowLine(text string, width int, selected, focused bool, gl Glyphs) string {
 }
 
 // TreeRow draws an indented guide and a label.
-func TreeRow(depth int, last, expanded bool, label string, width int) string {
+func TreeRow(depth int, last, expanded bool, label Safe, width int) string {
 	gl := G()
 	var b strings.Builder
 	for i := 0; i < depth; i++ {
@@ -157,7 +157,7 @@ func TreeRow(depth int, last, expanded bool, label string, width int) string {
 			b.WriteString("> ")
 		}
 	}
-	b.WriteString(label)
+	b.WriteString(label.String())
 	_ = gl
 	return Fit(b.String(), width)
 }

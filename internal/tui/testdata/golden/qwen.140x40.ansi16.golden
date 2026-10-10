@@ -2,24 +2,20 @@
 [94m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
 [1;97;45m model-inspector [0m  /model                                                                                                                   
   [1;97;45m model-inspector [0m  revision: — · qwen3_next · safetensors · u8                                                                            
-    [1;97;45m model-inspector [0m  [92m/model[0m                                                                                                               
+    [1;97;45m model-inspector [0m                                                                                                                       
       [1;97;45m model-inspector [0m                                                                                                                     
         [1;97;45m model-inspector [0m  [1;37;40m – headers-only [0m  [1;30;43m ▲ 1 callouts [0m                                                                                 
                                                                                                                                             
 ▌                      ▌                      ▌                      ▌                      ▌                      ▌                        
 ▌SIZE ON DISK          ▌PARAMETERS            ▌QUANT                 ▌LAYERS                ▌EXPERTS               ▌WEIGHTS                 
 ▌24.20 KiB             ▌~61.1K                ▌u8                    ▌48                    ▌8 · 2/tok             ▌≥ 59.65 KiB             
-▌2 files|1 shards      ▌245 tensors           ▌                      ▌○36 lin · ●12 full    ▌routed                ▌weights only            
+▌2 files · 1 shards    ▌245 tensors           ▌                      ▌○36 lin · ●12 full    ▌routed                ▌weights only            
 ▌                      ▌                      ▌                      ▌                      ▌                      ▌                        
                                                                                                                                             
 [1;97;45m STORAGE [0m 24.20 KiB                                         [1;97mCALLOUTS[0m  [90m1 notable[0m                                                             
 [91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m      [1;97;45m MTP [0m [1;97mMTP layer present (1.17 KiB): used only for speculative decoding[0m          
 [91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m                                                                                      
 █ plain u8 100%                                                                                                                             
-Memory  weights ≥ 59.65 KiB (0.0 GB)                                                                                                        
-  text-only ≥ 58.48 KiB                                                                                                                     
-  weights only: no KV cache, activations or runtime overhe                                                                                  
-  weights only; excludes KV cache, activations, runtime ov                                                                                  
                                                                                                                                             
 BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2× · per-layer totals differ by 15.1%                         
             ○ ○ ○ ● ○ ○ ○ ● ○ ○ ○ ● ○ ○ ○ ● ○ ○ ○ ● ○ ○ ○ ● ○ ○ ○ ● ○ ○ ○ ● ○ ○ ○ ● ○ ○ ○ ● ○ ○ ○ ● ○ ○ ○ ●  ●                              
@@ -33,7 +29,11 @@ Memory  weights ≥ 59.65 KiB (0.0 GB)
   text-only ≥ 58.48 KiB                                                                                                                     
   weights only: no KV cache, activations or runtime overhead                                                                                
   weights only; excludes KV cache, activations, runtime overhead                                                                            
-MTP layer present (1.17 KiB): used only for speculative decoding                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             

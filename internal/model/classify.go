@@ -24,6 +24,11 @@ var kindOrder = map[string]int{
 	KindLMHead: 4, KindMTP: 5, KindVision: 6, KindOther: 7,
 }
 
+// MaxLayerIndex is the highest decoder index that receives its own column.
+// A larger index is rejected and the inspection is marked partial, so a
+// name cannot size an allocation.
+const MaxLayerIndex = 4096
+
 // layerRe matches decoder-layer style names: model.layers.N., transformer.h.N., blocks.N.
 var layerRe = regexp.MustCompile(`(?:^|\.)(?:layers|h|blocks|block)\.(\d+)\.`)
 
@@ -53,7 +58,11 @@ func Classify(name string) (key, kind string, layer int) {
 		return "ngram", KindEmbeddings, -1
 	}
 	if m := layerRe.FindStringSubmatch(name); m != nil {
-		n, _ := strconv.Atoi(m[1])
+		n, err := strconv.Atoi(m[1])
+		// A value that does not fit in int must not collapse to layer 0.
+		if err != nil || n < 0 {
+			return "layer overflow", KindLayer, MaxLayerIndex + 1
+		}
 		return fmt.Sprintf("layer %d", n), KindLayer, n
 	}
 	// The model-level mixer sits next to the stack, not inside layers.N or
@@ -72,6 +81,26 @@ func Classify(name string) (key, kind string, layer int) {
 		return "norms", KindNorms, -1
 	}
 	return "other", KindOther, -1
+}
+
+// NoteAbsurdLayers marks the inspection partial when a tensor or group
+// carries a decoder index above MaxLayerIndex. The heatmap then omits it.
+func (m *Model) NoteAbsurdLayers() {
+	if m == nil {
+		return
+	}
+	for _, t := range m.Tensors {
+		if t != nil && t.Layer > MaxLayerIndex {
+			m.Partial = true
+			return
+		}
+	}
+	for _, g := range m.Groups {
+		if g != nil && g.Layer > MaxLayerIndex {
+			m.Partial = true
+			return
+		}
+	}
 }
 
 func hasSeg(segs []string, f func(string) bool) bool {
