@@ -44,7 +44,12 @@ func renderIdentity(m *model.Model, width int) string {
 			line = g.host + " of which ≥ " + bytes + " are lookup tables that can stay in CPU RAM (incomplete)"
 		}
 		add(indent(line))
-		add(indent("  (heuristic) → ≥ " + model.HumanBytes(mem.AcceleratorMinBytes) + " on the GPU/accelerator"))
+		// The subtraction is a lower bound only when the host total is exact.
+		// A partial host figure is itself a lower bound; subtracting it can
+		// overstate the accelerator remainder, so the line is omitted.
+		if !mem.HostCapablePartial {
+			add(indent("  (heuristic) → ≥ " + model.HumanBytes(mem.AcceleratorMinBytes) + " on the GPU/accelerator"))
+		}
 	}
 	if mem.UnifiedMemory {
 		add(indent("unified memory (MLX): CPU and GPU share RAM, total is unchanged"))

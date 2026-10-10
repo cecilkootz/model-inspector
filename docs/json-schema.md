@@ -122,6 +122,15 @@ class, or the storage legend, past 100%.
 `host_capable_note`. `text_only_bytes` is always computed. `unified_memory`
 is true for an MLX variant or for darwin/arm64.
 
+`accelerator_min_bytes` is `weights_bytes − host_capable_bytes` when the
+host total is exact, and that difference is a lower bound on bytes that
+cannot stay in host RAM. When the inspection is partial, or the index
+names a piece that was not loaded, `host_capable_bytes` is only a lower
+bound. Subtracting it can overstate the accelerator remainder, so it is
+not a lower bound. The field is then `0` — the only figure that is still
+a lower bound — and the identity screen omits the "≥ … on the
+GPU/accelerator" line. The text summary does not print that line.
+
 `groups[]` is `{key, kind, layer, attention_type, tensors, params_est,
 bytes, pct_bytes, storage, has_routed_experts, routed_experts, outliers,
 host_capable_bytes}`. `pct_bytes` is one decimal, clamped to 0 through 100.
@@ -145,6 +154,9 @@ Shard indexes are numeric, so `shard_01` and `shard_1` are one piece.
 Orphan `.scales` and `.biases` are not tables, and each tensor is counted
 once. Pieces that disagree in dtype or column count are not merged.
 One `host_capable_tensors` entry is emitted, named with the shared stem.
+Names are unique. A tensor whose name is exactly that stem stays under
+the stem; the summed table is then named `stem (sharded)`, and a further
+clash gets a numeric suffix. Piece matching still uses the stem.
 When `partial` is true, or the index names a piece that was not loaded,
 the ⌂ memory line and the n-gram callouts say the figure is incomplete.
 

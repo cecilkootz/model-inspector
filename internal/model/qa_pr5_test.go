@@ -195,13 +195,24 @@ func TestQA5_SpoofedPrefix(t *testing.T) {
 	if len(host) != 2 {
 		t.Fatalf("bare stem collided with shards: %+v", host)
 	}
+	seen := map[string]bool{}
 	var sharded, bare bool
 	for _, h := range host {
 		if h.Bytes != 4096*160*2 {
 			t.Fatalf("bytes summed across the collision: %+v", h)
 		}
+		if seen[h.Name] {
+			t.Fatalf("duplicate host name %q in %+v", h.Name, host)
+		}
+		seen[h.Name] = true
 		if h.sharded {
 			sharded = true
+			if h.Name == qaStem || !strings.Contains(h.Name, qaStem) || !strings.Contains(h.Name, "sharded") {
+				t.Fatalf("sharded name %q is not distinct from the stem", h.Name)
+			}
+			if h.stem != qaStem {
+				t.Fatalf("stem = %q", h.stem)
+			}
 		} else if h.Name == qaStem {
 			bare = true
 		}
@@ -273,6 +284,36 @@ func TestQA5_Overflow(t *testing.T) {
 		if strings.Contains(c.Message, " -") {
 			t.Fatalf("negative in %q", c.Message)
 		}
+	}
+}
+
+func TestQA5_PartialAcceleratorIsNotAFloor(t *testing.T) {
+	// Host bytes are a lower bound on a partial inspection. Subtracting them
+	// from weights can overstate the accelerator remainder, so the estimate
+	// does not claim that subtraction as a minimum.
+	n := int64(2 * GiB)
+	proj := int64(4096)
+	m := qm(
+		qt(qaStem+".weight", "BF16", []int64{4096, 160}, n, RolePlain),
+		qt("model.layers.0.mlp.down_proj.weight", "BF16", []int64{64, 64}, proj, RolePlain),
+	)
+	m.Partial = true
+	mem := m.MemoryEstimate()
+	if !mem.HostCapablePartial || mem.HostCapableBytes != n {
+		t.Fatalf("memory %+v", mem)
+	}
+	if mem.AcceleratorMinBytes != 0 {
+		t.Fatalf("partial accelerator %d, want 0", mem.AcceleratorMinBytes)
+	}
+	// A complete model still subtracts. The partial model above is cached
+	// with Partial set, so this is a separate value.
+	m = qm(
+		qt(qaStem+".weight", "BF16", []int64{4096, 160}, n, RolePlain),
+		qt("model.layers.0.mlp.down_proj.weight", "BF16", []int64{64, 64}, proj, RolePlain),
+	)
+	mem = m.MemoryEstimate()
+	if mem.HostCapablePartial || mem.AcceleratorMinBytes != proj {
+		t.Fatalf("complete accelerator %+v", mem)
 	}
 }
 

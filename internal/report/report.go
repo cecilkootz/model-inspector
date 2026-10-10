@@ -262,12 +262,11 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 			Strict: res.Strict, Overall: string(res.Overall), Disclaimer: res.Disclaimer,
 			Counts: res.Count(), Checks: []checkDoc{},
 		},
-		LoadWarnings: append([]string{}, m.Warnings...),
-		Partial:      m.Partial,
+		// Partial and LoadWarnings are filled after host totals are summed.
+		// addGroupHost can still mark the inspection partial, and every
+		// consumer of the document has to see that final value.
+		LoadWarnings: []string{},
 		ElapsedMS:    elapsed.Milliseconds(),
-	}
-	if d.LoadWarnings == nil {
-		d.LoadWarnings = []string{}
 	}
 	if m.Index != nil {
 		d.Files.IndexFile = strPtr(m.Index.File)
@@ -314,6 +313,11 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 			Name: h.Name, Group: h.Group, Bytes: h.Bytes, ParamsEst: h.ParamsEst, Rule: h.Rule,
 		})
 	}
+	d.LoadWarnings = append([]string{}, m.Warnings...)
+	if d.LoadWarnings == nil {
+		d.LoadWarnings = []string{}
+	}
+	d.Partial = m.Partial
 	outliersByGroup := map[string][]string{}
 	for _, c := range callouts {
 		var tag string

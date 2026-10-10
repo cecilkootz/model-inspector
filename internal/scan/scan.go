@@ -76,6 +76,11 @@ func Run(m *model.Model) Result { return RunOptions(m, Options{}) }
 // safetensors.CheckLayout; this function only sorts those results into
 // check ids and applies the strict promotion.
 func RunOptions(m *model.Model, opt Options) Result {
+	// One pass: host-capable warnings and any Partial they set are part of
+	// the verdict. HostCapable caches, so a later render does not append more.
+	if m != nil {
+		m.HostCapable()
+	}
 	checks := []Check{
 		headerParse(m),
 		filePresence(m),

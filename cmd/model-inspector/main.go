@@ -118,6 +118,11 @@ func run(args []string) int {
 	}
 	res := scan.RunOptions(m, scan.Options{Strict: opts.strict})
 	doc := report.Build(m, res, fromCache, time.Since(start))
+	// Build can saturate a group total and mark Partial after the scan that
+	// produced res. Re-run so the TUI shows the same verdict as doc.Scan.
+	if m.Partial && res.Overall != scan.StatusFail {
+		res = scan.RunOptions(m, scan.Options{Strict: opts.strict})
+	}
 	interactive := cmd == "tui" && !opts.json && isatty.IsTerminal(os.Stdout.Fd())
 	if interactive {
 		if err := tui.Run(m, res); err != nil {

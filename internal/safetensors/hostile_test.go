@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseRejectsNullAndEmpty(t *testing.T) {
@@ -13,6 +14,33 @@ func TestParseRejectsNullAndEmpty(t *testing.T) {
 		if _, err := Parse([]byte(js)); err == nil {
 			t.Fatalf("accepted %s", js)
 		}
+	}
+}
+
+func TestParseRejectsHugeNumberWithoutQuotingIt(t *testing.T) {
+	js := bytes.Repeat([]byte("0"), 1<<20)
+	js[0] = '1'
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	start := time.Now()
+	_, err := Parse(js)
+	elapsed := time.Since(start)
+	runtime.ReadMemStats(&after)
+	if err == nil {
+		t.Fatal("accepted a bare number")
+	}
+	if len(err.Error()) > 200 {
+		t.Fatalf("error quotes the literal (%d bytes)", len(err.Error()))
+	}
+	if !strings.Contains(err.Error(), "JSON object") {
+		t.Fatal(err)
+	}
+	if elapsed > 50*time.Millisecond {
+		t.Fatalf("Parse took %s", elapsed)
+	}
+	if delta := after.TotalAlloc - before.TotalAlloc; delta > 1<<20 {
+		t.Fatalf("alloc delta %d", delta)
 	}
 }
 
