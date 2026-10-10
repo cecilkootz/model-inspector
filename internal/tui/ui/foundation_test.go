@@ -52,6 +52,21 @@ func TestTokenContrast(t *testing.T) {
 				t.Errorf("rule on term = %.2f", c)
 			}
 		}
+		for _, tok := range []Token{JSONKey, JSONString, JSONNumber, JSONBool, JSONNull} {
+			if c := Contrast(tok.Hex(), SurfaceCard.Hex()); c < 4.5 {
+				t.Errorf("%s json %s on card = %.2f", theme, tok.Hex(), c)
+			}
+			if c := Contrast(tok.Hex(), SurfaceSel.Hex()); c < 4.5 {
+				t.Errorf("%s json %s on sel = %.2f", theme, tok.Hex(), c)
+			}
+		}
+		if theme == "dark" {
+			for _, tok := range []Token{JSONKey, JSONString, JSONNumber, JSONBool} {
+				if c := Contrast(tok.Hex(), SurfaceSel.Hex()); c < 6.1 {
+					t.Errorf("dark json %s on sel = %.2f", tok.Hex(), c)
+				}
+			}
+		}
 		for _, pos := range []float64{0, 0.25, 0.5, 0.75, 1} {
 			hex := string(GradBrand.At(pos))
 			ink := OnFill(hex)

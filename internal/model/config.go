@@ -1,6 +1,12 @@
 package model
 
-import "sort"
+import (
+	"encoding/json"
+	"fmt"
+	"sort"
+
+	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
+)
 
 // KV is one extracted config field.
 type KV struct {
@@ -109,8 +115,35 @@ func subMap(m map[string]any, key string) map[string]any {
 }
 
 func floatOf(v any) float64 {
-	f, _ := v.(float64)
+	f, ok := jsonx.FitFloat(v)
+	if !ok {
+		return 0
+	}
 	return f
+}
+
+// noteOutOfRangeNumbers records each JSON number that does not fit in
+// float64. The literal is kept on the value; this is the mark numeric
+// callers use instead of failing the document.
+func (m *Model) noteOutOfRangeNumbers(v any, path string) {
+	switch t := v.(type) {
+	case map[string]any:
+		for _, k := range SortedKeys(t) {
+			next := k
+			if path != "" {
+				next = path + "." + k
+			}
+			m.noteOutOfRangeNumbers(t[k], next)
+		}
+	case []any:
+		for i, e := range t {
+			m.noteOutOfRangeNumbers(e, fmt.Sprintf("%s[%d]", path, i))
+		}
+	case json.Number:
+		if _, ok := jsonx.FitFloat(t); !ok {
+			m.warnf("%s is out of range: %s", path, t.String())
+		}
+	}
 }
 
 func intOf(v any) int { return int(floatOf(v)) }

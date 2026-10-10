@@ -29,7 +29,6 @@ var (
 	activeTabStyle lipgloss.Style
 	labelStyle     lipgloss.Style
 	valueStyle     lipgloss.Style
-	headingStyle   lipgloss.Style
 	helpStyle      lipgloss.Style
 	warnStyle      lipgloss.Style
 	passStyle      lipgloss.Style
@@ -75,7 +74,6 @@ func configure() {
 	activeTabStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Dark: "230", Light: "255"}).Background(lipgloss.AdaptiveColor{Dark: "62", Light: "61"})
 	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Dark: "244", Light: "242"})
 	valueStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Dark: "252", Light: "235"})
-	headingStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Dark: "99", Light: "55"})
 	helpStyle = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Dark: "241", Light: "245"})
 	warnStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Dark: "214", Light: "130"})
 	passStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Dark: "42", Light: "28"})

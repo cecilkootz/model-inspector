@@ -353,6 +353,7 @@ func (m *Model) loadConfig() {
 		return
 	}
 	m.Config = cfg
+	m.noteOutOfRangeNumbers(cfg, "")
 	m.Quant = parseQuant(cfg)
 }
 
@@ -514,8 +515,8 @@ func parseIndex(name string, b []byte) (*Index, error) {
 // fitInt64 converts a JSON number to int64 when the value is finite and in range.
 // Out-of-range floats are rejected instead of truncated into a wrapped int64.
 func fitInt64(v any) (int64, bool) {
-	f, ok := v.(float64)
-	if !ok || math.IsNaN(f) || math.IsInf(f, 0) || f < 0 || f >= float64(uint64(1)<<63) {
+	f, ok := jsonx.FitFloat(v)
+	if !ok || f < 0 || f >= float64(uint64(1)<<63) {
 		return 0, false
 	}
 	return int64(f), true
