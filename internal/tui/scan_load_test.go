@@ -60,7 +60,9 @@ func TestHostileScanDetailsDoNotPanic(t *testing.T) {
 	if r, bad := rawBad(view); bad {
 		t.Fatalf("raw %s", r)
 	}
-	if !strings.Contains(view, "<U+001B>") || !strings.Contains(view, "<U+202E>") {
+	// fileerr.Present keeps the head of a long path and elides the middle,
+	// so the leading token stays and the later controls are inside the cut.
+	if !strings.Contains(view, "<U+009B>") {
 		t.Fatalf("hostile detail was dropped:\n%s", view)
 	}
 	plain := clipScan(hostile)
