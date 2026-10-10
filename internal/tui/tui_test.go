@@ -6,9 +6,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mwelch/model-inspector/internal/fixture"
-	"github.com/mwelch/model-inspector/internal/model"
-	"github.com/mwelch/model-inspector/internal/scan"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
 )
 
 func TestLayersViewKeepsHyperConnectionTogether(t *testing.T) {

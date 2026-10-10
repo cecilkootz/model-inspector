@@ -4,18 +4,24 @@ A terminal UI (Bubble Tea / Bubbles / Lip Gloss) for inspecting local LLM
 weights **without loading them**: identity, architecture config, per-layer
 tensor breakdown, and a structural integrity check.
 
-> Module path `github.com/mwelch/model-inspector` is a placeholder; change it
-> in `go.mod` (and imports) once a real remote exists.
+Module path: `origin.cursor.com/cecilkootz/model-inspector`.
 
 ## Safety: headers only
 
-model-inspector never reads or mmaps tensor data. It only:
+model-inspector never reads or mmaps tensor data. Checkpoint files, symlinks,
+index JSON, configs, and HF refs are treated as hostile input. It only:
 
-- `stat`s files (following HF cache symlinks) for sizes,
+- opens each small file once, fstats that descriptor, and requires a regular
+  file (a symlink to `/dev/zero` or a FIFO is refused, not read),
 - reads safetensors headers: the first 8 bytes (little-endian u64 length N)
-  plus N bytes of JSON per shard (N capped at 256 MiB),
-- reads small JSON files (`config.json`, `model.safetensors.index.json`),
-  capped at 64 MiB.
+  plus N bytes of JSON per shard, and only when N is at most the file size
+  minus 8 and at most 100 MiB,
+- reads small JSON files (`config.json`, `*.safetensors.index.json`), capped
+  at 64 MiB, and HF `refs/` files, capped at 1 KiB.
+
+File-derived text shown in the TUI or printed as text is sanitized (controls,
+bidi overrides, and zero-width characters become visible tokens). `--json`
+keeps the parsed values for machines.
 
 It never writes into the Hugging Face cache. Inspecting a ~106 GiB model takes
 ~15 ms and ~11 MB RSS.
@@ -72,9 +78,12 @@ Keys: `tab`/`shift+tab`, `←`/`→` or `1`-`4` switch screens; `↑`/`↓` scro
    shows each tensor's name, dtype, shape, bytes, and role (`q4`, `qscales`,
    `qbiases`).
 4. **Scan**: structural checks. **This is not a malware scan.** Implemented:
-   an unreadable index fails the check; every tensor in the index exists in
-   the referenced shard header; every header byte range is valid, matches
-   dtype×shape, doesn't overlap, and fits within the file. Planned: hash vs
+   an unreadable index fails the check; a missing or empty weight_map fails
+   it without being called unreadable; every tensor in the index exists in
+   the referenced shard header; shard names must be local files; every
+   `.safetensors` file on disk is checked, including ones the index omits;
+   every header byte range is valid, matches dtype×shape, starts at offset 0,
+   has no gaps or overlaps, and ends at the data section. Planned: hash vs
    pinned revision, metadata sanity, behavior probes.
 
 "Params" counts MLX packed quantized weights at their dequantized size and
@@ -86,6 +95,8 @@ excludes quantization scales/biases; "stored elements" is the raw count.
 cmd/model-inspector     CLI entry (tui / inspect)
 internal/hfcache        repo id / path -> snapshot dir
 internal/safetensors    header reader
+internal/safeopen       single-fd regular-file reads with a size cap
+internal/sanitize       terminal-safe text for file-derived strings
 internal/model          loader, grouping, quant inference, config fields
 internal/scan           structural checks (+ planned stubs)
 internal/tui            Bubble Tea screens

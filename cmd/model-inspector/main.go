@@ -11,10 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mwelch/model-inspector/internal/hfcache"
-	"github.com/mwelch/model-inspector/internal/model"
-	"github.com/mwelch/model-inspector/internal/scan"
-	"github.com/mwelch/model-inspector/internal/tui"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/hfcache"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/tui"
 )
 
 const usage = `model-inspector: inspect local model weights without loading them.
@@ -218,13 +219,16 @@ func printText(s summary) {
 	if name == "" {
 		name = s.Identity.Path
 	}
-	fmt.Printf("%s @ %s\n", name, s.Identity.Revision)
-	fmt.Printf("  format:   %s\n", s.Identity.Format)
+	fmt.Printf("%s @ %s\n", sanitize.From(name), sanitize.From(s.Identity.Revision))
+	fmt.Printf("  format:   %s\n", sanitize.From(s.Identity.Format))
 	fmt.Printf("  on disk:  %s in %d files (%d shards)\n", s.Identity.TotalSizeHuman, s.Identity.FileCount, s.Identity.SafetensorsShards)
-	fmt.Printf("  tensors:  %d, %s params (est), %s\n", s.Tensors.Count, s.Tensors.ParamsEstHuman, s.Tensors.BytesHuman)
+	fmt.Printf("  tensors:  %d, %s params (est), %s\n", s.Tensors.Count, sanitize.From(s.Tensors.ParamsEstHuman), s.Tensors.BytesHuman)
 	fmt.Printf("  layers:   %d (%d with routed experts)\n", s.Layers.Count, s.Layers.WithExperts)
 	for _, g := range s.Layers.OtherGroups {
-		fmt.Printf("  %-10s %d tensors, %s\n", g.Name+":", g.Tensors, model.HumanBytes(g.Bytes))
+		fmt.Printf("  %-10s %d tensors, %s\n", sanitize.From(g.Name).String()+":", g.Tensors, model.HumanBytes(g.Bytes))
 	}
 	fmt.Printf("  scan:     %s (%s)\n", s.Scan.Overall, s.Scan.Disclaimer)
+	for _, w := range s.Warnings {
+		fmt.Printf("  warning:  %s\n", sanitize.From(w))
+	}
 }

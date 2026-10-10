@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mwelch/model-inspector/internal/fixture"
-	"github.com/mwelch/model-inspector/internal/hfcache"
-	"github.com/mwelch/model-inspector/internal/model"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/hfcache"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 )
 
 func loadDir(t *testing.T, files map[string][]byte) *model.Model {
@@ -54,7 +54,10 @@ func check(t *testing.T, m *model.Model) Check {
 	if len(res.Checks) == 0 || res.Checks[0].ID != "index-shard-consistency" {
 		t.Fatalf("checks = %+v", res.Checks)
 	}
-	if res.Overall != res.Checks[0].Status && !(res.Checks[0].Status == StatusSkip && res.Overall == StatusPass) {
+	if res.Overall == StatusPass && res.Checks[0].Status != StatusPass {
+		t.Fatalf("overall PASS with check %s", res.Checks[0].Status)
+	}
+	if res.Overall != res.Checks[0].Status && res.Checks[0].Status != StatusSkip {
 		t.Fatalf("overall %s, check %s", res.Overall, res.Checks[0].Status)
 	}
 	return res.Checks[0]
@@ -319,14 +322,20 @@ func TestIndexMissingWeightMap(t *testing.T) {
 		"model.safetensors":            shard,
 		"model.safetensors.index.json": []byte(`{"metadata":{"total_size":4}}`),
 	})
-	if m.IndexErr == nil || !strings.Contains(m.IndexErr.Error(), "empty weight_map") {
+	if m.IndexErr == nil || !strings.Contains(m.IndexErr.Error(), "missing or empty weight_map") {
 		t.Fatalf("IndexErr = %v", m.IndexErr)
 	}
 	c := check(t, m)
 	if c.Status != StatusFail {
 		t.Fatalf("status %s details %v", c.Status, c.Details)
 	}
-	detailsContain(t, c, "empty weight_map")
+	detailsContain(t, c, "missing or empty weight_map")
+	if strings.Contains(c.Summary, "unreadable") {
+		t.Fatalf("parsed index called unreadable: %s", c.Summary)
+	}
+	if !strings.Contains(c.Summary, "missing or empty weight_map") {
+		t.Fatalf("summary = %s", c.Summary)
+	}
 	if len(m.Shards) != 1 || m.Shards[0].Header == nil {
 		t.Fatal("expected the on-disk shard to still be read")
 	}

@@ -3,11 +3,13 @@
 package scan
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 
-	"github.com/mwelch/model-inspector/internal/model"
-	"github.com/mwelch/model-inspector/internal/safetensors"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
 )
 
 type Status string
@@ -49,6 +51,12 @@ func Run(m *model.Model) Result {
 			if r.Overall != StatusFail {
 				r.Overall = StatusWarn
 			}
+		case StatusSkip:
+			// A skipped integrity check must not collapse to an overall pass.
+			// Planned checks stay planned and do not change the result.
+			if r.Overall == StatusPass {
+				r.Overall = StatusSkip
+			}
 		}
 	}
 	return r
@@ -71,13 +79,23 @@ const maxDetails = 25
 // referenced shard's header and that every header byte range fits in its file.
 func IndexConsistency(m *model.Model) Check {
 	c := Check{ID: "index-shard-consistency", Name: "Index vs shard headers / offsets within file sizes"}
-	if len(m.Shards) == 0 && m.IndexErr == nil {
+	if len(m.Shards) == 0 && m.IndexErr == nil && !m.Partial {
 		c.Status, c.Summary = StatusSkip, "no safetensors shards found"
 		return c
 	}
 	var problems, warnings []string
+	if m.Partial {
+		problems = append(problems, "inspection hit a safety cap and is incomplete")
+	}
 	if m.IndexErr != nil {
-		problems = append(problems, fmt.Sprintf("index file unreadable: %v", m.IndexErr))
+		switch {
+		case errors.Is(m.IndexErr, model.ErrIndexWeightMap), errors.Is(m.IndexErr, model.ErrMultipleIndex):
+			// Parsed, or deliberately not parsed because the choice is ambiguous.
+			// Do not call either case unreadable.
+			problems = append(problems, m.IndexErr.Error())
+		default:
+			problems = append(problems, fmt.Sprintf("index file unreadable: %v", m.IndexErr))
+		}
 	}
 	headerNames := map[string]map[string]bool{}
 	for _, s := range m.Shards {
@@ -90,12 +108,20 @@ func IndexConsistency(m *model.Model) Check {
 			set[t.Name] = true
 		}
 		headerNames[s.Name] = set
-		problems = append(problems, checkShardBounds(s)...)
+		p, w := safetensors.CheckLayout(s.Name, s.Header, s.Size-s.Header.DataStart())
+		problems = append(problems, p...)
+		warnings = append(warnings, w...)
 	}
 
 	if m.Index != nil {
 		found := 0
+		referenced := map[string]bool{}
 		for name, shard := range m.Index.WeightMap {
+			referenced[shard] = true
+			if !localName(shard) {
+				problems = append(problems, fmt.Sprintf("%s -> %s: shard name is not a local file name", name, shard))
+				continue
+			}
 			set, ok := headerNames[shard]
 			switch {
 			case ok && set[name]:
@@ -104,6 +130,11 @@ func IndexConsistency(m *model.Model) Check {
 				problems = append(problems, fmt.Sprintf("%s -> %s: shard missing or unreadable", name, shard))
 			default:
 				problems = append(problems, fmt.Sprintf("%s: not present in %s header", name, shard))
+			}
+		}
+		for _, s := range m.Shards {
+			if !referenced[s.Name] {
+				warnings = append(warnings, fmt.Sprintf("%s: safetensors file is not referenced by the index", s.Name))
 			}
 		}
 		extra := 0
@@ -122,6 +153,12 @@ func IndexConsistency(m *model.Model) Check {
 		}
 		c.Summary = fmt.Sprintf("%d/%d index entries found in %d shard headers; %d tensor byte ranges checked against file sizes",
 			found, len(m.Index.WeightMap), len(headerNames), len(m.Tensors))
+	} else if errors.Is(m.IndexErr, model.ErrIndexWeightMap) {
+		c.Summary = fmt.Sprintf("index parsed but has missing or empty weight_map; %d tensor byte ranges in %d shard headers checked against file sizes",
+			len(m.Tensors), len(headerNames))
+	} else if errors.Is(m.IndexErr, model.ErrMultipleIndex) {
+		c.Summary = fmt.Sprintf("multiple index files; not selecting one; %d tensor byte ranges in %d shard headers checked against file sizes",
+			len(m.Tensors), len(headerNames))
 	} else if m.IndexErr != nil {
 		c.Summary = fmt.Sprintf("index file present but unreadable; %d tensor byte ranges in %d shard headers checked against file sizes",
 			len(m.Tensors), len(headerNames))
@@ -148,35 +185,6 @@ func IndexConsistency(m *model.Model) Check {
 	return c
 }
 
-func checkShardBounds(s *model.Shard) []string {
-	var out []string
-	h := s.Header
-	dataLen := s.Size - h.DataStart()
-	if dataLen < 0 {
-		return []string{fmt.Sprintf("%s: header (%d bytes) runs past end of file (%d bytes)", s.Name, h.HeaderLen, s.Size)}
-	}
-	ts := append([]safetensors.TensorInfo(nil), h.Tensors...)
-	sort.Slice(ts, func(i, j int) bool { return ts[i].DataOffsets[0] < ts[j].DataOffsets[0] })
-	var prevEnd int64
-	var prevName string
-	for _, t := range ts {
-		start, end := t.DataOffsets[0], t.DataOffsets[1]
-		if start < 0 || end < start {
-			out = append(out, fmt.Sprintf("%s/%s: invalid offsets [%d,%d]", s.Name, t.Name, start, end))
-			continue
-		}
-		if end > dataLen {
-			out = append(out, fmt.Sprintf("%s/%s: data ends at %d, beyond %d-byte data section", s.Name, t.Name, end, dataLen))
-		}
-		if size, ok := safetensors.DTypeSize(t.DType); ok && t.NumElements()*size != end-start {
-			out = append(out, fmt.Sprintf("%s/%s: %s%v needs %d bytes, range is %d", s.Name, t.Name, t.DType, t.Shape, t.NumElements()*size, end-start))
-		}
-		if start < prevEnd {
-			out = append(out, fmt.Sprintf("%s/%s overlaps %s", s.Name, t.Name, prevName))
-		}
-		if end > prevEnd {
-			prevEnd, prevName = end, t.Name
-		}
-	}
-	return out
+func localName(name string) bool {
+	return name != "" && filepath.IsLocal(name)
 }

@@ -3,7 +3,7 @@
 package model
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -11,11 +11,28 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mwelch/model-inspector/internal/safetensors"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
 )
 
-// maxSmallJSON caps config/index reads; anything bigger is refused.
-const maxSmallJSON = 64 << 20
+const (
+	// maxSmallJSON caps config and index reads; anything bigger is refused.
+	maxSmallJSON = 64 << 20
+	// maxWalkDepth, maxFiles, and maxWarnings stop a hostile tree from
+	// turning a directory walk into unbounded work.
+	maxWalkDepth = 8
+	maxFiles     = 20_000
+	maxWarnings  = 100
+)
+
+// ErrIndexWeightMap is reported when an index file parses but weight_map
+// is missing or has no entries. The JSON itself was readable.
+var ErrIndexWeightMap = errors.New("missing or empty weight_map")
+
+// ErrMultipleIndex is reported when a directory contains more than one
+// *.safetensors.index.json. None of them is selected.
+var ErrMultipleIndex = errors.New("multiple safetensors index files")
 
 // Tensor roles.
 const (
@@ -103,9 +120,13 @@ type Model struct {
 	Quant     *Quantization
 	Index     *Index
 	// IndexErr is set when an index file is present but cannot be used
-	// (unreadable JSON, or a weight_map with no entries). Index stays nil
-	// so shard discovery can still see the .safetensors files.
+	// (unreadable JSON, a missing or empty weight_map, or several index
+	// files). Index stays nil so shard discovery can still see the
+	// .safetensors files.
 	IndexErr error `json:"-"`
+	// Partial is set when a safety cap stopped the walk or the warning
+	// list. A partial inspection must not produce an overall pass.
+	Partial bool `json:"-"`
 
 	Shards  []*Shard
 	Tensors []*Tensor
@@ -118,18 +139,30 @@ type Model struct {
 	TensorBytes        int64
 
 	Warnings []string
+
+	warningsTrunc bool
 }
 
 // Load inspects dir. Errors in individual shards are recorded, not fatal.
+// dir is resolved with EvalSymlinks before the walk, so a symlinked root
+// is inspected at its target.
 func Load(dir string) (*Model, error) {
-	fi, err := os.Stat(dir)
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+	real, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := os.Stat(real)
 	if err != nil {
 		return nil, err
 	}
 	if !fi.IsDir() {
 		return nil, fmt.Errorf("%s is not a directory", dir)
 	}
-	m := &Model{Dir: dir, DTypes: map[string]*DTypeStat{}, BitsHistogram: map[int]int{}}
+	m := &Model{Dir: real, DTypes: map[string]*DTypeStat{}, BitsHistogram: map[int]int{}}
 	if err := m.scanFiles(); err != nil {
 		return nil, err
 	}
@@ -143,26 +176,78 @@ func Load(dir string) (*Model, error) {
 }
 
 func (m *Model) warnf(format string, a ...any) {
+	if len(m.Warnings) >= maxWarnings {
+		if !m.warningsTrunc {
+			m.warningsTrunc = true
+			m.Partial = true
+			m.Warnings = append(m.Warnings, fmt.Sprintf("too many warnings; truncated at %d", maxWarnings))
+		}
+		return
+	}
 	m.Warnings = append(m.Warnings, fmt.Sprintf(format, a...))
 }
 
 func (m *Model) scanFiles() error {
+	roots := m.allowedRoots()
+	nfiles := 0
 	return filepath.WalkDir(m.Dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		rel, relErr := filepath.Rel(m.Dir, p)
+		if relErr != nil {
+			return relErr
+		}
+		depth := 0
+		if rel != "." {
+			depth = strings.Count(rel, string(filepath.Separator))
 		}
 		if d.IsDir() {
 			if p != m.Dir && d.Name() == ".git" {
 				return filepath.SkipDir
 			}
+			if depth > maxWalkDepth {
+				m.Partial = true
+				m.warnf("not descending past depth %d at %s", maxWalkDepth, rel)
+				return filepath.SkipDir
+			}
 			return nil
 		}
-		rel, _ := filepath.Rel(m.Dir, p)
+		if depth > maxWalkDepth {
+			m.Partial = true
+			m.warnf("skipping %s past depth %d", rel, maxWalkDepth)
+			return nil
+		}
+		nfiles++
+		if nfiles > maxFiles {
+			m.Partial = true
+			m.warnf("stopped after %d files", maxFiles)
+			return fs.SkipAll
+		}
 		f := File{Name: rel, Symlink: d.Type()&fs.ModeSymlink != 0}
-		// os.Stat follows HF snapshot symlinks into blobs/: metadata only, no data read.
-		if st, err := os.Stat(p); err != nil {
+		if f.Symlink {
+			real, err := filepath.EvalSymlinks(p)
+			if err != nil {
+				f.Broken = true
+				m.warnf("%s: %v", rel, err)
+				m.Files = append(m.Files, f)
+				return nil
+			}
+			if !withinAny(real, roots) {
+				f.Broken = true
+				m.warnf("%s: symlink escapes the model directory", rel)
+				m.Files = append(m.Files, f)
+				return nil
+			}
+		}
+		// Size for the file table. Content reads go through safeopen on one fd.
+		st, err := os.Stat(p)
+		if err != nil {
 			f.Broken = true
 			m.warnf("%s: %v", rel, err)
+		} else if !st.Mode().IsRegular() {
+			f.Broken = true
+			m.warnf("%s: not a regular file", rel)
 		} else {
 			f.Size = st.Size()
 			m.TotalSize += st.Size()
@@ -172,34 +257,49 @@ func (m *Model) scanFiles() error {
 	})
 }
 
-func readSmallJSON(path string, v any) ([]byte, error) {
-	st, err := os.Stat(path)
-	if err != nil {
-		return nil, err
+// allowedRoots are the directories a snapshot symlink may point at:
+// the model directory itself, and the sibling blobs/ directory when this
+// is an HF snapshot (.../snapshots/<commit>).
+func (m *Model) allowedRoots() []string {
+	roots := []string{m.Dir}
+	parent := filepath.Dir(m.Dir)
+	if filepath.Base(parent) == "snapshots" {
+		blobs := filepath.Join(filepath.Dir(parent), "blobs")
+		if real, err := filepath.EvalSymlinks(blobs); err == nil {
+			roots = append(roots, real)
+		}
 	}
-	if st.Size() > maxSmallJSON {
-		return nil, fmt.Errorf("%s is %d bytes; refusing to read JSON over %d bytes", filepath.Base(path), st.Size(), maxSmallJSON)
+	return roots
+}
+
+func withinAny(path string, roots []string) bool {
+	for _, root := range roots {
+		if safeopen.Within(root, path) {
+			return true
+		}
 	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(b, v); err != nil {
-		return b, fmt.Errorf("parsing %s: %w", filepath.Base(path), err)
-	}
-	return b, nil
+	return false
 }
 
 func (m *Model) loadConfig() {
 	p := filepath.Join(m.Dir, "config.json")
-	if _, err := os.Stat(p); err != nil {
+	raw, err := safeopen.ReadAll(p, maxSmallJSON, m.allowedRoots()...)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return
+		}
+		m.warnf("%v", err)
 		return
 	}
-	var cfg map[string]any
-	raw, err := readSmallJSON(p, &cfg)
 	m.ConfigRaw = raw
+	v, err := jsonx.Unmarshal(raw)
 	if err != nil {
-		m.warnf("%v", err)
+		m.warnf("parsing config.json: %v", err)
+		return
+	}
+	cfg, ok := v.(map[string]any)
+	if !ok || cfg == nil {
+		m.warnf("parsing config.json: expected a JSON object")
 		return
 	}
 	m.Config = cfg
@@ -243,70 +343,148 @@ func parseQuant(cfg map[string]any) *Quantization {
 }
 
 func (m *Model) loadIndex() {
-	p := filepath.Join(m.Dir, "model.safetensors.index.json")
-	if _, err := os.Stat(p); err != nil {
-		matches, _ := filepath.Glob(filepath.Join(m.Dir, "*.safetensors.index.json"))
-		if len(matches) == 0 {
-			return
-		}
-		p = matches[0]
-	}
-	var raw struct {
-		Metadata  map[string]any    `json:"metadata"`
-		WeightMap map[string]string `json:"weight_map"`
-	}
-	if _, err := readSmallJSON(p, &raw); err != nil {
+	matches, err := filepath.Glob(filepath.Join(m.Dir, "*.safetensors.index.json"))
+	if err != nil {
 		m.IndexErr = err
 		m.warnf("%v", err)
 		return
 	}
-	// A JSON null and {"weight_map":{}} both have no entries. Leaving the
-	// empty map in place makes shard discovery trust the index and skip
-	// every file on disk, so a corrupt shard is never opened and the scan
-	// skips with an overall pass.
-	if len(raw.WeightMap) == 0 {
-		m.IndexErr = fmt.Errorf("%s: empty weight_map", filepath.Base(p))
+	if len(matches) == 0 {
+		return
+	}
+	sort.Strings(matches)
+	if len(matches) > 1 {
+		names := make([]string, len(matches))
+		for i, p := range matches {
+			names[i] = filepath.Base(p)
+		}
+		m.IndexErr = fmt.Errorf("%w: %s", ErrMultipleIndex, strings.Join(names, ", "))
 		m.warnf("%v", m.IndexErr)
 		return
 	}
-	idx := &Index{File: filepath.Base(p), WeightMap: raw.WeightMap}
-	if v, ok := raw.Metadata["total_size"]; ok {
-		idx.TotalSize = int64(floatOf(v))
+	p := matches[0]
+	b, err := safeopen.ReadAll(p, maxSmallJSON, m.allowedRoots()...)
+	if err != nil {
+		m.IndexErr = err
+		m.warnf("%v", err)
+		return
+	}
+	idx, err := parseIndex(filepath.Base(p), b)
+	if err != nil {
+		m.IndexErr = err
+		m.warnf("%v", err)
+		return
 	}
 	m.Index = idx
 }
 
-func (m *Model) loadShards() {
-	var names []string
-	if m.Index != nil {
-		seen := map[string]bool{}
-		for _, s := range m.Index.WeightMap {
-			if !seen[s] {
-				seen[s] = true
-				names = append(names, s)
-			}
+func parseIndex(name string, b []byte) (*Index, error) {
+	v, err := jsonx.Unmarshal(b)
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s: %w", name, err)
+	}
+	obj, ok := v.(map[string]any)
+	if !ok || obj == nil {
+		return nil, fmt.Errorf("parsing %s: expected a JSON object", name)
+	}
+	rawMap, exists := obj["weight_map"]
+	wm, isMap := rawMap.(map[string]any)
+	// A missing key, JSON null, and {"weight_map":{}} all have no entries.
+	// An empty map must not become a usable index: shard discovery would
+	// trust it and skip every file on disk.
+	if !exists || rawMap == nil || (isMap && len(wm) == 0) {
+		return nil, fmt.Errorf("%s: %w", name, ErrIndexWeightMap)
+	}
+	if !isMap {
+		return nil, fmt.Errorf("parsing %s: weight_map must be an object", name)
+	}
+	weight := make(map[string]string, len(wm))
+	for k, val := range wm {
+		s, ok := val.(string)
+		if !ok {
+			return nil, fmt.Errorf("parsing %s: weight_map %q is not a string", name, k)
 		}
-	} else {
-		for _, f := range m.Files {
-			if strings.HasSuffix(f.Name, ".safetensors") {
-				names = append(names, f.Name)
-			}
+		weight[k] = s
+	}
+	idx := &Index{File: name, WeightMap: weight}
+	if meta, ok := obj["metadata"].(map[string]any); ok {
+		if ts, ok := meta["total_size"]; ok {
+			idx.TotalSize = int64(floatOf(ts))
 		}
 	}
-	sort.Strings(names)
-	for _, n := range names {
-		s := &Shard{Name: n, Path: filepath.Join(m.Dir, n)}
-		if st, err := os.Stat(s.Path); err != nil {
-			s.Err = err
-		} else {
-			s.Size = st.Size()
-			s.Header, s.Err = safetensors.ReadFile(s.Path)
+	return idx, nil
+}
+
+func (m *Model) loadShards() {
+	byName := make(map[string]File, len(m.Files))
+	names := map[string]struct{}{}
+	for _, f := range m.Files {
+		byName[f.Name] = f
+		if strings.HasSuffix(f.Name, ".safetensors") {
+			names[f.Name] = struct{}{}
 		}
+	}
+	// Names from the index are included even when the file is absent, so a
+	// missing or non-local shard is reported. On-disk .safetensors files
+	// are always included, including ones the index does not mention.
+	if m.Index != nil {
+		for _, shard := range m.Index.WeightMap {
+			names[shard] = struct{}{}
+		}
+	}
+	ordered := make([]string, 0, len(names))
+	for n := range names {
+		ordered = append(ordered, n)
+	}
+	sort.Strings(ordered)
+	roots := m.allowedRoots()
+	for _, n := range ordered {
+		s := &Shard{Name: n}
+		full, ok := joinWithin(m.Dir, n)
+		if !ok {
+			s.Err = fmt.Errorf("refusing non-local shard name %q", n)
+			m.warnf("shard %s: %v", n, s.Err)
+			m.Shards = append(m.Shards, s)
+			continue
+		}
+		f, listed := byName[n]
+		if !listed {
+			s.Err = fmt.Errorf("not present in the model directory")
+			m.warnf("shard %s: %v", n, s.Err)
+			m.Shards = append(m.Shards, s)
+			continue
+		}
+		if f.Broken {
+			s.Err = fmt.Errorf("not a readable regular file inside the model directory")
+			m.warnf("shard %s: %v", n, s.Err)
+			m.Shards = append(m.Shards, s)
+			continue
+		}
+		s.Path = full
+		s.Header, s.Size, s.Err = safetensors.ReadFile(full, roots...)
 		if s.Err != nil {
 			m.warnf("shard %s: %v", n, s.Err)
 		}
 		m.Shards = append(m.Shards, s)
 	}
+}
+
+// localShardName accepts a relative file name and rejects absolute paths
+// and any ".." segment. filepath.IsLocal is the check weight_map values
+// have to pass before they are joined onto the model directory.
+func localShardName(name string) bool {
+	return name != "" && filepath.IsLocal(name)
+}
+
+func joinWithin(root, name string) (string, bool) {
+	if !localShardName(name) {
+		return "", false
+	}
+	full := filepath.Join(root, name)
+	if !safeopen.Within(root, full) {
+		return "", false
+	}
+	return full, true
 }
 
 func (m *Model) groupSizeFor(module string) int {

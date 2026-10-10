@@ -2,7 +2,6 @@
 package tui
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -15,8 +14,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/mwelch/model-inspector/internal/model"
-	"github.com/mwelch/model-inspector/internal/scan"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
 )
 
 type tab int
@@ -179,6 +179,7 @@ func (t Model) View() string {
 	if name == "" {
 		name = filepath.Base(t.m.Dir)
 	}
+	name = sanitize.From(name).String()
 	var tabs []string
 	for i, n := range tabNames {
 		if tab(i) == t.active {
@@ -197,7 +198,7 @@ func (t Model) View() string {
 		body, help = t.configVP.View(), "↑/↓ scroll"
 	case tabLayers:
 		if t.detail != nil {
-			body = headingStyle.Render(fmt.Sprintf("%s · %d tensors · %s", t.detail.Key, len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))) +
+			body = headingStyle.Render(sanitize.From(fmt.Sprintf("%s · %d tensors · %s", t.detail.Key, len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))).String()) +
 				"\n" + t.tensorTable.View()
 			help = "↑/↓ select • esc back"
 		} else {
@@ -209,44 +210,50 @@ func (t Model) View() string {
 	return header + "\n" + body + "\n" + helpStyle.Render(help+" • tab/←/→/1-4 switch • q quit")
 }
 
-func kv(label string, value any) string {
-	return labelStyle.Render(label) + valueStyle.Render(fmt.Sprint(value)) + "\n"
+func kv(label string, value sanitize.Text) string {
+	return labelStyle.Render(sanitize.From(label).String()) + valueStyle.Render(value.String()) + "\n"
+}
+
+func text(s string) sanitize.Text { return sanitize.From(s) }
+
+func textf(format string, args ...any) sanitize.Text {
+	return sanitize.From(fmt.Sprintf(format, args...))
 }
 
 func renderIdentity(m *model.Model) string {
 	var b strings.Builder
 	b.WriteString(headingStyle.Render("Identity") + "\n")
-	b.WriteString(kv("Path", m.Dir))
-	b.WriteString(kv("Repo id", orDash(m.RepoID)))
-	b.WriteString(kv("Revision", orDash(m.Revision)))
-	b.WriteString(kv("Format", m.Format))
-	b.WriteString(kv("Size on disk (stat)", fmt.Sprintf("%s (%d bytes)", model.HumanBytes(m.TotalSize), m.TotalSize)))
-	b.WriteString(kv("Files", len(m.Files)))
-	b.WriteString(kv("Safetensors shards", len(m.Shards)))
+	b.WriteString(kv("Path", text(m.Dir)))
+	b.WriteString(kv("Repo id", text(orDash(m.RepoID))))
+	b.WriteString(kv("Revision", text(orDash(m.Revision))))
+	b.WriteString(kv("Format", text(m.Format)))
+	b.WriteString(kv("Size on disk (stat)", textf("%s (%d bytes)", model.HumanBytes(m.TotalSize), m.TotalSize)))
+	b.WriteString(kv("Files", textf("%d", len(m.Files))))
+	b.WriteString(kv("Safetensors shards", textf("%d", len(m.Shards))))
 	if m.Quant != nil {
 		b.WriteString("\n" + headingStyle.Render("Quantization") + "\n")
-		b.WriteString(kv("Source", m.Quant.Source))
-		b.WriteString(kv("Bits / group size / mode", fmt.Sprintf("%d / %d / %s", m.Quant.Bits, m.Quant.GroupSize, orDash(m.Quant.Mode))))
-		b.WriteString(kv("Per-module overrides", m.Quant.NumOverrides))
+		b.WriteString(kv("Source", text(m.Quant.Source)))
+		b.WriteString(kv("Bits / group size / mode", textf("%d / %d / %s", m.Quant.Bits, m.Quant.GroupSize, orDash(m.Quant.Mode))))
+		b.WriteString(kv("Per-module overrides", textf("%d", m.Quant.NumOverrides)))
 		for _, bits := range sortedInts(m.BitsHistogram) {
-			b.WriteString(kv(fmt.Sprintf("  %d-bit packed weights", bits), m.BitsHistogram[bits]))
+			b.WriteString(kv(fmt.Sprintf("  %d-bit packed weights", bits), textf("%d", m.BitsHistogram[bits])))
 		}
 	}
 	b.WriteString("\n" + headingStyle.Render("Tensors (from headers)") + "\n")
-	b.WriteString(kv("Tensors", len(m.Tensors)))
-	b.WriteString(kv("Stored elements", model.HumanCount(m.TotalElements)))
-	b.WriteString(kv("Params (dequantized est.)", model.HumanCount(m.TotalLogicalParams)))
-	b.WriteString(kv("Tensor bytes", model.HumanBytes(m.TensorBytes)))
+	b.WriteString(kv("Tensors", textf("%d", len(m.Tensors))))
+	b.WriteString(kv("Stored elements", text(model.HumanCount(m.TotalElements))))
+	b.WriteString(kv("Params (dequantized est.)", text(model.HumanCount(m.TotalLogicalParams))))
+	b.WriteString(kv("Tensor bytes", text(model.HumanBytes(m.TensorBytes))))
 	layers, experts := m.LayerCount()
-	b.WriteString(kv("Decoder layers", fmt.Sprintf("%d (%d with routed experts)", layers, experts)))
+	b.WriteString(kv("Decoder layers", textf("%d (%d with routed experts)", layers, experts)))
 	for _, dt := range model.SortedKeys(m.DTypes) {
 		d := m.DTypes[dt]
-		b.WriteString(kv("  dtype "+dt, fmt.Sprintf("%d tensors, %s elems, %s", d.Tensors, model.HumanCount(d.Elements), model.HumanBytes(d.Bytes))))
+		b.WriteString(kv("  dtype "+dt, textf("%d tensors, %s elems, %s", d.Tensors, model.HumanCount(d.Elements), model.HumanBytes(d.Bytes))))
 	}
 	if len(m.Warnings) > 0 {
 		b.WriteString("\n" + warnStyle.Render("Warnings") + "\n")
 		for _, w := range m.Warnings {
-			b.WriteString("  " + w + "\n")
+			b.WriteString("  " + sanitize.From(w).String() + "\n")
 		}
 	}
 	return b.String()
@@ -254,27 +261,30 @@ func renderIdentity(m *model.Model) string {
 
 func renderConfig(m *model.Model) string {
 	if m.Config == nil {
-		return "no config.json found"
+		if len(m.ConfigRaw) == 0 {
+			return "no config.json found"
+		}
+		return "config.json could not be parsed\n" + sanitize.From(string(m.ConfigRaw)).String()
 	}
 	var b strings.Builder
 	b.WriteString(headingStyle.Render("Key fields") + "\n")
 	for _, f := range m.KeyConfig() {
-		b.WriteString(kv(f.Path, compact(f.Value)))
+		b.WriteString(kv(f.Path, text(compact(f.Value))))
 	}
 	if lt := m.LayerTypeCounts(); lt != nil {
 		for _, k := range model.SortedKeys(lt) {
-			b.WriteString(kv("layer_types: "+k, lt[k]))
+			b.WriteString(kv("layer_types: "+k, textf("%d", lt[k])))
 		}
 	}
 	if m.Quant != nil {
-		b.WriteString(kv(m.Quant.Source, fmt.Sprintf("bits=%d group_size=%d mode=%s", m.Quant.Bits, m.Quant.GroupSize, m.Quant.Mode)))
+		b.WriteString(kv(m.Quant.Source, textf("bits=%d group_size=%d mode=%s", m.Quant.Bits, m.Quant.GroupSize, m.Quant.Mode)))
 	}
 	b.WriteString("\n" + headingStyle.Render("config.json (raw)") + "\n")
-	var buf bytes.Buffer
-	if err := json.Indent(&buf, m.ConfigRaw, "", "  "); err != nil {
-		b.Write(m.ConfigRaw)
+	pretty, err := sanitize.JSON(m.Config)
+	if err != nil {
+		b.WriteString(sanitize.From(string(m.ConfigRaw)).String())
 	} else {
-		b.Write(buf.Bytes())
+		b.WriteString(pretty)
 	}
 	return b.String()
 }
@@ -282,12 +292,12 @@ func renderConfig(m *model.Model) string {
 func renderScan(r scan.Result) string {
 	var b strings.Builder
 	b.WriteString(warnStyle.Render("⚠ "+r.Disclaimer) + "\n\n")
-	b.WriteString(kv("Overall", statusStyles[r.Overall].Render(strings.ToUpper(string(r.Overall)))))
+	b.WriteString(labelStyle.Render("Overall") + statusStyles[r.Overall].Render(strings.ToUpper(string(r.Overall))) + "\n")
 	for _, c := range r.Checks {
 		b.WriteString("\n" + statusStyles[c.Status].Render(fmt.Sprintf("[%s]", strings.ToUpper(string(c.Status)))) +
-			" " + headingStyle.Render(c.Name) + "\n  " + c.Summary + "\n")
+			" " + headingStyle.Render(c.Name) + "\n  " + sanitize.From(c.Summary).String() + "\n")
 		for _, d := range c.Details {
-			b.WriteString("    - " + d + "\n")
+			b.WriteString("    - " + sanitize.From(d).String() + "\n")
 		}
 	}
 	return b.String()
@@ -330,7 +340,8 @@ func groupRows(m *model.Model) []table.Row {
 		if g.HasExperts {
 			exp = "yes"
 		}
-		rows = append(rows, table.Row{g.Key, g.Kind, fmt.Sprint(len(g.Tensors)), model.HumanCount(g.LogicalParams),
+		rows = append(rows, table.Row{
+			sanitize.From(g.Key).String(), sanitize.From(g.Kind).String(), fmt.Sprint(len(g.Tensors)), model.HumanCount(g.LogicalParams),
 			model.HumanBytes(g.Bytes), exp, fmt.Sprint(g.QuantizedTensors)})
 	}
 	return rows
@@ -347,7 +358,9 @@ func tensorRows(g *model.Group) []table.Row {
 		if t.Role == model.RoleQuantWeight {
 			role = fmt.Sprintf("q%d", t.Bits)
 		}
-		rows = append(rows, table.Row{name, t.DType, fmt.Sprint(t.Shape), model.HumanBytes(t.ByteLen()), role})
+		rows = append(rows, table.Row{
+			sanitize.From(name).String(), sanitize.From(t.DType).String(), sanitize.From(fmt.Sprint(t.Shape)).String(),
+			model.HumanBytes(t.ByteLen()), sanitize.From(role).String()})
 	}
 	return rows
 }

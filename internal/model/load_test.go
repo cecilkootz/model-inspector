@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mwelch/model-inspector/internal/fixture"
-	"github.com/mwelch/model-inspector/internal/hfcache"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/hfcache"
 )
 
 func loadTiny(t *testing.T) *Model {

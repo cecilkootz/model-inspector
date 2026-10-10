@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/mwelch/model-inspector/internal/safetensors"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
 )
 
 func TestWriteShardRoundTrip(t *testing.T) {

@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/mwelch/model-inspector/internal/fixture"
-	"github.com/mwelch/model-inspector/internal/scan"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
 )
 
 func TestInspectJSONOnHubFixture(t *testing.T) {
@@ -66,6 +68,27 @@ func TestInspectJSONOnHubFixture(t *testing.T) {
 	}
 	if got["other"] {
 		t.Errorf("mixer tensors fell through to other: %+v", s.Layers.OtherGroups)
+	}
+}
+
+func TestInspectTextSanitizesFormat(t *testing.T) {
+	// JSON \u escapes so the header parses; the decoded format string contains ESC.
+	hdr := `{"__metadata__":{"format":"mlx\u001b]0;pwned\u0007"},"w":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}`
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "model.safetensors"), fixture.EncodeHeader([]byte(hdr), []byte{0, 0, 0, 0}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := captureStdout(t, func() error {
+		return run([]string{"inspect", dir})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "\x1b") {
+		t.Fatalf("text output contains ESC:\n%s", out)
+	}
+	if !strings.Contains(out, "<U+001B>") {
+		t.Fatalf("expected a visible token:\n%s", out)
 	}
 }
 
