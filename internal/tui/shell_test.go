@@ -343,7 +343,7 @@ func TestShellDetailScroll(t *testing.T) {
 // Selecting a Config field points the tree at it, and Layers at its group.
 func TestShellSelectionDrivesDetail(t *testing.T) {
 	x := press(shellModel(t, shellFixtures(t)["tiny"], 120, 30), "4", "down", "down")
-	if !strings.Contains(screenOf(x)[1], "[0] hidden_size") && !strings.Contains(screenOf(x)[1], "[0] layers") {
+	if !strings.Contains(screenOf(x)[1], "[0] text_config.hidden_size") {
 		t.Fatalf("Config detail title %q", screenOf(x)[1])
 	}
 	cur := x.(Model)

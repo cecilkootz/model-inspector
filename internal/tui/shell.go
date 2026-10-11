@@ -492,6 +492,10 @@ func (t Model) updateShellKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		(&t).shellJump(-1)
 	case "y":
 		(&t).shellCopy()
+	case "r":
+		if tg, ok := p.(detailToggler); ok {
+			tg.toggleDetail()
+		}
 	case "up", "k":
 		(&t).shellMove(p, -1)
 	case "down", "j":

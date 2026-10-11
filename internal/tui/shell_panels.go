@@ -35,6 +35,11 @@ type detailDriver interface {
 	foldDetail(key string)
 }
 
+// detailToggler is for panels whose detail has a second view behind `r`.
+type detailToggler interface {
+	toggleDetail()
+}
+
 // sidePanels builds the adapters over t. They hold the pointer so a move
 // lands in the Model the caller returns.
 func (t *Model) sidePanels() [4]sidePanel {
@@ -207,137 +212,5 @@ func (p *layersPanel) foldDetail(key string) {
 		p.t.layersCollapse()
 	default:
 		p.t.layersToggle()
-	}
-}
-
-// Config
-
-type configPanel struct{ t *Model }
-
-func (p *configPanel) num() int { return 4 }
-
-func (p *configPanel) title() sanitize.Text { return ui.L("Config") }
-
-func (p *configPanel) counter() string {
-	if n := nodeCount(p.t.cfg); n > 0 {
-		return muted(commaInt(n) + " nodes")
-	}
-	return ""
-}
-
-// fields are the indices into fieldLines of the key-field rows.
-func (p *configPanel) fields() ([]fieldLine, []int) {
-	p.t.prepareConfig()
-	lines := p.t.fieldLines()
-	var at []int
-	for i, ln := range lines {
-		if ln.kind == fieldRow {
-			at = append(at, i)
-		}
-	}
-	return lines, at
-}
-
-func (p *configPanel) row(f fieldLine, width int, selected bool) string {
-	value := sanitize.From(f.value).String()
-	if f.unit != "" {
-		value += " " + f.unit
-	}
-	return ui.ListRow(ui.RowSpec{
-		Name: sanitize.From(f.label), Value: sanitize.Program(value), Selected: selected,
-	}, width)
-}
-
-func (p *configPanel) rows(width int) []string {
-	lines, at := p.fields()
-	cur := p.cursor()
-	var out []string
-	for i, idx := range at {
-		out = append(out, p.row(lines[idx], width, i == cur))
-	}
-	return out
-}
-
-func (p *configPanel) summary(width int) []string {
-	lines, at := p.fields()
-	var out []string
-	for _, idx := range at {
-		if len(out) == 3 {
-			break
-		}
-		out = append(out, p.row(lines[idx], width, false))
-	}
-	return out
-}
-
-func (p *configPanel) cursor() int {
-	_, at := p.fields()
-	cur := 0
-	for i, idx := range at {
-		if idx > p.t.cfg.fieldCur {
-			break
-		}
-		cur = i
-	}
-	return cur
-}
-
-// move steps the field cursor and points the tree at that field's node.
-func (p *configPanel) move(d int) {
-	_, at := p.fields()
-	if len(at) == 0 {
-		return
-	}
-	p.t.cfg.fieldCur = at[clampInt(p.cursor()+d, 0, len(at)-1)]
-	p.t.clampFields()
-	p.t.jumpField(p.t.cfg.fieldCur)
-	p.t.touchConfig()
-}
-
-func (p *configPanel) detail(w, h int) []string {
-	if p.t.cfg == nil {
-		return nil
-	}
-	p.t.prepareConfig()
-	v := p.t.paneView(w, h)
-	v.cfg.hits = v.cfg.hits[:0]
-	var lines []string
-	if v.configProblem() != "" {
-		lines = v.configLines(w, h)
-	} else {
-		lines = v.treePaneLines(0, 0, w, h, p.t.sh.inDetail)
-	}
-	return lines
-}
-
-func (p *configPanel) selection() (sanitize.Text, ui.Safe) {
-	lines, at := p.fields()
-	if len(at) == 0 {
-		return ui.L("Config"), ui.Safe{}
-	}
-	return sanitize.From(lines[at[p.cursor()]].label), ui.Safe{}
-}
-
-func (p *configPanel) keys() []ui.KeyHint { return moveHints(hint("y", "copy")) }
-
-func (p *configPanel) problems() []int { return nil }
-
-func (p *configPanel) scrollDetail(d int) {
-	if p.t.cfg != nil && p.t.cfg.tree != nil {
-		p.t.configMove(d, true)
-	}
-}
-
-func (p *configPanel) foldDetail(key string) {
-	if p.t.cfg == nil || p.t.cfg.tree == nil {
-		return
-	}
-	switch key {
-	case "right", "l":
-		p.t.configExpand()
-	case "left", "h":
-		p.t.configCollapse()
-	default:
-		p.t.configToggle()
 	}
 }

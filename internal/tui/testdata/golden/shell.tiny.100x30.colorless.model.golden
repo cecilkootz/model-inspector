@@ -25,6 +25,6 @@ model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params            ✓ 
 ╭[4] Config ────────── 32 nodes ─╮│   weights                                                      │
 │   model_type           qwen3_5 ││ +2 more                                                        │
 │   layers              2 layers ││                                                                │
-│   hidden_size            8 dim ││                                                                │
+│   context              128 tok ││                                                                │
 ╰────────────────────────────────╯╰────────────────────────────────────────────────────────────────╯
 ↑↓ move · ⏎ detail · ? keys · 1-4 panels · tab next panel                    org/tiny-qwen · 0123456
