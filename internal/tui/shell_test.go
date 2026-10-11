@@ -331,13 +331,6 @@ func TestShellDetailScroll(t *testing.T) {
 	if got := x.(Model).cfg.row; got != before+2 {
 		t.Fatalf("Config tree row %d -> %d", before, got)
 	}
-	x = press(shellModel(t, m, 120, 30), "3", "0")
-	_ = x.View()
-	before = x.(Model).lay.row
-	x = press(x, "down")
-	if got := x.(Model).lay.row; got != before+1 {
-		t.Fatalf("Layers tree row %d -> %d", before, got)
-	}
 }
 
 // Selecting a Config field points the tree at it, and Layers at its group.
@@ -638,6 +631,8 @@ func TestShellGolden(t *testing.T) {
 	tiny.RepoID, tiny.Revision = "org/tiny-qwen", "0123456789abcdef0123456789abcdef01234567"
 	code := loadFiles(t, mustCode(t))
 	code.RepoID, code.Revision = "org/code-exec", "89abcdef0123456789abcdef0123456789abcdef"
+	qwen := loadFiles(t, mustShape(t))
+	qwen.RepoID, qwen.Revision = "org/qwen-shape", "fedcba9876543210fedcba9876543210fedcba98"
 	focus := []struct {
 		name string
 		keys []string
@@ -664,6 +659,9 @@ func TestShellGolden(t *testing.T) {
 			spec{"shell.code.140x40." + p + ".problem", code, 140, 40, p, []string{"]"}},
 			spec{"shell.tiny.140x40." + p + ".detail", tiny, 140, 40, p, []string{"3", "0"}},
 			spec{"shell.code.84x24." + p + ".checks", code, 84, 24, p, []string{"2"}},
+			spec{"shell.qwen.140x40." + p + ".layer", qwen, 140, 40, p, []string{"3", "right", "down", "down"}},
+			spec{"shell.qwen.84x24." + p + ".layer", qwen, 84, 24, p, []string{"3", "right", "down", "down"}},
+			spec{"shell.qwen.140x40." + p + ".decoder", qwen, 140, 40, p, []string{"3"}},
 		)
 	}
 	for i, sec := range []string{"storage", "memory", "callouts", "files"} {

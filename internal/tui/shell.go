@@ -428,7 +428,7 @@ func (t *Model) shellCopy() {
 	case 2:
 		t.copyScan(false)
 	case 3:
-		t.copyLayers(false)
+		(&layersPanel{t}).copySelection()
 	case 4:
 		t.copyConfig(false)
 	default:
@@ -448,6 +448,9 @@ func (t Model) updateShellKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	sh := t.sh
 	p := (&t).sidePanels()[sh.side-1]
 	page := max(1, t.shellBodyHeight()/2)
+	if f, ok := p.(sideFolder); ok && !sh.inDetail && f.foldSide(k) {
+		return t, nil
+	}
 	switch k {
 	case "q":
 		return t, tea.Quit
