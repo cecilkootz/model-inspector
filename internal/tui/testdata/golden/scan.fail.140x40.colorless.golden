@@ -35,6 +35,6 @@ PROVENANCE
  |  – N/R  Config vs tensor shapes                          —                                                                               
  |         no usable config.json                                                                                                            
                                                                                                                                             
- |  – N/R  Chat template & tokenizer                        —                                                                               
- |         no chat template or tokenizer files                                                                                              
+↓ 1 more · ⏎ details · space expand · e/E all · ] next problem · y copy                                                                     
+                                                                                                                                            
 SCAN │ org/fail │ ↑↓ check · ⏎ details · space expand · i not covered                 safetensors │ 101 B │ bf16 │ ✗ 1 fail │ ◇ headers-only

@@ -1,10 +1,8 @@
 [1;97;45m 1 Identity [0m [94m 2 Config [0m [94m 3 Layers [0m [94m 4 Scan ✗1 [0m                                                              ? keys   : commands   m mouse on
 [94m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
-[1;97;45m model-inspector [0m  /model                                                                                                                   
-  [1;97;45m model-inspector [0m  revision: — · qwen3_next · safetensors · u8                                                                            
-    [1;97;45m model-inspector [0m                                                                                                                       
-      [1;97;45m model-inspector [0m                                                                                                                     
-        [1;97;45m model-inspector [0m  [1;37;40m – headers-only [0m  [1;30;43m ▲ 1 callouts [0m                                                                                 
+[1;97m/model[0m                                                                                                                                      
+revision: — · qwen3_next · safetensors · u8                                                                                                 
+[1;37;40m – headers-only [0m  [1;30;43m ▲ 1 callouts [0m                                                                                                            
                                                                                                                                             
 ▌                      ▌                      ▌                      ▌                      ▌                      ▌                        
 ▌SIZE ON DISK          ▌PARAMETERS            ▌QUANT                 ▌LAYERS                ▌EXPERTS               ▌WEIGHTS                 
@@ -27,8 +25,10 @@ norms       [34m░[0m[34m░[0m[34m░[0m[34m░[0m[34m░[0m[34m░
 8 B  <64K ▒ <4M ▓ <256M █  2.0 KiB  ○ linear  ● full  per-layer totals differ by 15.1%                                                      
 Memory  weights ≥ 59.65 KiB (0.0 GB)                                                                                                        
   text-only ≥ 58.48 KiB                                                                                                                     
-  weights only: no KV cache, activations or runtime overhead                                                                                
   weights only; excludes KV cache, activations, runtime overhead                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
