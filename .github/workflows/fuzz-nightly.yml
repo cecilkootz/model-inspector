@@ -1,0 +1,66 @@
+name: fuzz-nightly
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: 'Per-target fuzz time: <n>s or <n>m, at most 10m'
+        required: false
+        default: '5m'
+
+permissions:
+  contents: read
+
+# Queue rather than cancel, so a long run is never cut short by the next one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    # make fuzz runs the 10 targets one after another: 10 x 10m cap plus build.
+    timeout-minutes: 130
+    steps:
+      # Actions are pinned to commit SHAs; the tag is in the trailing comment.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: make fuzz
+        env:
+          # Empty on schedule.
+          FUZZTIME_INPUT: ${{ inputs.fuzztime }}
+        run: |
+          fuzztime=${FUZZTIME_INPUT:-5m}
+          if ! [[ $fuzztime =~ ^([1-9][0-9]{0,3})([sm])$ ]]; then
+            echo "fuzztime must be <n>s or <n>m" >&2
+            exit 2
+          fi
+          n=${BASH_REMATCH[1]}
+          [[ ${BASH_REMATCH[2]} == m ]] && n=$((n * 60))
+          if (( n > 600 )); then
+            echo "fuzztime must be at most 10m" >&2
+            exit 2
+          fi
+          make fuzz FUZZTIME="$fuzztime"
+      - name: collect new crashers
+        if: failure()
+        run: |
+          mkdir -p crashers
+          git ls-files -z --others --exclude-standard -- '*/testdata/fuzz/*' |
+            xargs -0 -r cp --parents -t crashers
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: fuzz-crashers-${{ github.run_id }}
+          path: crashers/
+          if-no-files-found: ignore
+          retention-days: 30
