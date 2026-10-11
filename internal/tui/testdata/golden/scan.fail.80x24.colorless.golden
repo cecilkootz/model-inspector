@@ -1,6 +1,6 @@
 model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✗1]             m mouse on
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ✗ STRUCTURE PROBLEMS FOUND   3 passed · 0 warn · 1 fail · 4 not run           
+  ✗ STRUCTURE PROBLEMS FOUND   3 passed · 0 warn · 1 fail · 5 not run           
   Structure only · not a malware or behavior scan                       i more  
                                                                                 
 READ                                                                            
@@ -15,9 +15,9 @@ CODE
 PROVENANCE                                                                      
  | – N/R  Hashes vs revision     not run: needs a full read of 101 B            
  | – N/R  Config vs tensor shap… no usable config.json                          
+ | – N/R  Chat template & token… no chat template or tokenizer files            
                                                                                 
  ▸ Not covered by any check (5)                                               i 
-                                                                                
                                                                                 
                                                                                 
                                                                                 

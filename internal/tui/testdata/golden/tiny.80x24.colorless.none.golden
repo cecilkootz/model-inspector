@@ -21,4 +21,4 @@ BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step =
             ○● ●                                                                
 routed exp  ░· ·  8 B  flat                                                     
 4 B  <64K ▒ <4M ▓ <256M █  8 B  ○ linear  ● full  per-layer totals differ by 400
-IDENTITY │ /model           6.07 KiB │ q4 g32 │ ✓ structure 6/8 │ – headers-only
+IDENTITY │ /model           6.07 KiB │ q4 g32 │ ✓ structure 6/9 │ – headers-only

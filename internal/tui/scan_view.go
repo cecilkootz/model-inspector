@@ -275,7 +275,7 @@ var scanPhases = []scanPhase{
 	{"READ", []string{scan.CheckHeader, scan.CheckFiles}},
 	{"STRUCTURE", []string{scan.CheckOffsets, scan.CheckIndex}},
 	{"CODE", []string{scan.CheckCodeExec, scan.CheckCode}},
-	{"PROVENANCE", []string{scan.CheckHash, scan.CheckMetadata}},
+	{"PROVENANCE", []string{scan.CheckHash, scan.CheckMetadata, scan.CheckAgent}},
 }
 
 func (t Model) cardLines(c scan.Check, width, rows int, showDur, sel, split bool) []string {
@@ -1191,6 +1191,8 @@ func ruleShort(id string) string {
 		return "names only; nothing imported or run"
 	case scan.CheckMetadata:
 		return "config dims = tensor shapes; warn only"
+	case scan.CheckAgent:
+		return "template, tokenizer and generation files; warn only"
 	default:
 		return ""
 	}
@@ -1427,6 +1429,8 @@ func checkName(id string) string {
 		return "Hashes vs revision"
 	case scan.CheckMetadata:
 		return "Config vs tensor shapes"
+	case scan.CheckAgent:
+		return "Chat template & tokenizer"
 	default:
 		return id
 	}

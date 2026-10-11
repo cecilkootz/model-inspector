@@ -2,11 +2,11 @@ model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✗2]                     
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 == STRICT (--strict): warnings count as failures ==                                                                                         
                                                                                                                                             
-  ✗ FAILS UNDER --strict   4 passed · 0 warn · 2 fail (2 was warn) · 2 not run           1/1 shards · 1 ranges · 1/1 index entries · 400 B  
+  ✗ FAILS UNDER --strict   4 passed · 0 warn · 2 fail (2 was warn) · 3 not run           1/1 shards · 1 ranges · 1/1 index entries · 400 B  
                                                                                                                                             
   Structure only: files complete, headers well-formed, internally consistent. Not a malware or behavior scan.  i  what this does not cover  
                                                                                                                                             
-CHECKS  8 · structure only · in main's order                  DETAIL  selected check                                                        
+CHECKS  9 · structure only · in main's order                  DETAIL  selected check                                                        
                                                               Shard headers parse   ✓ PASS  <1 ms                                           
 READ                                                          1/1 headers read (length + JSON)                                              
  |  ✓ PASS  Shard headers parse                         <1 ms                                                                               
@@ -36,5 +36,5 @@ PROVENANCE
  |  – N/R  Config vs tensor shapes                          —                                                                               
  |         no config field to compare with tensors                                                                                          
                                                                                                                                             
-⏎ details · space expand · e/E all · ] next problem · y copy                                                                                
+ |  – N/R  Chat template & tokenizer                        —                                                                               
 SCAN · STRICT │ org/warn │ ↑↓ check · ⏎ details · space expand · i not covered        safetensors │ 400 B │ bf16 │ ✗ 2 fail │ ◇ headers-only

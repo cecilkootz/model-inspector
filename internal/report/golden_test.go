@@ -34,6 +34,8 @@ func TestGoldenJSON(t *testing.T) {
 		{"ngram-table", func() ([]fixture.File, error) { return fixture.NgramTable() }},
 		{"tied-embed", func() ([]fixture.File, error) { return fixture.TiedEmbed() }},
 		{"code-exec", func() ([]fixture.File, error) { return fixture.CodeExec() }},
+		{"agent-hermes", func() ([]fixture.File, error) { return fixture.AgentHermes() }},
+		{"agent-tampered", func() ([]fixture.File, error) { return fixture.AgentTampered() }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

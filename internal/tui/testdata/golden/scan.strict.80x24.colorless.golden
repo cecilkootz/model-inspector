@@ -1,7 +1,7 @@
 model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✗2]             m mouse on
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 == STRICT (--strict): warnings count as failures ==                             
-  ✗ FAILS UNDER --strict   4 passed · 0 warn · 2 fail (2 was warn) · 2 not run  
+  ✗ FAILS UNDER --strict   4 passed · 0 warn · 2 fail (2 was warn) · 3 not run  
   Structure only · not a malware or behavior scan                       i more  
                                                                                 
 READ                                                                            
@@ -16,9 +16,9 @@ CODE
 PROVENANCE                                                                      
  | – N/R      Hashes vs revision     not run: needs a full read of 400 B        
  | – N/R      Config vs tensor shap… no config field to compare with tensors    
+ | – N/R      Chat template & token… no chat template or tokenizer files        
                                                                                 
  ▸ Not covered by any check (5)                                               i 
-                                                                                
                                                                                 
                                                                                 
 SCAN · STRICT │ ↑↓ · ⏎ details          400 B │ bf16 │ ✗ 2 fail │ ◇ headers-only

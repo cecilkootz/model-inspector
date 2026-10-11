@@ -126,7 +126,7 @@
       "pass": 4,
       "warn": 2,
       "fail": 0,
-      "skip": 1,
+      "skip": 2,
       "planned": 1
     },
     "checks": [
@@ -199,6 +199,14 @@
         "status": "skip",
         "effective_status": "skip",
         "summary": "no config field to compare with tensors",
+        "details": []
+      },
+      {
+        "id": "agent-surface",
+        "name": "Chat template & tokenizer",
+        "status": "skip",
+        "effective_status": "skip",
+        "summary": "no chat template or tokenizer files",
         "details": []
       }
     ]

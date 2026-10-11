@@ -1,11 +1,11 @@
 model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✗1]                                                   ? keys   : commands   m mouse on
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                                                                                                                                             
-  ✗ STRUCTURE PROBLEMS FOUND   3 passed · 0 warn · 1 fail · 4 not run                    1/1 shards · 1 ranges · 0/0 index entries · 101 B  
+  ✗ STRUCTURE PROBLEMS FOUND   3 passed · 0 warn · 1 fail · 5 not run                    1/1 shards · 1 ranges · 0/0 index entries · 101 B  
                                                                                                                                             
   Structure only: files complete, headers well-formed, internally consistent. Not a malware or behavior scan.  i  what this does not cover  
                                                                                                                                             
-CHECKS  8 · structure only · in main's order                  DETAIL  selected check                                                        
+CHECKS  9 · structure only · in main's order                  DETAIL  selected check                                                        
                                                               Shard headers parse   ✓ PASS  <1 ms                                           
 READ                                                          1/1 headers read (length + JSON)                                              
  |  ✓ PASS  Shard headers parse                         <1 ms                                                                               
@@ -35,6 +35,6 @@ PROVENANCE
  |  – N/R  Config vs tensor shapes                          —                                                                               
  |         no usable config.json                                                                                                            
                                                                                                                                             
-⏎ details · space expand · e/E all · ] next problem · y copy                                                                                
-                                                                                                                                            
+ |  – N/R  Chat template & tokenizer                        —                                                                               
+ |         no chat template or tokenizer files                                                                                              
 SCAN │ org/fail │ ↑↓ check · ⏎ details · space expand · i not covered                 safetensors │ 101 B │ bf16 │ ✗ 1 fail │ ◇ headers-only

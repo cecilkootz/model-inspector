@@ -1,11 +1,11 @@
 model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✓]                                                    ? keys   : commands   m mouse on
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                                                                                                                                             
-  ✓ STRUCTURE CONSISTENT   6 passed · 0 warn · 0 fail · 2 not run                  2/2 shards · 25 ranges · 25/25 index entries · 6.02 KiB  
+  ✓ STRUCTURE CONSISTENT   6 passed · 0 warn · 0 fail · 3 not run                  2/2 shards · 25 ranges · 25/25 index entries · 6.02 KiB  
                                                                                                                                             
   Structure only: files complete, headers well-formed, internally consistent. Not a malware or behavior scan.  i  what this does not cover  
                                                                                                                                             
-CHECKS  8 · structure only · in main's order                  DETAIL  selected check                                                        
+CHECKS  9 · structure only · in main's order                  DETAIL  selected check                                                        
                                                               Shard headers parse   ✓ PASS  <1 ms                                           
 READ                                                          2/2 headers read (length + JSON)                                              
  |  ✓ PASS  Shard headers parse                         <1 ms                                                                               
@@ -35,6 +35,6 @@ PROVENANCE
  |  ✓ PASS  Config vs tensor shapes                     <1 ms                                                                               
  |          2 config comparisons match tensor shapes                                                                                        
                                                                                                                                             
-⏎ details · space expand · e/E all · ] next problem · y copy                                                                                
-                                                                                                                                            
-SCAN │ org/pass │ ↑↓ check · ⏎ details · space expand · i not covered safetensors·mlx │ 6.02 KiB │ q4 g32 │ ✓ structure 6/8 │ ◇ headers-only
+ |  – N/R  Chat template & tokenizer                        —                                                                               
+ |         no chat template or tokenizer files                                                                                              
+SCAN │ org/pass │ ↑↓ check · ⏎ details · space expand · i not covered safetensors·mlx │ 6.02 KiB │ q4 g32 │ ✓ structure 6/9 │ ◇ headers-only

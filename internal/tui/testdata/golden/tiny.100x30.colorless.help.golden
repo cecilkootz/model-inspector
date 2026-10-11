@@ -27,4 +27,4 @@ model-inspector  [1 Identity] 2 Config 3 Layers 4 Scan ✓            ? keys   :
             │                                                                         │             
             │ Mouse is on. Hold Shift to select text.                                 │             
             │                                                                         │             
-HELP │ /model                 safetensors·mlx │ 6.07 KiB │ q4 g32 │ ✓ structure 6/8 │ – headers-only
+HELP │ /model                 safetensors·mlx │ 6.07 KiB │ q4 g32 │ ✓ structure 6/9 │ – headers-only
