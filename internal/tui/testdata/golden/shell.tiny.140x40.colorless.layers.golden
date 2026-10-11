@@ -1,8 +1,8 @@
-model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86                                                           ✓ checks pass · headers-only
+model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params                                                    ✓ checks pass · headers-only
 ╭[1] Model ──────────────────────── 5 notes ─╮╭[0] embeddings ────────────────────────────────────────────────────────────────────── 20 B ─╮
 │   Overview                                 ││ BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2× · per-lay │
 │   Storage                         6.02 KiB ││             ○● ●                                                                           │
-│   Memory                           ≥ 152 B ││ routed exp  ░· ·  8 B  flat                                                                │
+│   Callouts                               5 ││ routed exp  ░· ·  8 B  flat                                                                │
 ╰────────────────────────────────────────────╯│ 4 B  <64K ▒ <4M ▓ <256M █  8 B  ○ linear  ● full  per-layer totals differ by 400.0%        │
 ╭[2] Checks ───────────────────────── 6✓ 3· ─╮│ flat  attention 4 B  flat · router 4 B  flat · shared exp 4 B  flat · norms ·              │
 │   ✓ 6 passed                               ││ excludes ple 40 B · excludes hyper 32 B · other 4 B not in the grid                        │

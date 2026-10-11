@@ -1,8 +1,8 @@
-model-inspector · code-exec · 400 B · bf16 · ~2              ! 2 warn · headers-only
+model-inspector · code-exec · 400 B · bf16 · ~2 params       ! 2 warn · headers-only
 ╭[1] Model ───────────── 1 note ─╮╭[0] Shard headers parse ──────────────────── ✓ ─╮
 │   Overview                     ││ DETAIL  selected check                         │
 │   Storage                400 B ││ Shard headers parse   ✓ PASS  <1 ms            │
-│   Memory                 ≥ 4 B ││ 1/1 headers read (length + JSON)               │
+│   Callouts                   1 ││ 1/1 headers read (length + JSON)               │
 ╰────────────────────────────────╯│                                                │
 ╭▶[2] Checks ───────── 4✓ 2! 3· ─╮│ CHECKED                                        │
 │ ▶ ✓ Shard headers parse  <1 ms ││ ################ 1/1 headers read (length + J… │

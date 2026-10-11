@@ -666,6 +666,17 @@ func TestShellGolden(t *testing.T) {
 			spec{"shell.code.84x24." + p + ".checks", code, 84, 24, p, []string{"2"}},
 		)
 	}
+	for i, sec := range []string{"storage", "memory", "callouts", "files"} {
+		keys := repeatKey("down", i+1)
+		cases = append(cases,
+			spec{"shell.tiny.140x40.colorless.model-" + sec, tiny, 140, 40, "colorless", keys},
+			spec{"shell.code.84x24.colorless.model-" + sec, code, 84, 24, "colorless", keys},
+		)
+	}
+	cases = append(cases,
+		spec{"shell.code.84x24.colorless.model", code, 84, 24, "colorless", nil},
+		spec{"shell.tiny.140x40.truecolor.model-storage", tiny, 140, 40, "truecolor", []string{"down"}},
+	)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			res := scan.Run(c.m)
