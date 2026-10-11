@@ -215,11 +215,11 @@
     "overall": "pass",
     "disclaimer": "Structural integrity checks only: file completeness, header well-formedness and internal consistency. Not a malware or behavior scan; does not establish what the weights do or who produced them.",
     "counts": {
-      "pass": 5,
+      "pass": 6,
       "warn": 0,
       "fail": 0,
       "skip": 1,
-      "planned": 2
+      "planned": 1
     },
     "checks": [
       {
@@ -281,9 +281,9 @@
       {
         "id": "metadata-sanity",
         "name": "Config vs tensor shapes",
-        "status": "planned",
-        "effective_status": "planned",
-        "summary": "not run: planned",
+        "status": "pass",
+        "effective_status": "pass",
+        "summary": "1 config comparison matches tensor shapes",
         "details": []
       }
     ]

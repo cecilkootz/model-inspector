@@ -21,4 +21,4 @@ excludes ple 40 B · excludes hyper 32 B · other 4 B not in the grid
                                                                                 
                                                                                 
  norms · 8 B · [bf16]                                                           
-LAYERS · TREE │ /model      6.07 KiB │ q4 g32 │ ✓ structure 5/8 │ – headers-only
+LAYERS · TREE │ /model      6.07 KiB │ q4 g32 │ ✓ structure 6/8 │ – headers-only

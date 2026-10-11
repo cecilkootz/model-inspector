@@ -33,7 +33,7 @@ PROVENANCE
  |         not run: needs a full read of 101 B                                                                                              
                                                                                                                                             
  |  – N/R  Config vs tensor shapes                          —                                                                               
- |         not run: planned                                                                                                                 
+ |         no usable config.json                                                                                                            
                                                                                                                                             
 ⏎ details · space expand · e/E all · ] next problem · y copy                                                                                
                                                                                                                                             

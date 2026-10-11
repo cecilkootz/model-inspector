@@ -5,7 +5,7 @@ model-inspector  1 Identity [2 Config] 3 Layers 4 Scan ✓              m mouse 
   >model_type      qwen3_5                                                      
    layers          2 layers  = 1 linear · 1 full                                
    hidden_size     8 dim                                                        
-   vocab_size      32 tok                                                       
+   vocab_size      2 tok                                                        
    context         128 tok  = 128 native                                        
    tie_embeddings  false                                                        
    dtype           bfloat16                                                     
@@ -21,4 +21,4 @@ model-inspector  1 Identity [2 Config] 3 Layers 4 Scan ✓              m mouse 
                                                                                 
                                                                                 
  ▸ Browse config.json (32 nodes)                                   ⏎ on any row 
-CONFIG │ /model             6.07 KiB │ q4 g32 │ ✓ structure 5/8 │ – headers-only
+CONFIG │ /model             6.07 KiB │ q4 g32 │ ✓ structure 6/8 │ – headers-only

@@ -135,6 +135,7 @@ func IndexJSON(totalSize int64, weightMap map[string]string) ([]byte, error) {
 
 // TinyQwenConfig is a small config.json with the architecture keys the loader reads.
 // Quantization sits on text_config.quantization_config, the HF-style location.
+// vocab_size equals the lm_head rows so metadata-sanity passes.
 func TinyQwenConfig() []byte {
 	return []byte(`{
   "model_type": "qwen3_5",
@@ -147,7 +148,7 @@ func TinyQwenConfig() []byte {
     "num_attention_heads": 2,
     "num_key_value_heads": 1,
     "head_dim": 4,
-    "vocab_size": 32,
+    "vocab_size": 2,
     "max_position_embeddings": 128,
     "tie_word_embeddings": false,
     "num_experts": 4,
@@ -525,4 +526,37 @@ func TinyQwenMLXQuant() ([]File, int64, error) {
 		}
 	}
 	return files, n, nil
+}
+
+// DenseShapes is a two-layer dense checkpoint whose tensors describe
+// hidden_size 8, vocab_size 32, and an untied lm_head. cfg is written
+// as config.json unchanged, so tests can pair it with any config.
+func DenseShapes(cfg []byte) ([]File, error) {
+	shard, _, err := WriteShard("", []Tensor{
+		{"model.embed_tokens.weight", "BF16", []int64{32, 8}},
+		{"model.layers.0.self_attn.q_proj.weight", "BF16", []int64{8, 8}},
+		{"model.layers.1.self_attn.q_proj.weight", "BF16", []int64{8, 8}},
+		{"model.norm.weight", "BF16", []int64{8}},
+		{"lm_head.weight", "BF16", []int64{32, 8}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return []File{
+		{Name: "config.json", Data: cfg},
+		{Name: "model.safetensors", Data: shard},
+	}, nil
+}
+
+// MetadataMismatch is DenseShapes with a config that disagrees on every
+// field metadata-sanity compares.
+func MetadataMismatch() ([]File, error) {
+	return DenseShapes([]byte(`{
+  "model_type": "llama",
+  "hidden_size": 16,
+  "vocab_size": 64,
+  "num_hidden_layers": 3,
+  "tie_word_embeddings": false
+}
+`))
 }

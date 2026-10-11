@@ -1,6 +1,6 @@
 model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✓]              m mouse on
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ✓ STRUCTURE CONSISTENT   5 passed · 0 warn · 0 fail · 3 not run               
+  ✓ STRUCTURE CONSISTENT   6 passed · 0 warn · 0 fail · 2 not run               
   Structure only · not a malware or behavior scan                       i more  
                                                                                 
 READ                                                                            
@@ -14,11 +14,11 @@ CODE
  | – N/R  Code & pickle contents nothing to read (no flagged files)             
 PROVENANCE                                                                      
  | – N/R  Hashes vs revision     not run: needs a full read of 6.02 KiB         
- | – N/R  Config vs tensor shap… not run: planned                               
+ | ✓ PASS Config vs tensor shap… 2 config comparisons match tensor shapes       
                                                                                 
  ▸ Not covered by any check (5)                                               i 
                                                                                 
                                                                                 
                                                                                 
                                                                                 
-SCAN │ org/pass │ ↑↓ · ⏎ details      6.02 KiB │ q4 g32 │ ✓ 5/8 │ ◇ headers-only
+SCAN │ org/pass │ ↑↓ · ⏎ details      6.02 KiB │ q4 g32 │ ✓ 6/8 │ ◇ headers-only

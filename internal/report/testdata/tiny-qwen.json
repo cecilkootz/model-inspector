@@ -21,7 +21,7 @@
   },
   "files": {
     "count": 4,
-    "total_bytes": 6169,
+    "total_bytes": 6168,
     "shard_count": 2,
     "index_file": "model.safetensors.index.json",
     "shards": [
@@ -115,7 +115,7 @@
         "key": "vocab_size",
         "path": "text_config.vocab_size",
         "group": "architecture",
-        "value": 32
+        "value": 2
       },
       {
         "key": "max_position_embeddings",
@@ -442,11 +442,11 @@
     "overall": "pass",
     "disclaimer": "Structural integrity checks only: file completeness, header well-formedness and internal consistency. Not a malware or behavior scan; does not establish what the weights do or who produced them.",
     "counts": {
-      "pass": 5,
+      "pass": 6,
       "warn": 0,
       "fail": 0,
       "skip": 1,
-      "planned": 2
+      "planned": 1
     },
     "checks": [
       {
@@ -508,9 +508,9 @@
       {
         "id": "metadata-sanity",
         "name": "Config vs tensor shapes",
-        "status": "planned",
-        "effective_status": "planned",
-        "summary": "not run: planned",
+        "status": "pass",
+        "effective_status": "pass",
+        "summary": "2 config comparisons match tensor shapes",
         "details": []
       }
     ]

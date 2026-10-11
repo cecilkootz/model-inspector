@@ -21,4 +21,4 @@ routed exp  ··· ·  ·
 flat  attention 16 B  flat · router · · shared exp · · norms ·                  
 excludes ple 32.00 KiB · other 32 B not in the grid                             
 Memory  weights ≥ 32.17 KiB (0.0 GB)                                            
-IDENTITY │ /model            33.30 KiB │ bf16 │ ✓ structure 5/8 │ – headers-only
+IDENTITY │ /model            33.30 KiB │ bf16 │ ✓ structure 6/8 │ – headers-only

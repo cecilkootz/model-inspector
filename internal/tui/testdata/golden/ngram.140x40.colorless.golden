@@ -37,4 +37,4 @@ layer 1 is 32.02 KiB, 99.5% of weights: ~16.4K-param n-gram embedding table
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
-IDENTITY │ /model │ ↑↓ scroll · ←→ tabs · ? keys                           safetensors │ 33.30 KiB │ bf16 │ ✓ structure 5/8 │ – headers-only
+IDENTITY │ /model │ ↑↓ scroll · ←→ tabs · ? keys                           safetensors │ 33.30 KiB │ bf16 │ ✓ structure 6/8 │ – headers-only
