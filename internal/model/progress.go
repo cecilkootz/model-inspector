@@ -53,6 +53,15 @@ func (m *Model) emit(p Progress, force bool) {
 	}
 }
 
+// DetachProgress stops the model from emitting. The channel's owner calls
+// it before close, because the scan still reports the layout pass through
+// the same channel after loading ends.
+func (m *Model) DetachProgress() {
+	if m != nil {
+		m.prog = nil
+	}
+}
+
 // NoteLayout records the offsets pass. Scan calls it from the existing
 // CheckLayout loop; it does not open files.
 func (m *Model) NoteLayout(done, total, ranges int, d time.Duration, force bool) {
