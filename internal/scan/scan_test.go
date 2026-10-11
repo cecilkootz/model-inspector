@@ -450,7 +450,7 @@ func TestCodeExecWarnsAndStrictPromotes(t *testing.T) {
 		}
 	}
 	content := findCheck(t, res, CheckCode)
-	if content.Status != StatusSkip || !strings.Contains(content.Summary, "not run") {
+	if content.Status != StatusWarn || !strings.Contains(content.Summary, "weights.bin") {
 		t.Fatalf("code-content %+v", content)
 	}
 	for _, ch := range res.Checks {

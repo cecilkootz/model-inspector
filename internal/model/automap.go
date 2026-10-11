@@ -195,3 +195,6 @@ func autoMapTargets(v any) []string {
 		return nil
 	}
 }
+
+// AllowedRoots are the directories content reads may resolve into.
+func (m *Model) AllowedRoots() []string { return m.allowedRoots() }

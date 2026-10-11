@@ -23,6 +23,7 @@ type File struct {
 	r    io.Reader
 	size int64
 	max  int64
+	at   int64 // bytes ReadAt may still request
 	name string
 }
 
@@ -80,6 +81,7 @@ func openUnder(path string, max int64, roots ...string) (*File, error) {
 		r:    io.LimitReader(f, max+1),
 		size: st.Size(),
 		max:  max,
+		at:   max,
 		name: path,
 	}, nil
 }
@@ -118,6 +120,18 @@ func resolvedPath(f *os.File, fallback string) (string, error) {
 
 // Read reads at most max+1 bytes from the file.
 func (f *File) Read(p []byte) (int, error) { return f.r.Read(p) }
+
+// ReadAt reads len(p) bytes at off from the same descriptor, independent of
+// the sequential position. Across all calls it requests at most the cap given
+// to Open, and off must lie within the file, so ReadAt callers keep the same
+// bound Read gives. A refused call reads nothing.
+func (f *File) ReadAt(p []byte, off int64) (int, error) {
+	if off < 0 || off > f.size || int64(len(p)) > f.at {
+		return 0, fmt.Errorf("safeopen: read of %d bytes at %d exceeds the %d-byte cap", len(p), off, f.max)
+	}
+	f.at -= int64(len(p))
+	return f.f.ReadAt(p, off)
+}
 
 // Close closes the descriptor.
 func (f *File) Close() error { return f.f.Close() }

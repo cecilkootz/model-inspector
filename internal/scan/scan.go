@@ -145,7 +145,7 @@ func Why(id string) string {
 	case CheckCodeExec:
 		return "These formats can run code when some other tool loads the model. This check matches file names and reads top-level auto_map in config files. It does not import or execute anything."
 	case CheckCode:
-		return "Reading code and pickle contents is not part of this version."
+		return "Custom modeling code (trust_remote_code) and pickles can run code or reach the network when another tool loads them. This check reads their text and opcodes, by name only, to show whether they import or reference anything that could."
 	case CheckHash:
 		return "A hash would show whether the bytes match the revision. It is not run, because it would read every weight byte."
 	case CheckMetadata:
@@ -169,7 +169,7 @@ func Rule(id string) string {
 	case CheckCodeExec:
 		return "file names with code-executing suffixes (.bin .pt .pth .pkl .ckpt .h5 .keras .nemo .dill .mar .py, .bin.gz …) and top-level auto_map in config files; nothing opened"
 	case CheckCode:
-		return "static pickle disassembly and .py import scan; never executes or unpickles"
+		return "line scan of .py (imports; network, process, code-loading, env and encoding names; URLs) and a bounded opcode walk of pickles and torch zip data.pkl (GLOBAL/STACK_GLOBAL names, REDUCE/BUILD/INST/OBJ/NEWOBJ counts). fail: a pickle references os, subprocess, builtins, sys, socket and similar, or an auto_map .py uses network/process/code-loading names. warn: other .py with those names, pickle imports outside torch/numpy, or anything truncated, compressed or unsupported. Never executes, imports, unpickles or decompresses"
 	case CheckMetadata:
 		return "hidden_size = token embedding width; vocab_size = token embedding and lm_head rows; num_hidden_layers = distinct decoder indices (plus num_nextn_predict_layers); text_config, llm_config, language_config before root; MLX packs compared dequantized; mismatches warn"
 	default:
@@ -191,7 +191,7 @@ func NotProven(id string) string {
 	case CheckCodeExec:
 		return "that other files carry no risk, or that flagged files are harmful"
 	case CheckCode:
-		return "that loading these files with another tool is harmless"
+		return "that these files do no harm when loaded. It reads names only: it cannot see obfuscated or runtime-constructed imports, and does not read compressed or unsupported formats (.gz .zip deflate .h5 .npy .pyc …)"
 	case CheckMetadata:
 		return "that the fields not compared agree, or that the config describes how the weights were trained"
 	default:
@@ -548,16 +548,6 @@ func codeExecFormats(m *model.Model) Check {
 	c.Status = StatusWarn
 	c.Summary = fmt.Sprintf("%d findings (code-exec formats or auto_map)", len(details))
 	c.Details = capDetails(details)
-	return c
-}
-
-func codeContent(m *model.Model) Check {
-	c := Check{ID: CheckCode, Name: "Code & pickle contents", Status: StatusSkip}
-	if len(m.CodeExecFiles()) == 0 && len(m.AutoMapEntries()) == 0 {
-		c.Summary = "nothing to read (no flagged files)"
-		return c
-	}
-	c.Summary = "not run (open Code & pickles, or pass --code)"
 	return c
 }
 

@@ -575,12 +575,12 @@ func (t Model) disclosureBody() string {
 	if t.m != nil {
 		n = len(t.m.CodeExecFiles())
 	}
-	return foldASCII(fmt.Sprintf("So far only names and sizes were read. Reading contents opens %d files (≤ 64 MiB of pickle stream, ≤ 1 MiB of .py each). Nothing is executed, imported or unpickled. Pickles are disassembled as bytes only.", n))
+	return foldASCII(fmt.Sprintf("The Code & pickle contents check has read these %d files (≤ 8 MiB of each pickle, ≤ 1 MiB of each .py, ≤ 64 MiB in all). Names only: nothing is executed, imported, unpickled or decompressed.", n))
 }
 
 func (t Model) disclosureConfirm() (label string, enabled bool) {
 	if contentReader == nil {
-		return "content reading ships in a later version", false
+		return "already read by the scan", false
 	}
 	return "Read contents", true
 }

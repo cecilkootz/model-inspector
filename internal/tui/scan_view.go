@@ -619,7 +619,7 @@ func (t Model) scanCodeLines(width, height int) []string {
 		lines = append(lines, scanPaint(ui.G().NR+" Nothing flagged. No code-executing formats or auto_map entries were found by name.", ui.TextSecondary, false))
 		return lines
 	}
-	lines = append(lines, scanPaint(fmt.Sprintf("%d flagged · nothing has been opened yet (stat only)", len(files)), ui.TextMuted, false))
+	lines = append(lines, scanPaint(fmt.Sprintf("%d flagged · contents are read by the scan, names only", len(files)), ui.TextMuted, false))
 	lines = append(lines, "")
 	for i, f := range files {
 		sel := t.scn != nil && i == t.scn.codeCur
@@ -627,7 +627,7 @@ func (t Model) scanCodeLines(width, height int) []string {
 		if sel {
 			bg = ui.SurfaceSel
 		}
-		row := f.mark + "  " + f.name + "   " + f.kind + "   " + f.size + "   contents not read"
+		row := f.mark + "  " + f.name + "   " + f.kind + "   " + f.size
 		lines = append(lines, fitPaint(paintOn(scanTrunc(row, width-1), ui.TextPrimary, bg, false), width, bg))
 		t.addScanHit("scan:code", 0, 2+len(lines)-1, width, 1)
 	}

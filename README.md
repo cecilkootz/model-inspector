@@ -210,9 +210,8 @@ On Scan, `space` expands the selected check, `e` expands every check, and
 toggles the "not covered" panel. `c` opens the code and pickle name list;
 `y` copies the selected check and `Y` copies the whole scan as text.
 Enter focuses that check's detail (a full-screen drill below 100 columns)
-and, on a code check, opens the name list. Confirming the list asks before
-any contents are read. That reader is not in this version: the confirm
-button stays disabled and says content reading ships in a later version.
+and, on a code check, opens the name list. The scan already read those
+files on load, so the list's confirm button stays disabled.
 A directory that takes more than a moment shows a progress row while the
 headers are read. The window must be at least 60×16; below that the screen
 says so and only `q` works.
@@ -268,10 +267,42 @@ follows the overall result.
    name (including `.h5`, `.keras`, `.nemo`, `.dill`, `.mar`, `.tar`, `.tgz`, and compound
    suffixes such as `.bin.gz`, `.tar.gz`, `.pt.zip`, `.ckpt.zip`, `.pth.zip`, `.bin.zip`, and `.pth.tar`) and by top-level `auto_map` read from
    config files (warn, or fail under `--strict`; a config file that exists
-   but cannot be read or parsed warns instead of passing as none); code and pickle contents (not
-   run); hashes vs revision (planned); config vs tensor shapes (`hidden_size`,
+   but cannot be read or parsed warns instead of passing as none); code and pickle contents (see below); hashes vs revision (planned); config vs tensor shapes (`hidden_size`,
    `vocab_size`, and `num_hidden_layers` against the embedding, `lm_head`, and
    decoder layer tensors; warn only).
+   **Code and pickle contents** (`code-content`) runs by default and is
+   bounded; there is no flag for it. It reads names only and never executes,
+   imports, unpickles or decompresses anything.
+   - `.py`: a line scan (no parser) for imports and for network (`requests`,
+     `urllib`, `socket`, `http.client`, `aiohttp`, `httpx`, `ftplib`,
+     `smtplib`), process (`subprocess`, `os.system`, `os.popen`, `os.exec*`,
+     `pty`) and code-loading names (`exec(`, `eval(`, `compile(`,
+     `__import__`, `importlib`, `ctypes`, `cffi`, `pickle`, `marshal`,
+     `shelve`). Environment and filesystem names, encoders, URLs and
+     credential paths are listed but do not change the status. Comments and
+     triple-quoted text are skipped for names.
+   - Pickles (`.pkl .pickle .bin .pt .pth .ckpt .dill .joblib`): an opcode
+     walker resolves `GLOBAL` and `STACK_GLOBAL` names and counts `REDUCE`,
+     `BUILD`, `INST`, `OBJ`, `NEWOBJ`, `NEWOBJ_EX`. A torch zip is read
+     through its central directory; only a stored `data.pkl` is walked. A
+     deflated entry is reported, not inflated.
+   - Not scanned, and reported as such: compressed files (`.gz .tgz .zip`,
+     compressed pickles) and unsupported formats (`.h5 .keras .nemo .mar
+     .tar .npy .pyc`).
+   - Caps: 1 MiB per `.py` (4096-byte lines, 10,000 lines, 256 findings);
+     8 MiB per pickle or torch zip, 1,000,000 opcodes, 256 distinct imports;
+     4096 zip entries with names up to 512 bytes; 512 files and 64 MiB read
+     in all. A cap hit is reported as truncated.
+   - Status: **fail** when a pickle references `os`, `subprocess`,
+     `builtins`, `sys`, `socket`, `requests`, `urllib`, `runpy`,
+     `importlib`, `shutil`, `pty`, `webbrowser`, `codecs`, `base64`,
+     `operator`, `types`, `functools`, `pickle`, `copyreg`, `nt`, `posix`
+     (and `__builtin__`, `ctypes`, `marshal`), or when a `.py` named by
+     `auto_map` has network, process or code-loading names. **Warn** for
+     those names in other `.py` files, pickle imports outside the usual
+     torch/numpy set, and anything truncated, compressed or unsupported.
+     **Pass** when everything read was clean. `--strict` promotes warn.
+     The first detail line says whether `trust_remote_code` is needed.
    Skip and planned do not turn a pass into a failure. An empty directory
    or GGUF-only directory is not reported as a pass.
 
@@ -298,7 +329,6 @@ internal/version        tool name and version written into JSON
 
 - GGUF support (header + tensor info parsing)
 - Hash / provenance verification against the HF commit (LFS sha256)
-- Code and pickle contents (names are flagged today; contents are not read)
 - Behavior probes against a served copy (not a scan check)
 - Agent / tool config inspection (chat template, tool-call format, generation config)
 - Offload planner: given a VRAM/unified-memory size, plan which layers/experts fit

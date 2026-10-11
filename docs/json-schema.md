@@ -29,7 +29,7 @@ It is false when the inspection completed. The field is additive, so
 | --- | --- | --- |
 | `schema_version` | number | Always `1`. |
 | `tool` | object | `name` (`model-inspector`) and `version` (`0.1.0`). |
-| `options` | object | `strict` (bool) and `code` (always `false`; content reads are not in this version). |
+| `options` | object | `strict` (bool) and `code` (always `true`: the code and pickle content scan runs by default). |
 | `source` | object | Where the directory came from. See below. |
 | `format` | object | `name`, `variant`, `supported`. |
 | `files` | object | On-disk files and shards. |
@@ -193,7 +193,7 @@ Check ids, in order:
 | `offsets-bounds` | `safetensors.CheckLayout`: bounds, dtype×shape, overlap, gaps, trailing bytes. |
 | `index-shard-consistency` | Index against shard headers. |
 | `code-exec-formats` | File names (`.bin`, `.pt`, `.pth`, `.ckpt`, `.pkl`, `.pickle`, `.joblib`, `.npy`, `.pyc`, `.py`, `.h5`, `.keras`, `.nemo`, `.dill`, `.mar`, `.tar`, `.tgz`, and `.bin.gz` / `.pt.gz` / `.pkl.gz` / `.tar.gz` / `.pt.zip` / `.ckpt.zip` / `.pth.zip` / `.bin.zip` / `.pth.tar`) and top-level `auto_map` read from `config.json`, `tokenizer_config.json`, `processor_config.json`, and `preprocessor_config.json`. Warns. `--strict` makes that a failure. A file that exists but cannot be read or parsed warns `could not check auto_map in <file>` and does not pass as none. The check does not import or execute anything. |
-| `code-content` | Always `skip`. |
+| `code-content` | `skip` (`nothing to read`) when there are no flagged files or `auto_map` entries. Otherwise a names-only read of `.py` files and pickles (never executed, unpickled or decompressed): `fail` for a pickle that references `os`, `subprocess`, `builtins` and similar, or an `auto_map` `.py` with network, process or code-loading names; `warn` for the same names in other `.py` files, pickle imports outside the usual torch/numpy set, and anything truncated, compressed or unsupported; `pass` otherwise. `details[0]` is `needs trust_remote_code: yes/no (...)`; the rest are `file:line → category: name` and `file → finding` lines. Names come from the files and are escaped like every other string. |
 | `hash-vs-revision` | Always `planned`. |
 | `metadata-sanity` | Config fields against tensor shapes: `hidden_size` (or `word_embed_proj_dim` / `embedding_size` when present) against the token embedding width, `vocab_size` against the token embedding and `lm_head` rows, and `num_hidden_layers` against the distinct decoder indices in tensor names (a count of `num_hidden_layers + num_nextn_predict_layers` also matches). Fields are read from `text_config`, `llm_config`, or `language_config` before the root. MLX packed weights are compared at their dequantized width; an integer-dtype embedding with no scales is not compared. A mismatch, or a field that is not a whole number in range, warns; it never fails. `skip` when there are no shards, no usable `config.json`, or nothing to compare. A decoder index above 4096 makes this check `fail` with name `Layer index`, and no comparison is made. |
 
