@@ -204,8 +204,25 @@ var ScanDisclose = Context{
 	},
 }
 
+// Shell is the panels layout (--layout panels). 1-4, tab, enter, esc and the
+// move keys stay global; in the detail pane of a tree panel left and right
+// fold, so it may shadow only those.
+var Shell = Context{
+	Name:    "shell",
+	Tree:    true,
+	Shadows: []string{"left", "right", "h", "l"},
+	Bindings: []Bind{
+		{Keys: []string{"0"}, HelpKey: "0", Help: "detail pane"},
+		{Keys: []string{"]"}, HelpKey: "]", Help: "next problem", Hint: "] next problem"},
+		{Keys: []string{"["}, HelpKey: "[", Help: "previous problem"},
+		{Keys: []string{"y"}, HelpKey: "y", Help: "copy", Hint: "y copy"},
+		{Keys: []string{"right", "l"}, HelpKey: "→/l", Help: "expand (detail)"},
+		{Keys: []string{"left", "h"}, HelpKey: "←/h", Help: "collapse (detail)"},
+	},
+}
+
 // Contexts is every context the conflict test walks.
-var Contexts = []Context{Identity, TreeDummy, ConfigFields, ConfigTree, ConfigSearch, LayersTree, LayersSearch, LayersDetail, LayersJump, ScanList, ScanDetail, ScanCode, ScanDisclose}
+var Contexts = []Context{Identity, TreeDummy, ConfigFields, ConfigTree, ConfigSearch, LayersTree, LayersSearch, LayersDetail, LayersJump, ScanList, ScanDetail, ScanCode, ScanDisclose, Shell}
 
 // HintLine is the status-bar hint for a context. Tree contexts say fold.
 func HintLine(tree bool) string {

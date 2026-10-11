@@ -1,0 +1,40 @@
+model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86                                                           ✓ checks pass · headers-only
+╭▶[1] Model ─────────────────────── 5 notes ─╮╭[0] Overview ───────────────────────────────────────────────────────────────────────────────╮
+│ ▶ Overview                                 ││ tiny-qwen  org · revision 0123456789ab · qwen3_5 · safetensors·mlx · q4 g32                │
+│   Storage                         6.02 KiB ││                                                                                            │
+│   Memory                           ≥ 152 B ││ SIZE ON DISK   PARAMETERS     QUANT          LAYERS         EXPERTS        WEIGHTS         │
+│   Callouts                               5 ││ 6.02 KiB       ~86            q4 g32         2              4 · 2/tok      ≥ 152 B         │
+│   Files                                  4 ││ 4 files · 2 sh 25 tensors     mlx            ○1 lin · ●1 fu routed         weights only    │
+│                                            ││                                                                                            │
+│                                            ││ STORAGE  6.02 KiB on disk                                                                  │
+│                                            ││ █████████████████████████████████████████████████████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▒▒▒▒▒▒░░     │
+│                                            ││ █ plain bf16 65.8%   ▓ plain i64 21.1%   ▒ q4 packed 10.5%   ░ scales/biases 2.6%          │
+│                                            ││                                                                                            │
+│                                            ││ CALLOUTS  5 notable                                                                        │
+│                                            ││ [▲] language_model.model.embed_tokens.weight is 16 B, 10.5% of weights                     │
+│                                            ││ [▲] ple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% of weights                        │
+│                                            ││ [▲] ple.ple_embedding.ngram_heads_vocab_sizes is 16 B, 10.5% of weights                    │
+│                                            ││ [MTP] MTP layer present (16 B): used only for speculative decoding                         │
+│                                            ││ [MTP] vision tower present (8 B)                                                           │
+│                                            ││                                                                                            │
+│                                            ││ BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2× · per-lay │
+│                                            ││             ○● ●                                                                           │
+│                                            ││ routed exp  ░· ·  8 B  flat                                                                │
+│                                            ││ 4 B  <64K ▒ <4M ▓ <256M █  8 B  ○ linear  ● full  per-layer totals differ by 400.0%        │
+│                                            ││ flat  attention 4 B  flat · router 4 B  flat · shared exp 4 B  flat · norms ·              │
+╰────────────────────────────────────────────╯│ excludes ple 40 B · excludes hyper 32 B · other 4 B not in the grid                        │
+╭[2] Checks ───────────────────────── 6✓ 3· ─╮│ Memory  weights ≥ 152 B (0.0 GB)                                                           │
+│   ✓ 6 passed                               ││   text-only ≥ 128 B                                                                        │
+│   · 3 not run                              ││   unified memory (MLX): CPU and GPU share RAM, total is unchanged                          │
+╰────────────────────────────────────────────╯│   weights only; excludes KV cache, activations, runtime overhead                           │
+╭[3] Layers ───────────────────── 2 decoder ─╮│                                                                                            │
+│   embeddings                          20 B ││                                                                                            │
+│   n-gram table (PLE)                  36 B ││                                                                                            │
+│   decoder layers 2                    32 B ││                                                                                            │
+╰────────────────────────────────────────────╯│                                                                                            │
+╭[4] Config ────────────────────── 32 nodes ─╮│                                                                                            │
+│   model_type                       qwen3_5 ││                                                                                            │
+│   layers                          2 layers ││                                                                                            │
+│   hidden_size                        8 dim ││                                                                                            │
+╰────────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────────────────────────────╯
+↑↓ move · ⏎ detail · ? keys · 1-4 panels · tab next panel                                                            org/tiny-qwen · 0123456

@@ -48,6 +48,9 @@ func (t *Model) apply(o Options) {
 	if o.NoClipboard {
 		t.noClipboard = true
 	}
+	if o.Layout != "" {
+		t.layout = o.Layout
+	}
 	if o.Motion != nil {
 		t.motion = *o.Motion
 		if !t.motion {
@@ -115,6 +118,9 @@ func (t Model) frameKey() string {
 }
 
 func (t Model) renderFrame() string {
+	if t.shellOn() {
+		return t.renderShell()
+	}
 	if t.width < 60 || t.height < 16 {
 		return frame(t.tooSmall(), t.width, t.height)
 	}
@@ -158,7 +164,7 @@ func (t Model) overlay(body string) string {
 	switch {
 	case t.help:
 		return ui.Modal(ui.ModalSpec{
-			Title: ui.Chrome("KEYS  " + t.modeName()),
+			Title: ui.Chrome("KEYS  " + t.helpMode()),
 			Body:  ui.Chrome(t.helpBody()),
 			Width: min(w-4, 76),
 		}, w, h)
@@ -180,7 +186,17 @@ func chip(s string) string {
 	return ui.Paint(" "+s+" ", ui.TextPrimary.Hex(), ui.SurfaceSeg.Hex(), false)
 }
 
+func (t Model) helpMode() string {
+	if t.shellOn() {
+		return t.shellModeName()
+	}
+	return t.modeName()
+}
+
 func (t Model) helpBody() string {
+	if t.shellOn() {
+		return t.shellHelpBody()
+	}
 	side := "<->"
 	if ui.UTF8() {
 		side = "←→"
@@ -266,6 +282,9 @@ func (t Model) paletteBody() string {
 }
 
 func (t Model) commands() []ui.Match {
+	if t.shellOn() {
+		return t.shellCommands()
+	}
 	type cmd struct {
 		id, title, key, where string
 		enable                bool
@@ -353,6 +372,9 @@ func (t Model) commands() []ui.Match {
 }
 
 func (t *Model) runCommand(id string) tea.Cmd {
+	if t.shellOn() && t.runShellCommand(id) {
+		return nil
+	}
 	switch id {
 	case "id":
 		t.active = tabIdentity
@@ -623,6 +645,8 @@ func (t Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		t.focusSecondary = false
 	case z.ID == "pane:secondary":
 		t.focusSecondary = true
+	case strings.HasPrefix(z.ID, "sh:"):
+		return t.shellClick(z.ID, double), nil
 	case strings.HasPrefix(z.ID, "scan:"):
 		return t.scanClick(z.ID, double), nil
 	case strings.HasPrefix(z.ID, "row:scan:"):
@@ -648,6 +672,9 @@ func (t Model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 func (t Model) scrollAt(x, y, d int) tea.Model {
+	if t.shellOn() {
+		return t.shellScroll(x, y, d)
+	}
 	if y >= t.height-1 {
 		return t
 	}
@@ -734,8 +761,9 @@ func (t Model) fillZones() {
 }
 
 // addPaletteZones registers one zone per visible command row. The body
-// starts on screen row 2 (wordmark, rule). Inside the card the rows follow
-// the title, a blank line, and the three palette header lines.
+// starts on screen row 2 (wordmark, rule), or row 1 in the panels layout.
+// Inside the card the rows follow the title, a blank line, and the three
+// palette header lines.
 func (t Model) addPaletteZones() {
 	body := t.paletteBody()
 	items := ui.Rank(t.palette.query, t.commands())
@@ -752,9 +780,16 @@ func (t Model) addPaletteZones() {
 	// title, blank, "N of M", query, blank, then the rows.
 	const rowsAfterContent = 5
 	for i := 0; i < n; i++ {
-		y := 2 + lay.Y + lay.ContentTop + rowsAfterContent + i
+		y := t.bodyTop() + lay.Y + lay.ContentTop + rowsAfterContent + i
 		t.zones.Add(fmt.Sprintf("palette:row:%d", i), ui.Rect{X: lay.X, Y: y, W: lay.W, H: 1})
 	}
+}
+
+func (t Model) bodyTop() int {
+	if t.shellOn() {
+		return 1
+	}
+	return 2
 }
 
 func (t Model) configClick(id string, double bool) tea.Model {

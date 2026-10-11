@@ -144,6 +144,23 @@ instead of opening the TUI. `--json` prints JSON instead of opening the TUI.
 `LANG`, when `LC_ALL` is unset) is set and is not UTF-8 uses ASCII glyphs;
 an empty locale stays Unicode.
 
+### Layout (experimental)
+
+`--layout tabs` is the default. `--layout panels` opens the v3 shell:
+a header line, four stacked side panels (`[1] Model`, `[2] Checks`,
+`[3] Layers`, `[4] Config`), a detail pane `[0]` that shows the focused
+panel's selection, and a key line for the focused panel. It needs at least
+84 columns and 16 rows; below that it falls back to the tab layout, and
+while the model is still loading it shows the loading view.
+
+`1`-`4` focus a side panel, `0` or `enter` focuses the detail pane, and
+`tab` / `shift+tab` cycle. `esc` returns from the detail pane. `up` / `down`
+or `j` / `k` move or scroll. `]` / `[` jump to the next or previous warning
+or failure and focus Checks. `y` copies, `?` lists the keys for the focused
+panel, `:` opens the command palette, `m` toggles the mouse, and `q` quits.
+Click a panel to focus it and a row to select it. The panels show today's
+screens as their detail content for now.
+
 ### Path or repo
 
 `--path` always reads a directory and never consults the hub. `--repo`

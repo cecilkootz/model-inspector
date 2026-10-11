@@ -83,6 +83,8 @@ type Model struct {
 	cfg            *configState
 	lay            *layersState
 	scn            *scanView
+	layout         string
+	sh             *shellState
 }
 
 type frameCache struct {
@@ -98,11 +100,13 @@ type palState struct {
 
 // Options configures a TUI session. A nil Mouse keeps the default
 // (on, unless MODEL_INSPECTOR_MOUSE=0). NoClipboard turns OSC 52 off
-// for the session; MODEL_INSPECTOR_NO_OSC52=1 does the same.
+// for the session; MODEL_INSPECTOR_NO_OSC52=1 does the same. Layout is
+// LayoutTabs (the default) or LayoutPanels.
 type Options struct {
 	Mouse       *bool
 	Motion      *bool
 	NoClipboard bool
+	Layout      string
 	Now         func() time.Time
 }
 
@@ -143,7 +147,7 @@ func New(m *model.Model, res scan.Result) Model {
 		mouse: mouseDefault(), noClipboard: osc52EnvOff(), motion: motion, motionFrame: frame,
 		ratio: 55, derived: &d, cache: &frameCache{}, zones: &ui.Zones{},
 		now: time.Now, cfg: newConfigState(), lay: newLayersState(),
-		scn: &scanView{},
+		scn: &scanView{}, sh: newShellState(), layout: LayoutTabs,
 	}
 	t.identityVP = viewport.New(t.width, t.bodyHeight())
 	t.configVP = viewport.New(t.width, t.bodyHeight())
@@ -163,6 +167,9 @@ func (t Model) Init() tea.Cmd {
 }
 
 func (t Model) bodyHeight() int {
+	if t.shellOn() {
+		return t.shellBodyHeight()
+	}
 	if h := t.height - 3; h > 1 {
 		return h
 	}
@@ -174,7 +181,7 @@ func (t *Model) resize() {
 	for _, vp := range []*viewport.Model{&t.identityVP, &t.configVP} {
 		vp.Width, vp.Height = t.width, h
 	}
-	if t.active == tabIdentity {
+	if t.active == tabIdentity && !t.shellOn() {
 		t.identityVP.SetContent(t.identityBody())
 	}
 	if t.cache != nil {
@@ -267,6 +274,9 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return t, tea.Quit
 			}
 			return t, nil
+		}
+		if t.shellOn() {
+			return t.updateShellKey(msg)
 		}
 		switch msg.String() {
 		case "q":
@@ -476,6 +486,9 @@ func (t Model) View() string {
 		return fitLine("model-inspector   1 Identity   2 Config   3 Layers   4 Scan", 80)
 	}
 	key := t.frameKey()
+	if t.shellOn() {
+		key += t.sh.framePart()
+	}
 	if t.cache != nil && t.cache.key == key && t.cache.frame != "" {
 		return t.cache.frame
 	}

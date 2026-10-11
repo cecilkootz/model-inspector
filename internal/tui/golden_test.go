@@ -194,7 +194,7 @@ func renderGolden(t *testing.T, m *model.Model, w, h int, profile string, keys [
 
 // renderPrepared draws a frame from an already-built scan result. Durations
 // are zeroed so a slow machine does not change "<1 ms".
-func renderPrepared(t *testing.T, m *model.Model, res scan.Result, w, h int, profile string, keys []string) string {
+func renderPrepared(t *testing.T, m *model.Model, res scan.Result, w, h int, profile string, keys []string, opts ...Options) string {
 	t.Helper()
 	prevNC, hadNC := os.LookupEnv("NO_COLOR")
 	t.Cleanup(func() {
@@ -236,6 +236,9 @@ func renderPrepared(t *testing.T, m *model.Model, res scan.Result, w, h int, pro
 		res.Checks[i].Duration = 0
 	}
 	ui := New(m, res)
+	for _, o := range opts {
+		ui.apply(o)
+	}
 	var x tea.Model = ui
 	x, _ = x.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	for _, k := range keys {
