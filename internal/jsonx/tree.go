@@ -216,7 +216,7 @@ func tokenBoundary(raw []byte, i int) bool {
 	if c >= '0' && c <= '9' {
 		return false
 	}
-	if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || c == '.' {
+	if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || c == '.' || c == '-' || c == '+' {
 		return false
 	}
 	return true
