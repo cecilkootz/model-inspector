@@ -20,10 +20,6 @@ func TestTokenContrast(t *testing.T) {
 		bgs := []string{canvases[theme], Surface.Hex(), Selection.Hex()}
 		for _, tok := range []Token{Text1, Text2, Text3, AccentTok, WarnTok, FailTok, JSONKey, JSONString, JSONNumber, JSONBool, JSONNull} {
 			for _, bg := range bgs {
-				// ramp-5 light on selection is 4.17:1; the palette owner decides.
-				if theme == "light" && bg == Selection.Hex() && (tok == JSONNumber || tok == JSONBool) {
-					continue
-				}
 				if c := Contrast(tok.Hex(), bg); c < 4.5 {
 					t.Errorf("%s %s on %s = %.2f, want >= 4.5", theme, tok.Hex(), bg, c)
 				}

@@ -32,9 +32,8 @@ func (t Token) ansi256Light() string {
 
 // Color is the lipgloss adaptive colour for this token.
 func (t Token) Color() lipgloss.TerminalColor {
-	ansi := t.ANSI
-	if ansi == "" {
-		ansi = "7"
+	if t.ANSI == "" && lipgloss.ColorProfile() == termenv.ANSI {
+		return lipgloss.NoColor{}
 	}
 	light := t.LightHex
 	if light == "" {
@@ -44,12 +43,12 @@ func (t Token) Color() lipgloss.TerminalColor {
 		Dark: lipgloss.CompleteColor{
 			TrueColor: t.DarkHex,
 			ANSI256:   t.ANSI256,
-			ANSI:      ansi,
+			ANSI:      t.ANSI,
 		},
 		Light: lipgloss.CompleteColor{
 			TrueColor: light,
 			ANSI256:   t.ansi256Light(),
-			ANSI:      ansi,
+			ANSI:      t.ANSI,
 		},
 	}
 }
@@ -80,7 +79,7 @@ var (
 	Ramp2     = Token{DarkHex: "#2C4120", LightHex: "#C6E2A4", ANSI256: "22", ANSI: "2"}
 	Ramp3     = Token{DarkHex: "#46682A", LightHex: "#93C463", ANSI256: "64", ANSI: "2"}
 	Ramp4     = Token{DarkHex: "#6E9F3C", LightHex: "#5E9A2C", ANSI256: "70", ANSI: "10"}
-	Ramp5     = Token{DarkHex: "#A8DC6E", LightHex: "#3F7D12", ANSI256: "149", ANSI: "10"}
+	Ramp5     = Token{DarkHex: "#A8DC6E", LightHex: "#3C7711", ANSI256: "149", ANSI: "10"}
 )
 
 // Legacy names, kept so call sites do not change.
