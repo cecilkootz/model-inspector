@@ -18,11 +18,9 @@ env:
 
 jobs:
   test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    # macOS jobs are off to save Actions minutes. Set the repository variable
+    # LINUX_RUNNER (JSON, e.g. ["self-hosted","linux"]) to use a self-hosted runner.
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 20
     steps:
       # Actions are pinned to commit SHAs; the tag is in the trailing comment.
@@ -41,11 +39,7 @@ jobs:
         run: env -u NO_COLOR make test
 
   fuzz:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
