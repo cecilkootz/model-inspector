@@ -464,15 +464,14 @@ const (
 
 // StatusPill is the status mark. Only warn and fail get a fill; pass and
 // not-run stay quiet text-3 glyphs so problems are the only loud thing on
-// screen. warn-bg and fail-bg tokens do not exist yet, so the fill is the
-// card surface under the status foreground.
+// screen.
 func StatusPill(k PillKind) string {
 	gl := G()
 	switch k {
 	case PillWarn:
-		return statusFill("WARN", Warn)
+		return statusFill("WARN", WarnTok, WarnBG)
 	case PillFail:
-		return statusFill("FAIL", Fail)
+		return statusFill("FAIL", FailTok, FailBG)
 	case PillNR:
 		g := gl.NR
 		if UTF8() {
@@ -484,9 +483,9 @@ func StatusPill(k PillKind) string {
 	}
 }
 
-func statusFill(label string, fg Token) string {
+func statusFill(label string, fg, bg Token) string {
 	if ColorOff() {
 		return "[" + label + "]"
 	}
-	return PaintToken(" "+label+" ", fg, &SurfaceCard, true)
+	return PaintToken(" "+label+" ", fg, &bg, true)
 }

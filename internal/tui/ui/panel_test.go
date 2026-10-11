@@ -424,6 +424,9 @@ func TestStatusPill(t *testing.T) {
 	if w, f := StatusPill(PillWarn), StatusPill(PillFail); !strings.Contains(w, "\x1b[") || !strings.Contains(f, "\x1b[") {
 		t.Fatalf("warn/fail unstyled: %q %q", w, f)
 	}
+	if w, f := StatusPill(PillWarn), StatusPill(PillFail); w != PaintToken(" WARN ", WarnTok, &WarnBG, true) || f != PaintToken(" FAIL ", FailTok, &FailBG, true) {
+		t.Fatalf("warn/fail fills are not warn-bg/fail-bg: %q %q", w, f)
+	}
 	for _, k := range []PillKind{PillPass, PillNR} {
 		if strings.Contains(StatusPill(k), "48;") {
 			t.Errorf("pill %d has a fill", k)
