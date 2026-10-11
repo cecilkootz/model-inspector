@@ -1,30 +1,30 @@
 model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params                                                    ✓ checks pass · headers-only
 ╭[1] Model ──────────────────────── 5 notes ─╮╭[0] Shard headers parse ──────────────────────────────────────────────────────────────── ✓ ─╮
-│   Overview                                 ││ DETAIL  selected check                                                                     │
-│   Storage                         6.02 KiB ││ Shard headers parse   ✓ PASS  <1 ms                                                        │
-│   Callouts                               5 ││ 2/2 headers read (length + JSON)                                                           │
-╰────────────────────────────────────────────╯│                                                                                            │
-╭▶[2] Checks ──────────────────────── 6✓ 3· ─╮│ CHECKED                                                                                    │
-│ ▶ ✓ Shard headers parse              <1 ms ││ ################ 2/2 headers read (length + JSON)                                          │
-│   ✓ Files present                    <1 ms ││                                                                                            │
-│   ✓ Offsets & sizes                  <1 ms ││ RULE                                                                                       │
-│   ✓ Index matches headers            <1 ms ││ 8-byte length ≤ 100 MiB and ≤ file size; header is one JSON object, no duplicate keys,     │
-│   ✓ Code-executing formats           <1 ms ││ each tensor has dtype, shape and data_offsets                                              │
-│   · Code & pickle contents               — ││                                                                                            │
-│   · Hashes vs revision                   — ││ PROBLEMS  none                                                                             │
+│   Overview                                 ││ 2/2 headers read (length + JSON)                                                           │
+│   Storage                         6.02 KiB ││                                                                                            │
+│   Callouts                               5 ││ PROBLEMS                                                                                   │
+╰────────────────────────────────────────────╯│ none                                                                                       │
+╭▶[2] Checks ──────────────────────── 6✓ 3· ─╮│                                                                                            │
+│ ▶ ✓ Shard headers parse              <1 ms ││ RULE                                                                                       │
+│   ✓ Files present                    <1 ms ││ 8-byte length ≤ 100 MiB and ≤ file size; header is one JSON object, no duplicate keys,     │
+│   ✓ Offsets & sizes                  <1 ms ││ each tensor has dtype, shape and data_offsets                                              │
+│   ✓ Index matches headers            <1 ms ││                                                                                            │
+│   ✓ Code-executing formats           <1 ms ││ WHY IT MATTERS                                                                             │
+│   · Code & pickle contents               — ││ A header that is not valid JSON, or a length that does not fit the file, means that shard  │
+│   · Hashes vs revision                   — ││ cannot be mapped.                                                                          │
 │   ✓ Config vs tensor shapes          <1 ms ││                                                                                            │
-│   · Chat template & tokenizer            — ││ WHY IT MATTERS                                                                             │
-│                                            ││ A header that is not valid JSON, or a length that does not fit the file, means that        │
-│                                            ││ shard cannot be mapped.                                                                    │
+│   · Chat template & tokenizer            — ││ DOES NOT PROVE                                                                             │
+│                                            ││ That tensor values are sensible or finite.                                                 │
 │                                            ││                                                                                            │
-│                                            ││ DOES NOT PROVE  that tensor values are sensible or finite                                  │
-│                                            ││                                                                                            │
-│                                            ││                                                                                            │
-│                                            ││  ▸ Not covered by any check (5)                                                         i  │
-│                                            ││                                                                                            │
-│                                            ││                                                                                            │
-│                                            ││                                                                                            │
-│                                            ││                                                                                            │
+│                                            ││ NOT COVERED BY ANY CHECK (5)                                                               │
+│                                            ││ Structural integrity checks only: file completeness, header well-formedness and internal   │
+│                                            ││ consistency. Not a malware or behavior scan; does not establish what the weights do or who │
+│                                            ││ produced them.                                                                             │
+│                                            ││ ·  whether the weights are benign, unmodified or what the publisher intended               │
+│                                            ││ ·  what the model outputs or how it behaves                                                │
+│                                            ││ ·  tokenizer, chat template, license, or training-data provenance                          │
+│                                            ││ ·  revision 0123456 is the cache ref; file contents were not hashed                        │
+│                                            ││ ·  This is not a malware or behavior scan.                                                 │
 │                                            ││                                                                                            │
 ╰────────────────────────────────────────────╯│                                                                                            │
 ╭[3] Layers ───────────────────── 2 decoder ─╮│                                                                                            │

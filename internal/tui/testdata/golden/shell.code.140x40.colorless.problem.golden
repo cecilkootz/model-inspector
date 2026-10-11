@@ -1,30 +1,30 @@
 model-inspector · code-exec · 400 B · bf16 · ~2 params                                                               ! 2 warn · headers-only
 ╭[1] Model ───────────────────────── 1 note ─╮╭[0] Code-executing formats ──────────────────────────────────────────────────────── [WARN] ─╮
-│   Overview                                 ││ DETAIL  selected check                                                                     │
-│   Storage                            400 B ││ Code-executing formats   ! WARN  <1 ms                                                     │
-│   Callouts                               1 ││ 3 findings (code-exec formats or auto_map)                                                 │
-╰────────────────────────────────────────────╯│                                                                                            │
-╭▶[2] Checks ───────────────────── 4✓ 2! 3· ─╮│ CHECKED                                                                                    │
-│   ✓ Shard headers parse              <1 ms ││ ################ 2 files · 1 auto_map entries                                              │
+│   Overview                                 ││ 3 findings (code-exec formats or auto_map)                                                 │
+│   Storage                            400 B ││                                                                                            │
+│   Callouts                               1 ││ PROBLEMS                                                                                   │
+╰────────────────────────────────────────────╯│ ! config.json auto_map AutoModelForCausalLM -> modeling_demo.DemoForCausalLM               │
+╭▶[2] Checks ───────────────────── 4✓ 2! 3· ─╮│ ! modeling_demo.py                                                                         │
+│   ✓ Shard headers parse              <1 ms ││ ! weights.bin                                                                              │
 │   ✓ Files present                    <1 ms ││                                                                                            │
 │   ✓ Offsets & sizes                  <1 ms ││ RULE                                                                                       │
 │   ✓ Index matches headers            <1 ms ││ file names with code-executing suffixes (.bin .pt .pth .pkl .ckpt .h5 .keras .nemo .dill   │
 │ ▶ ! Code-executing formats           <1 ms ││ .mar .py, .bin.gz …) and top-level auto_map in config files; nothing opened                │
 │   ! Code & pickle contents           <1 ms ││                                                                                            │
-│   · Hashes vs revision                   — ││ PROBLEMS                                                                                   │
-│   · Config vs tensor shapes              — ││ config.json auto_map AutoModelForCausalLM -> modeling_demo.DemoForCausalLM                 │
-│   · Chat template & tokenizer            — ││ modeling_demo.py                                                                           │
-│                                            ││ weights.bin                                                                                │
-│                                            ││                                                                                            │
-│                                            ││ WHY IT MATTERS                                                                             │
-│                                            ││ These formats can run code when some other tool loads the model. This check matches file   │
-│                                            ││ names and reads top-level auto_map in config files. It does not import or execute          │
+│   · Hashes vs revision                   — ││ WHY IT MATTERS                                                                             │
+│   · Config vs tensor shapes              — ││ These formats can run code when some other tool loads the model. This check matches file   │
+│   · Chat template & tokenizer            — ││ names and reads top-level auto_map in config files. It does not import or execute          │
 │                                            ││ anything.                                                                                  │
 │                                            ││                                                                                            │
-│                                            ││ DOES NOT PROVE  that other files carry no risk, or that flagged files are harmful          │
+│                                            ││ DOES NOT PROVE                                                                             │
+│                                            ││ That other files carry no risk, or that flagged files are harmful.                         │
+│                                            ││                                                                                            │
+│                                            ││ Structural checks only. Not a malware or behavior scan.                                    │
 │                                            ││                                                                                            │
 │                                            ││                                                                                            │
-│                                            ││  ▸ Not covered by any check (5)                                                         i  │
+│                                            ││                                                                                            │
+│                                            ││                                                                                            │
+│                                            ││                                                                                            │
 │                                            ││                                                                                            │
 │                                            ││                                                                                            │
 │                                            ││                                                                                            │
