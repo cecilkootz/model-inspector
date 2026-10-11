@@ -37,4 +37,4 @@ model-inspector · code-exec · 400 B · bf16 · ~2 params                      
 ╭[4] Config ─────────────────────── 4 nodes ─╮│                                                                                            │
 │   model_type                          demo ││                                                                                            │
 ╰────────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────────────────────────────╯
-↑↓ move · ⏎ detail · ? keys · ] next problem · y copy · 1-4 panels · tab next panel                                  org/code-exec · 89abcde
+↑↓ move · ⏎ detail · ? keys · ] next problem · y copy · / filter · 1-4 panels · tab next panel                       org/code-exec · 89abcde

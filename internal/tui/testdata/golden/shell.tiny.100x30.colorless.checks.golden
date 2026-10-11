@@ -27,4 +27,4 @@ model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params            ✓ 
 │   layers              2 layers ││ ·  what the model outputs or how it behaves                    │
 │   context              128 tok ││ ·  tokenizer, chat template, license, or training-data         │
 ╰────────────────────────────────╯╰────────────────────────────────────────────────────────────────╯
-↑↓ move · ⏎ detail · ? keys · ] next problem · y copy · 1-4 panels           org/tiny-qwen · 0123456
+↑↓ move · ⏎ detail · ? keys · ] next problem · y copy · / filter             org/tiny-qwen · 0123456

@@ -1,0 +1,40 @@
+model-inspector · qwen-shape · 24.20 KiB · u8 · ~61.1K params                                                        ✗ 1 fail · headers-only
+╭[1] Model ───────────────────────── 1 note ─╮╭[0] decoder ──────────────────────────────────────────────────────────────────── 58.48 KiB ─╮
+│   Overview                                 ││ BYTES PER LAYER                                                                            │
+│   Storage                        24.20 KiB ││             ○○○●○○○●○○○●○○○●○○○●○○○●○○○●○○○●○○○●○○○●○○○●○○○● ●                             │
+│   Callouts                               1 ││ attention   ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ░  +18% ●                     │
+╰────────────────────────────────────────────╯│ router      ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ░  64 B  flat                 │
+╭[2] Checks ────────────────────── 4✓ 1✗ 4· ─╮│ shared exp  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ░  64 B  flat                 │
+│   ✗ Offsets & sizes                  <1 ms ││ routed exp  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ░  64 B  flat                 │
+│   ✓ 4 passed                               ││ norms       ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ░  +10% ● 10 B-11 B           │
+│   · 4 not run                              ││ 8 B  <64K ▒ <4M ▓ <256M █  2.0 KiB  ○ linear  ● full  log2                                 │
+╰────────────────────────────────────────────╯│ per-layer totals differ by 15.1%                                                           │
+╭▶[3] Layers ──────────────────── filter: 1 ─╮│ 48 layers · 58.48 KiB · 59.9K params · 36 ○ · 12 ●                                         │
+│ ▶ ▾ decoder ×48                  58.48 KiB ││                                                                                            │
+│     ○ layer 1                     1.17 KiB ││ TENSORS                                                                                    │
+│     ○ layer 10                    1.17 KiB ││   input_layernorm.weight                                                      u8 ×48 504 B │
+│     ● layer 11                    1.35 KiB ││   mlp.experts.0.down_proj.weight                                           u8 ×48 3.00 KiB │
+│     ○ layer 12                    1.17 KiB ││   mlp.gate.weight                                                          u8 ×48 3.00 KiB │
+│     ○ layer 13                    1.17 KiB ││   mlp.shared_expert.up_proj.weight                                         u8 ×48 3.00 KiB │
+│     ○ layer 14                    1.17 KiB ││   self_attn.q_proj.weight                                                 u8 ×48 48.98 KiB │
+│     ● layer 15                    1.35 KiB ││                                                                                            │
+│     ○ layer 16                    1.17 KiB ││                                                                                            │
+│     ○ layer 17                    1.17 KiB ││                                                                                            │
+│     ○ layer 18                    1.17 KiB ││                                                                                            │
+│     ● layer 19                    1.35 KiB ││                                                                                            │
+│     ○ layer 21                    1.17 KiB ││                                                                                            │
+│     ● layer 31                    1.35 KiB ││                                                                                            │
+│     ○ layer 41                    1.17 KiB ││                                                                                            │
+│                                            ││                                                                                            │
+│                                            ││                                                                                            │
+│                                            ││                                                                                            │
+│                                            ││                                                                                            │
+│                                            ││                                                                                            │
+│                                            ││                                                                                            │
+╰────────────────────────────────────────────╯│                                                                                            │
+╭[4] Config ─────────────────────── 8 nodes ─╮│                                                                                            │
+│   model_type                    qwen3_next ││                                                                                            │
+│   layers                         48 layers ││                                                                                            │
+│   hidden_size                        8 dim ││                                                                                            │
+╰────────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────────────────────────────╯
+↑↓ move · ⏎ fold · 0 detail · ? keys · y copy · / filter · esc clear filter · 1-4 panels · tab next panel           org/qwen-shape · fedcba9

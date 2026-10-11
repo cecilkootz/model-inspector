@@ -213,6 +213,7 @@ var Shell = Context{
 	Shadows: []string{"left", "right", "h", "l"},
 	Bindings: []Bind{
 		{Keys: []string{"0"}, HelpKey: "0", Help: "detail pane"},
+		{Keys: []string{"/"}, HelpKey: "/", Help: "filter list", Hint: "/ filter"},
 		{Keys: []string{"]"}, HelpKey: "]", Help: "next problem", Hint: "] next problem"},
 		{Keys: []string{"["}, HelpKey: "[", Help: "previous problem"},
 		{Keys: []string{"y"}, HelpKey: "y", Help: "copy", Hint: "y copy"},
