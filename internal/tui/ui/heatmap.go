@@ -359,7 +359,7 @@ func heatCell(v int64, cw, lo, hi int, gl Glyphs, dim bool) string {
 	if ColorOff() || Profile() == "ansi16" {
 		ch := gl.Heat[bucket(v)]
 		if Profile() == "ansi16" {
-			cols := []string{"4", "5", "13", "11"}
+			cols := []string{Ramp2.ANSI, Ramp3.ANSI, Ramp4.ANSI, Ramp5.ANSI}
 			ch = paintANSI(ch, cols[bucket(v)])
 		}
 		if cw == 2 {

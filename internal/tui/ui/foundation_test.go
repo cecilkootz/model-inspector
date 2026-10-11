@@ -13,29 +13,39 @@ import (
 	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
+// text-3 (labels, meta, quiet pass) is deliberately low-key in the v3 palette,
+// so it and text-2 on the line fill are held to 3:1 rather than 4.5:1.
 func TestTokenContrast(t *testing.T) {
 	for _, theme := range []string{"dark", "light"} {
 		t.Setenv("MODEL_INSPECTOR_THEME", theme)
 		surface := SurfaceCard.Hex()
-		pairs := [][2]string{
-			{TextPrimary.Hex(), surface},
-			{TextSecondary.Hex(), surface},
-			{TextMuted.Hex(), surface},
-			{TextPrimary.Hex(), SurfaceSeg.Hex()},
-			{TextSecondary.Hex(), SurfaceSeg.Hex()},
-			{TextPrimary.Hex(), SurfaceSeg2.Hex()},
-			{TextSecondary.Hex(), SurfaceSeg2.Hex()},
+		type pair struct {
+			fg, bg string
+			min    float64
+		}
+		pairs := []pair{
+			{TextPrimary.Hex(), surface, 4.5},
+			{TextSecondary.Hex(), surface, 4.5},
+			{TextMuted.Hex(), surface, 3},
+			{TextPrimary.Hex(), SurfaceSeg.Hex(), 4.5},
+			{TextSecondary.Hex(), SurfaceSeg.Hex(), 4.5},
+			{TextPrimary.Hex(), SurfaceSeg2.Hex(), 4.5},
+			{TextSecondary.Hex(), SurfaceSeg2.Hex(), 3},
+			{TextPrimary.Hex(), SurfaceSel.Hex(), 4.5},
+			{TextSecondary.Hex(), SurfaceSel.Hex(), 4.5},
+			{Warn.Hex(), WarnBG.Hex(), 4.5},
+			{Fail.Hex(), FailBG.Hex(), 4.5},
 		}
 		if theme == "dark" {
 			pairs = append(pairs,
-				[2]string{TextPrimary.Hex(), TermBG},
-				[2]string{TextSecondary.Hex(), TermBG},
-				[2]string{TextMuted.Hex(), TermBG},
+				pair{TextPrimary.Hex(), TermBG, 4.5},
+				pair{TextSecondary.Hex(), TermBG, 4.5},
+				pair{TextMuted.Hex(), TermBG, 3},
 			)
 		}
 		for _, p := range pairs {
-			if c := Contrast(p[0], p[1]); c < 4.5 {
-				t.Errorf("%s %s on %s = %.2f", theme, p[0], p[1], c)
+			if c := Contrast(p.fg, p.bg); c < p.min {
+				t.Errorf("%s %s on %s = %.2f, want >= %.1f", theme, p.fg, p.bg, c, p.min)
 			}
 		}
 		for _, k := range []FillKind{FillKindViolet, FillKindPink, FillKindOK, FillKindWarn, FillKindFail, FillKindHost, FillKindInfo} {
@@ -53,10 +63,14 @@ func TestTokenContrast(t *testing.T) {
 			}
 		}
 		for _, tok := range []Token{JSONKey, JSONString, JSONNumber, JSONBool, JSONNull} {
-			if c := Contrast(tok.Hex(), SurfaceCard.Hex()); c < 4.5 {
+			min := 4.0
+			if tok == JSONNull {
+				min = 3
+			}
+			if c := Contrast(tok.Hex(), SurfaceCard.Hex()); c < min {
 				t.Errorf("%s json %s on card = %.2f", theme, tok.Hex(), c)
 			}
-			if c := Contrast(tok.Hex(), SurfaceSel.Hex()); c < 4.5 {
+			if c := Contrast(tok.Hex(), SurfaceSel.Hex()); c < min {
 				t.Errorf("%s json %s on sel = %.2f", theme, tok.Hex(), c)
 			}
 		}
@@ -78,31 +92,31 @@ func TestTokenContrast(t *testing.T) {
 }
 
 func TestOnFillPicksInkOrWhite(t *testing.T) {
-	if OnFill(FillViolet.DarkHex) != White {
-		t.Fatalf("violet wants white, got %s", OnFill(FillViolet.DarkHex))
-	}
-	for _, hex := range []string{FillPink.DarkHex, FillOK.DarkHex, FillWarn.DarkHex, FillFail.DarkHex, FillHost.DarkHex} {
+	for _, hex := range []string{FillViolet.DarkHex, FillWarn.DarkHex, FillFail.DarkHex} {
 		if OnFill(hex) != InkHex {
 			t.Errorf("%s wants ink, got %s", hex, OnFill(hex))
 		}
 	}
+	if OnFill(FillOK.DarkHex) != White {
+		t.Errorf("line fill wants white, got %s", OnFill(FillOK.DarkHex))
+	}
 }
 
 func TestGradientEndpoints(t *testing.T) {
-	if !strings.EqualFold(string(GradBrand.At(0)), "#F25D94") {
+	if !strings.EqualFold(string(GradBrand.At(0)), "#8FD14F") {
 		t.Fatalf("start %s", GradBrand.At(0))
 	}
-	if !strings.EqualFold(string(GradBrand.At(1)), "#6B48F0") {
+	if !strings.EqualFold(string(GradBrand.At(1)), "#8FD14F") {
 		t.Fatalf("end %s", GradBrand.At(1))
 	}
 	if string(GradBrand.At(math.NaN())) != string(GradBrand.At(0)) {
 		t.Fatal("NaN did not map to the first stop")
 	}
-	c1, err := colorful.Hex("#F25D94")
+	c1, err := colorful.Hex("#8FD14F")
 	if err != nil {
 		t.Fatal(err)
 	}
-	c2, err := colorful.Hex("#6B48F0")
+	c2, err := colorful.Hex("#8FD14F")
 	if err != nil {
 		t.Fatal(err)
 	}

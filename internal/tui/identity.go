@@ -219,7 +219,7 @@ func tileSpecs(m *model.Model, d derived) []ui.TileSpec {
 		}
 		expertSub = "routed"
 	}
-	edge := func(k int) string { return string(ui.GradBrand.At(float64(k) / 5)) }
+	edge := func(int) string { return ui.RuleDim.Hex() }
 	return []ui.TileSpec{
 		{Label: ui.L("SIZE ON DISK"), Value: sanitize.Program(model.HumanBytes(m.TotalSize)), Sub: sanitize.Program(files), Edge: edge(0)},
 		{Label: ui.L("PARAMETERS"), Value: sanitize.Program(params), Sub: sanitize.Program(fmt.Sprintf("%s tensors", model.Comma(int64(len(m.Tensors))))), Edge: edge(1)},

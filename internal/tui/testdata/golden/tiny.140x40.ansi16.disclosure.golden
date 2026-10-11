@@ -1,10 +1,8 @@
-[1;97;45m model-inspector [0m  [94m 1 Identity [0m [94m 2 Config [0m [94m 3 Layers [0m [1;97;45m 4 Scan ✓ [0m                                            ? keys   : commands   m mouse on
-[94m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
-[1;97mScan › Code & pickles[0m  [36m[ names only ][0m                                                                                                       
+[1;30;102m model-inspector [0m  [37m 1 Identity [0m [37m 2 Config [0m [37m 3 Layers [0m [1;30;102m 4 Scan ✓ [0m                                            ? keys   : commands   m mouse on
+[92m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[1;95mScan › Code & pickles[0m  [90m[ names only ][0m                                                                                                       
                                                                                                                                             
-[94m– Nothing flagged. No code-executing formats or auto_map entries were found by name.[0m                                                        
-                                                                                                                                            
-                                                                                                                                            
+[37m– Nothing flagged. No code-executing formats or auto_map entries were found by name.[0m                                                        
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
@@ -37,4 +35,6 @@
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
-[1;30m CODE [0m[97m /model [0m[37m ↑↓ · ⏎ details · c code [0m                                 [37m safetensors·mlx [0m[97m 6.07 KiB [0m[1;97m q4 g32 [0m[1;30m ✓ structure 6/9 [0m[37m ◇ headers-only [0m
+                                                                                                                                            
+                                                                                                                                            
+[1;30m CODE [0m[97m /model [0m[37m ↑↓ · ⏎ details · c code [0m                                 [37m safetensors·mlx [0m[97m 6.07 KiB [0m[1;97m q4 g32 [0m[1;97m ✓ structure 6/9 [0m[37m ◇ headers-only [0m

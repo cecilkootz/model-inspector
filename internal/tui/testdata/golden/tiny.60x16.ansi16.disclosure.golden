@@ -1,6 +1,6 @@
  model-inspector    1 Identity   2 Config   3 Layers   4 Sc…
-[94m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
-[1;97mScan › Code & pickles[0m  [36m[ names only ][0m                       
+[92m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[1;95mScan › Code & pickles[0m  [90m[ names only ][0m                       
                                                             
 – Nothing flagged. No code-executing formats or auto_map ent
                                                             
@@ -13,4 +13,4 @@
                                                             
                                                             
                                                             
-[1;30m CODE [0m[37m ↑↓ · ⏎ details · c code [0m      [1;30m ✓ 6/9 [0m[37m ◇ headers-only [0m
+[1;30m CODE [0m[37m ↑↓ · ⏎ details · c code [0m      [1;97m ✓ 6/9 [0m[37m ◇ headers-only [0m

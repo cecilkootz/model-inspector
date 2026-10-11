@@ -115,13 +115,13 @@ func TestWidgetsRender(t *testing.T) {
 			if len(rows) != 2 || legend == "" {
 				t.Fatalf("stacked %d %q", len(rows), legend)
 			}
-			tile := Tile(TileSpec{Label: sanitize.From("SIZE"), Value: sanitize.From("1 GiB"), Sub: sanitize.From("2 files"), Edge: "#6B48F0"}, 16, 3)
+			tile := Tile(TileSpec{Label: sanitize.From("SIZE"), Value: sanitize.From("1 GiB"), Sub: sanitize.From("2 files"), Edge: "#4A505C"}, 16, 3)
 			if len(tile) < 3 {
 				t.Fatalf("tile %d", len(tile))
 			}
 			band := TileRow([]TileSpec{
-				{Label: sanitize.From("A"), Value: sanitize.From("1"), Sub: sanitize.From("a"), Edge: "#6B48F0"},
-				{Label: sanitize.From("B"), Value: sanitize.From("2"), Sub: sanitize.From("b"), Edge: "#A594FF"},
+				{Label: sanitize.From("A"), Value: sanitize.From("1"), Sub: sanitize.From("a"), Edge: "#4A505C"},
+				{Label: sanitize.From("B"), Value: sanitize.From("2"), Sub: sanitize.From("b"), Edge: "#8FD14F"},
 			}, 40, 3)
 			if len(band) == 0 {
 				t.Fatal("tile row")

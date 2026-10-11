@@ -58,12 +58,21 @@ func paintHex(s, fg, bg string, bold bool) string {
 	}
 	st := lipgloss.NewStyle().Bold(bold)
 	if fg != "" {
-		st = st.Foreground(lipgloss.Color(fg))
+		st = st.Foreground(lipgloss.Color(hexFor(fg)))
 	}
 	if bg != "" {
-		st = st.Background(lipgloss.Color(bg))
+		st = st.Background(lipgloss.Color(hexFor(bg)))
 	}
 	return st.Render(s)
+}
+
+func hexFor(hex string) string {
+	if Profile() == "ansi256" {
+		if n, ok := ansi256Of(hex); ok {
+			return n
+		}
+	}
+	return hex
 }
 
 // Pill is a filled label. Colorless output is [label].
