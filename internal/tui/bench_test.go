@@ -23,7 +23,7 @@ func TestViewUnder50ms(t *testing.T) {
 	sized, _ := ui.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	start := time.Now()
 	view := sized.View()
-	if d := time.Since(start); d > raceScale*50*time.Millisecond {
+	if d := time.Since(start); d > budget(50*time.Millisecond) {
 		t.Fatalf("View took %s", d)
 	}
 	if view == "" {
@@ -119,3 +119,6 @@ func benchModel(tb testing.TB) *model.Model {
 	}
 	return m
 }
+
+// budget is a native-speed perf limit, widened under the race detector.
+func budget(d time.Duration) time.Duration { return raceScale * d }

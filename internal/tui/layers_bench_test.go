@@ -109,25 +109,25 @@ func TestLayersBudgets(t *testing.T) {
 		t.Run(names[i], func(t *testing.T) {
 			x := readyLayers(t, m)
 			view := median(9, func() { _ = x.View() })
-			if view > 2*time.Millisecond {
+			if view > budget(2*time.Millisecond) {
 				t.Errorf("cached View %s", view)
 			}
 			key := median(9, func() {
 				x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown})
 			})
-			if key > 500*time.Microsecond {
+			if key > budget(500*time.Microsecond) {
 				t.Errorf("Update key %s", key)
 			}
 			mouse := median(9, func() {
 				x, _ = x.Update(tea.MouseMsg{X: 4, Y: 6, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
 			})
-			if mouse > 500*time.Microsecond {
+			if mouse > budget(500*time.Microsecond) {
 				t.Errorf("Update mouse %s", mouse)
 			}
 			resize := median(9, func() {
 				x, _ = x.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 			})
-			if resize > 5*time.Millisecond {
+			if resize > budget(5*time.Millisecond) {
 				t.Errorf("Resize %s", resize)
 			}
 		})

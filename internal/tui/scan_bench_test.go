@@ -40,19 +40,19 @@ func readyScan(tb testing.TB) tea.Model {
 func TestScanBudgets(t *testing.T) {
 	x := readyScan(t)
 	view := median(9, func() { _ = x.View() })
-	if view > 2*time.Millisecond {
+	if view > budget(2*time.Millisecond) {
 		t.Errorf("cached View %s", view)
 	}
 	key := median(9, func() {
 		x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown})
 	})
-	if key > 500*time.Microsecond {
+	if key > budget(500*time.Microsecond) {
 		t.Errorf("Update key %s", key)
 	}
 	resize := median(9, func() {
 		x, _ = x.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	})
-	if resize > 5*time.Millisecond {
+	if resize > budget(5*time.Millisecond) {
 		t.Errorf("Resize %s", resize)
 	}
 }
