@@ -3,9 +3,9 @@ model-inspector · qwen-shape · 24.20 KiB · u8 · ~61.1K para… ✗ 1 fail ·
 │   Overview                     ││ BYTES PER LAYER                                │
 │   Storage            24.20 KiB ││ 4 layers/cell                                  │
 │   Callouts                   1 ││         ○○○○○○○○○○○○ ●                         │
-╰────────────────────────────────╯│ attenti ░░░░░░░░░░░░ ░  +18% ● 1000 B-         │
+╰────────────────────────────────╯│ attenti ░░░░░░░░░░░░ ░  +18% ●                 │
 ╭[2] Checks ────────── 4✓ 1✗ 4· ─╮│ routed  ░░░░░░░░░░░░ ░  64 B  flat             │
-│   ✗ Offsets & sizes      <1 ms ││ norms   ░░░░░░░░░░░░ ░  +10% ● 10 B-11         │
+│   ✗ Offsets & sizes      <1 ms ││ norms   ░░░░░░░░░░░░ ░  +10% ●                 │
 │   ✓ 4 passed                   ││         ▲                                      │
 │   · 4 not run                  ││ 8 B  <64K ▒ <4M ▓ <256M █  2.0 KiB             │
 ╰────────────────────────────────╯│ per-layer totals differ by 15.1%               │

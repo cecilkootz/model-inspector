@@ -16,7 +16,7 @@ CALLOUTS  1 notable
 BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2×
 2 layers/cell                                                                   
             ○○○○○○○○○○○○○○○○○○○○○○○○ ●                                          
-attention   ░░░░░░░░░░░░░░░░░░░░░░░░ ░  +18% ● 1000 B-1.2                       
+attention   ░░░░░░░░░░░░░░░░░░░░░░░░ ░  +18% ●                                  
 routed exp  ░░░░░░░░░░░░░░░░░░░░░░░░ ░  64 B  flat                              
 norms       ░░░░░░░░░░░░░░░░░░░░░░░░ ░  +10% ● 10 B-11 B                        
 8 B  <64K ▒ <4M ▓ <256M █  2.0 KiB  ○ linear  ● full  per-layer totals differ by

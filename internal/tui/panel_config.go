@@ -349,7 +349,7 @@ func (t Model) configCard(w int) []string {
 		out = append(out, cardHead(ui.PillNR, "NO CONFIG", w), "")
 		out = append(out, paras(w,
 			"No config.json in this snapshot.",
-			"Architecture fields come from config.json, so nothing to show here. Layer counts, dtypes and sizes on Identity/Layers come from tensor headers and are still available.")...)
+			"Architecture fields come from config.json, so nothing to show here. Layer counts, dtypes and sizes on the Model and Layers panels come from tensor headers and are still available.")...)
 	case "unreadable":
 		// The loader warning names the absolute path; a stable sentence keeps
 		// a temp directory out of the frame.

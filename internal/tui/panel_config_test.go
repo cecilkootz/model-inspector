@@ -204,7 +204,7 @@ func TestPanelConfigCards(t *testing.T) {
 						t.Errorf("detail lacks %q:\n%s", w, view)
 					}
 				}
-				for _, gone := range []string{"KEY FIELDS", "CONFIG.JSON"} {
+				for _, gone := range []string{"KEY FIELDS", "CONFIG.JSON", "Identity/Layers"} {
 					if strings.Contains(det, gone) {
 						t.Errorf("legacy heading %q in the detail pane", gone)
 					}

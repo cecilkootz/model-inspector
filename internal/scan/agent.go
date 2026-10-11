@@ -21,6 +21,7 @@ func agentSurface(m *model.Model) Check {
 	if len(r.Findings) == 0 {
 		c.Status = StatusPass
 		c.Summary = r.Tools + "; no suspicious template content"
+		c.Facts = r.Facts
 		c.Details = capOrdered(r.Facts)
 		return c
 	}
@@ -35,6 +36,7 @@ func agentSurface(m *model.Model) Check {
 	for _, f := range r.Findings {
 		details = append(details, f.Text)
 	}
+	c.Facts = r.Facts
 	c.Details = capOrdered(append(details, r.Facts...))
 	return c
 }

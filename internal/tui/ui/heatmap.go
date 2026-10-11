@@ -13,7 +13,7 @@ type HeatRow struct {
 	MTP    int64
 	HasMTP bool
 
-	spread string
+	spread []string
 	flat   bool
 	ready  bool
 }
@@ -55,10 +55,26 @@ func (r *HeatRow) prepare() {
 func (r HeatRow) Cached() bool { return r.ready }
 
 func (r HeatRow) spreadLine() (string, bool) {
+	steps, flat := r.spreadSteps()
+	return steps[0], flat
+}
+
+func (r HeatRow) spreadSteps() ([]string, bool) {
 	if r.ready {
 		return r.spread, r.flat
 	}
 	return spreadParts(r.Cells)
+}
+
+// fitSpread picks the longest step that fits, or nothing, so a narrow column
+// never shows half a figure.
+func fitSpread(steps []string, w int) string {
+	for _, s := range steps {
+		if Width(s) <= w {
+			return s
+		}
+	}
+	return ""
 }
 
 // Heatmap renders the grid at width. One log2 scale is shared by every row.
@@ -322,8 +338,8 @@ func heatRow(r HeatRow, cols, pool, cw, labelW, spreadW, lo, hi int, gl Glyphs, 
 	}
 	b.WriteString(heatCell(mtp, cw, lo, hi, gl, false))
 	b.WriteString("  ")
-	sp, _ := r.spreadLine()
-	b.WriteString(Trunc(sp, spreadW, ""))
+	steps, _ := r.spreadSteps()
+	b.WriteString(fitSpread(steps, spreadW))
 	return b.String()
 }
 
@@ -500,11 +516,13 @@ func itoaU(n uint64) string {
 }
 
 func spreadText(cells []int64) string {
-	text, _ := spreadParts(cells)
-	return text
+	steps, _ := spreadParts(cells)
+	return steps[0]
 }
 
-func spreadParts(cells []int64) (string, bool) {
+// spreadParts returns the spread label and its shorter forms, longest first.
+// Each form drops whole pieces of the one before.
+func spreadParts(cells []int64) ([]string, bool) {
 	var pos []int64
 	for _, v := range cells {
 		if v > 0 {
@@ -513,9 +531,9 @@ func spreadParts(cells []int64) (string, bool) {
 	}
 	if len(pos) == 0 {
 		if UTF8() {
-			return "·", true
+			return []string{"·"}, true
 		}
-		return "-", true
+		return []string{"-"}, true
 	}
 	min, max := pos[0], pos[0]
 	var sum int64
@@ -531,18 +549,19 @@ func spreadParts(cells []int64) (string, bool) {
 	med := median(pos)
 	gl := G()
 	if med > 0 && float64(max-min)/float64(med) < 0.01 {
-		return humanPow(uint64(med)) + "  flat", true
+		v := humanPow(uint64(med))
+		return []string{v + "  flat", v}, true
 	}
 	pct := 0
 	if med > 0 {
 		pct = int(math.Round(float64(max-min) / float64(med) * 100))
 	}
-	mark := ""
+	steps := []string{"+" + itoa(pct) + "%"}
 	if max > min {
-		mark = " " + gl.Full
+		steps = append([]string{steps[0] + " " + gl.Full}, steps...)
 	}
-	// Percent first so a narrow spread column keeps the figure.
-	return "+" + itoa(pct) + "%" + mark + " " + humanPow(uint64(min)) + "-" + humanPow(uint64(max)), false
+	full := steps[0] + " " + humanPow(uint64(min)) + "-" + humanPow(uint64(max))
+	return append([]string{full}, steps...), false
 }
 
 func median(v []int64) int64 {

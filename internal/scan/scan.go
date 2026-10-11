@@ -53,6 +53,9 @@ type Check struct {
 	EffectiveStatus Status   `json:"effective_status"`
 	Summary         string   `json:"summary"`
 	Details         []string `json:"details,omitempty"`
+	// Facts are the informational rows of Details (agent check), kept apart
+	// so the panel need not parse the summary. Not in JSON schema v1.
+	Facts []string `json:"-"`
 	// Duration is the attributable loader phase plus this check's own time.
 	// It is omitted from JSON so goldens stay deterministic.
 	Duration time.Duration `json:"-"`

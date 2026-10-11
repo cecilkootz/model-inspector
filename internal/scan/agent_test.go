@@ -159,6 +159,21 @@ func TestAgentContextAndStop(t *testing.T) {
 		"stop tokens disagree: config.json has [0], generation_config.json has [1]")
 }
 
+func TestAgentFactsAreDetailRows(t *testing.T) {
+	for name, load := range map[string]func() ([]fixture.File, error){
+		"pass": fixture.AgentHermes, "warn": fixture.AgentTampered,
+	} {
+		files, err := load()
+		c := agentCheck(t, loadFixture(t, files, err))
+		if len(c.Facts) == 0 {
+			t.Fatalf("%s: no facts", name)
+		}
+		for _, f := range c.Facts {
+			detailsContain(t, c, f)
+		}
+	}
+}
+
 func TestAgentHostileDetailsAreRawButBounded(t *testing.T) {
 	files, err := fixture.AgentHostile()
 	m := loadFixture(t, files, err)

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -270,24 +271,20 @@ func moreLine(d string, w int) [][]run {
 }
 
 // splitDetails separates findings from facts and takes off the trailing
-// "... and N more" marker. Only the agent check mixes facts into Details:
-// findings first, then facts, with the finding count leading the summary.
+// "... and N more" marker. Details lists findings, then c.Facts, and the
+// 25-row cap may have cut into the facts, so the facts are the longest tail
+// of Details that is a prefix of c.Facts.
 func splitDetails(c scan.Check) (problems, facts []string, more string) {
 	d := c.Details
 	if n := len(d); n > 0 && (strings.HasPrefix(d[n-1], "...") || strings.HasPrefix(d[n-1], "…")) {
 		more, d = d[n-1], d[:n-1]
 	}
-	if c.ID != scan.CheckAgent {
-		return d, nil, more
-	}
-	n := 0
-	if c.Status != scan.StatusPass {
-		n = len(d)
-		if k, err := strconv.Atoi(strings.Fields(c.Summary + " 0")[0]); err == nil && k >= 0 {
-			n = min(k, len(d))
+	for k := min(len(c.Facts), len(d)); k > 0; k-- {
+		if slices.Equal(d[len(d)-k:], c.Facts[:k]) {
+			return d[:len(d)-k], c.Facts, more
 		}
 	}
-	return d[:n], d[n:], more
+	return d, c.Facts, more
 }
 
 // snippetRe finds where a finding hands over to the excerpt it matched.
