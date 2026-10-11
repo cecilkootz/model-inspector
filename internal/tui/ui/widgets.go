@@ -735,8 +735,8 @@ func TileRow(tiles []TileSpec, width, height int) []string {
 	return rows
 }
 
-// Panel renders a filled panel. Focus uses a violet title pill and an accent edge.
-func Panel(title, right sanitize.Text, body []string, w, h int, focused bool) []string {
+// LegacyPanel renders the v2 filled card panel. The v3 bordered Panel is in panel.go.
+func LegacyPanel(title, right sanitize.Text, body []string, w, h int, focused bool) []string {
 	if w < 1 {
 		w = 1
 	}

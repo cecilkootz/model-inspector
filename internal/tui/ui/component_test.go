@@ -126,7 +126,7 @@ func TestWidgetsRender(t *testing.T) {
 			if len(band) == 0 {
 				t.Fatal("tile row")
 			}
-			panel := Panel(sanitize.From("SCAN"), sanitize.From("PASS"), []string{"one", "two"}, 30, 6, true)
+			panel := LegacyPanel(sanitize.From("SCAN"), sanitize.From("PASS"), []string{"one", "two"}, 30, 6, true)
 			if len(panel) == 0 {
 				t.Fatal("panel")
 			}
