@@ -185,10 +185,10 @@ func TestMedianCached(t *testing.T) {
 	}
 	row := HeatRow{Label: txt("attention"), Cells: cells}
 	row.prepare()
-	if !row.ready || row.spread == "" {
+	if !row.ready || len(row.spread) == 0 {
 		t.Fatal("spread not cached")
 	}
-	before := row.spread
+	before := row.spread[0]
 	text, flat := row.spreadLine()
 	if text != before || flat {
 		t.Fatalf("cached spread %q flat %v", text, flat)

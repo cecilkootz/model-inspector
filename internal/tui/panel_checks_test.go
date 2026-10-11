@@ -230,19 +230,41 @@ func TestQuoteRunsAndSnippets(t *testing.T) {
 }
 
 func TestSplitDetailsAgent(t *testing.T) {
+	facts := []string{"fact: a", "fact: b"}
 	c := scan.Check{
 		ID: scan.CheckAgent, Status: scan.StatusWarn, EffectiveStatus: scan.StatusWarn,
 		Summary: "2 findings, strongest: x; tool calling: no",
 		Details: []string{"f1", "f2", "fact: a", "fact: b", "... and 3 more"},
+		Facts:   facts,
 	}
 	p, f, more := splitDetails(c)
 	if len(p) != 2 || len(f) != 2 || more != "... and 3 more" {
 		t.Fatalf("split %q %q %q", p, f, more)
 	}
+
+	c.Summary = "this wording no longer starts with a count"
+	if p, f, _ = splitDetails(c); len(p) != 2 || len(f) != 2 {
+		t.Fatalf("reworded summary: %q %q", p, f)
+	}
+
+	c.Summary = "7 findings"
+	c.Details = []string{"3 matches at byte 9", "7", "fact: a", "fact: b"}
+	if p, f, _ = splitDetails(c); len(p) != 2 || len(f) != 2 {
+		t.Fatalf("count-like finding text: %q %q", p, f)
+	}
+
 	c.Status, c.EffectiveStatus = scan.StatusPass, scan.StatusPass
-	if p, f, _ = splitDetails(c); len(p) != 0 || len(f) != 4 {
+	c.Details = facts
+	if p, f, _ = splitDetails(c); len(p) != 0 || len(f) != 2 {
 		t.Fatalf("passing agent check: %q %q", p, f)
 	}
+
+	c.Status, c.EffectiveStatus = scan.StatusWarn, scan.StatusWarn
+	c.Details = []string{"f1", "fact: a", "... and 4 more"}
+	if p, f, more = splitDetails(c); len(p) != 1 || len(f) != 2 || more == "" {
+		t.Fatalf("cap cut into the facts: %q %q %q", p, f, more)
+	}
+
 	c = scan.Check{ID: scan.CheckFiles, Status: scan.StatusWarn, EffectiveStatus: scan.StatusWarn, Details: []string{"a", "b"}}
 	if p, f, _ = splitDetails(c); len(p) != 2 || len(f) != 0 {
 		t.Fatalf("other checks keep every detail as a problem: %q %q", p, f)
