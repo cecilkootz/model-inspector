@@ -93,8 +93,8 @@ export MI_ROOT
 
 # GNU make 3.81 or later is required; macOS's /usr/bin/make works, BSD make does not.
 #
-# Bare `make` runs `test` (override check, vet, and race tests). That is the
-# historical default, plus the override check below.
+# Bare `make` prints the target list. `make test` runs the override check,
+# vet, and race tests.
 #
 # VERSION, COMMIT, FUZZTIME, and BIN may be set in the environment or on the
 # make command line. A command-line assignment wins over the environment.
@@ -166,8 +166,20 @@ override define enter_root
 cd "$$MI_ROOT" || { echo "make: cannot enter $$MI_ROOT" >&2; exit 1; }; here=$$(pwd -P); if [ "$$here" != "$$MI_ROOT" ]; then echo "make: refusing to run from $$here; makefile directory is $$MI_ROOT" >&2; exit 1; fi
 endef
 
-.PHONY: test build clean cover fuzz check-overrides check-env
-.DEFAULT_GOAL := test
+.PHONY: help test build clean cover fuzz check-overrides check-env
+.DEFAULT_GOAL := help
+
+help:
+	@printf '%s\n' \
+	  'model-inspector make targets:' \
+	  '' \
+	  '  make test    override check, go vet (-printf.funcs=Notef), go test -race, Makefile self-test' \
+	  '  make build   bin/model-inspector (VERSION=... COMMIT=... set the -ldflags)' \
+	  '  make clean   remove this checkout'"'"'s bin/ and coverage.out only' \
+	  '  make cover   coverage.out and a per-function summary' \
+	  '  make fuzz    every Fuzz* target, FUZZTIME each (default 10s)' \
+	  '' \
+	  'Run tests with NO_COLOR unset so colour paths are exercised.'
 
 # Vet and test every package. Synthetic fixtures are generated in-process;
 # a clean checkout does not need any external checkpoint. check-overrides

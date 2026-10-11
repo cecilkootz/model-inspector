@@ -50,7 +50,7 @@ make clean   # bin/ and coverage.out only; BIN is not a delete path
 make fuzz    # every fuzz target, for FUZZTIME (default 10s)
 ```
 
-Bare `make` runs `test`.
+Bare `make` prints this list.
 
 `make build` leaves the version at `internal/version.Version` (`0.1.0`) and
 does not pass `-ldflags` unless `VERSION` or `COMMIT` is set. The commit
