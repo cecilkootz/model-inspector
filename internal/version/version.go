@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"runtime/debug"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 // Name is the tool name.

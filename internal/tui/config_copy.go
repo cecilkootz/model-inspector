@@ -12,8 +12,8 @@ import (
 	"github.com/aymanbagabas/go-osc52/v2"
 	"github.com/muesli/termenv"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/jsonx"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 func (t *Model) copyConfig(value bool) {

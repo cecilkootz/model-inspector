@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/report"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
+	"github.com/cecilkootz/model-inspector/internal/fixture"
+	"github.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/report"
+	"github.com/cecilkootz/model-inspector/internal/scan"
 )
 
 func TestVerdictAgreesWithTextAndJSON(t *testing.T) {

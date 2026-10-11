@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/fixture"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 func TestQA_PrintTextAndJSON(t *testing.T) {

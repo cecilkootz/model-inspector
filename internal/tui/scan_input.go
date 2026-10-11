@@ -8,10 +8,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/report"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
+	"github.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/report"
+	"github.com/cecilkootz/model-inspector/internal/scan"
+	"github.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 // Finding is one content-reading result. PR3 fills it; this version only

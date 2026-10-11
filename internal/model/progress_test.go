@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
+	"github.com/cecilkootz/model-inspector/internal/fixture"
 )
 
 func TestLoadProgressEndsAtTotal(t *testing.T) {

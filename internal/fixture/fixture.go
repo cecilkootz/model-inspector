@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
+	"github.com/cecilkootz/model-inspector/internal/safetensors"
 )
 
 // File is one snapshot-relative file.

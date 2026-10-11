@@ -8,9 +8,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/rivo/uniseg"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
+	"github.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 func (t Model) layersBody() string {

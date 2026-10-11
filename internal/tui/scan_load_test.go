@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
+	"github.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/scan"
 )
 
 func TestLoadErrorCardExits3(t *testing.T) {

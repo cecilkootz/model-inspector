@@ -9,8 +9,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
+	"github.com/cecilkootz/model-inspector/internal/fileerr"
+	"github.com/cecilkootz/model-inspector/internal/fixture"
 )
 
 func TestJSONDoesNotRepeatHugeNumber(t *testing.T) {

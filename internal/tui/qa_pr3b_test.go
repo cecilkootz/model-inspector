@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/model"
 )
 
 func TestP3_ColorForced(t *testing.T) {

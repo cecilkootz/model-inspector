@@ -12,9 +12,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
+	"github.com/cecilkootz/model-inspector/internal/fixture"
+	"github.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/scan"
 )
 
 const hostileP3 = "h\u009b[31m\u202e\u2066\u200b\U000E0041\u2028\u00ad\x1b]0;PWN\x07\x1b[2J<x>"

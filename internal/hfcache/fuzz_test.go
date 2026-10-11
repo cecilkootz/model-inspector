@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
+	"github.com/cecilkootz/model-inspector/internal/safeopen"
 )
 
 func FuzzResolve(f *testing.F) {

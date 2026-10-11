@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
+	"github.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 // glyphs is the character set for the current locale.

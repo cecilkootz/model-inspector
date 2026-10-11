@@ -12,14 +12,14 @@ import (
 
 	"github.com/mattn/go-isatty"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/hfcache"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/report"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/tui"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/version"
+	"github.com/cecilkootz/model-inspector/internal/fileerr"
+	"github.com/cecilkootz/model-inspector/internal/hfcache"
+	"github.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/report"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/scan"
+	"github.com/cecilkootz/model-inspector/internal/tui"
+	"github.com/cecilkootz/model-inspector/internal/version"
 )
 
 const usage = `model-inspector: inspect local model weights without loading them.

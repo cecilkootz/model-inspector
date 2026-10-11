@@ -12,8 +12,8 @@ import (
 	"regexp"
 	"strings"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/safeopen"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 // ErrAmbiguousTarget is returned when a bare argument is both an HF repo id

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 func TestResolveRepoID(t *testing.T) {

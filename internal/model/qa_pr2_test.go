@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
+	"github.com/cecilkootz/model-inspector/internal/fixture"
 )
 
 func TestDuplicateConfigKeyRejected(t *testing.T) {

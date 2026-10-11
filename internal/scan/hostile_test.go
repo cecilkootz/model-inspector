@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/fixture"
+	"github.com/cecilkootz/model-inspector/internal/model"
 )
 
 func TestEmptyIndexDoesNotPass(t *testing.T) {

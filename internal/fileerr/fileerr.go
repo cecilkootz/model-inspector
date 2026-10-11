@@ -20,7 +20,7 @@ import (
 
 	"github.com/rivo/uniseg"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 // MaxRunes is the longest Error string returned after a clip, including

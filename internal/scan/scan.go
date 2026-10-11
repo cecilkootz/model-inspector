@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
+	"github.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/safetensors"
 )
 
 type Status string

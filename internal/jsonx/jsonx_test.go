@@ -6,7 +6,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
+	"github.com/cecilkootz/model-inspector/internal/fileerr"
 )
 
 func TestUnmarshalValues(t *testing.T) {

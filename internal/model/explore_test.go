@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
+	"github.com/cecilkootz/model-inspector/internal/fixture"
+	"github.com/cecilkootz/model-inspector/internal/safetensors"
 )
 
 func TestExpertCountStackedAndIndexed(t *testing.T) {

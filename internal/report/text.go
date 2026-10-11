@@ -7,8 +7,8 @@ import (
 
 	"github.com/rivo/uniseg"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/fileerr"
+	"github.com/cecilkootz/model-inspector/internal/model"
 )
 
 // Text is the 80-column inspect summary. File-derived strings are sanitized.

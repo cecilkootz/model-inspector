@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
+	"github.com/cecilkootz/model-inspector/internal/jsonx"
 )
 
 // KV is one extracted config field.

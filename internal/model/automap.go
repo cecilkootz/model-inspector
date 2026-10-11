@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
+	"github.com/cecilkootz/model-inspector/internal/safeopen"
 )
 
 // AutoMapEntry is one auto_map value. The target is recorded; nothing is imported.

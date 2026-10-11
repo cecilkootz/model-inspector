@@ -14,8 +14,8 @@ import (
 	"sort"
 	"strings"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
+	"github.com/cecilkootz/model-inspector/internal/fileerr"
+	"github.com/cecilkootz/model-inspector/internal/safeopen"
 )
 
 const (

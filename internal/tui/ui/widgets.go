@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/rivo/uniseg"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 func paint(s string, fg, bg lipgloss.TerminalColor, bold bool) string {

@@ -1,6 +1,6 @@
 package ui
 
-import "origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+import "github.com/cecilkootz/model-inspector/internal/sanitize"
 
 // Safe is text a widget is allowed to draw. Build it with S from sanitized
 // text, or with Chrome for strings this program already rendered (its own

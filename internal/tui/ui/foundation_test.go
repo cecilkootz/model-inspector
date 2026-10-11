@@ -10,7 +10,7 @@ import (
 	"github.com/lucasb-eyer/go-colorful"
 	"github.com/muesli/termenv"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 func TestTokenContrast(t *testing.T) {

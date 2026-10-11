@@ -9,7 +9,7 @@ import (
 	"io"
 	"math"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
+	"github.com/cecilkootz/model-inspector/internal/fileerr"
 )
 
 // MaxDepth is the deepest array/object nesting Unmarshal accepts.
