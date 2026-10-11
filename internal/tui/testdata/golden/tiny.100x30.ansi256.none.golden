@@ -20,7 +20,7 @@
 BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2× · per-layer totals 
             ○● ●                                                                                    
 routed exp  [48;5;149m [0m· ·  8 B  flat                                                                         
-4 B [48;5;234m [0m[48;5;232m [0m[48;5;22m [0m[48;5;22m [0m[48;5;22m [0m[48;5;58m [0m[48;5;58m [0m[48;5;58m [0m[48;5;58m [0m[48;5;65m [0m[48;5;65m [0m[48;5;65m [0m[48;5;107m [0m[48;5;107m [0m[48;5;113m [0m[48;5;149m [0m 8 B  ○ linear  ● full                                                          
+4 B [48;5;234m [0m[48;5;234m [0m[48;5;22m [0m[48;5;22m [0m[48;5;22m [0m[48;5;22m [0m[48;5;64m [0m[48;5;64m [0m[48;5;64m [0m[48;5;64m [0m[48;5;70m [0m[48;5;70m [0m[48;5;70m [0m[48;5;70m [0m[48;5;149m [0m[48;5;149m [0m 8 B  ○ linear  ● full                                                          
 flat  attention 4 B  flat · router 4 B  flat · shared exp 4 B  flat · norms ·                       
 excludes ple 40 B · excludes hyper 32 B · other 4 B not in the grid                                 
 Memory  weights ≥ 152 B (0.0 GB)                                                                    
