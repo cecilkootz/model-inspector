@@ -96,7 +96,7 @@ func TestResolveTargetBrokenSymlinkIsAmbiguous(t *testing.T) {
 }
 
 func TestResolveTargetBareRepoWithoutDirectory(t *testing.T) {
-	hub := t.TempDir()
+	hub := realTempDir(t)
 	const (
 		repo   = "Org/Only-Hub"
 		commit = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"

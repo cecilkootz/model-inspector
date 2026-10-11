@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"unicode"
 	"unicode/utf8"
@@ -31,6 +33,32 @@ func write(t *testing.T, p string, b []byte) {
 	}
 }
 
+// writeName writes dir/name. Filesystems that require UTF-8 names (APFS)
+// refuse invalid bytes, so those are dropped and the rest of the name kept.
+func writeName(t *testing.T, dir, name string, b []byte) {
+	t.Helper()
+	err := os.WriteFile(filepath.Join(dir, name), b, 0o644)
+	if errors.Is(err, syscall.EILSEQ) {
+		err = os.WriteFile(filepath.Join(dir, strings.ToValidUTF8(name, "")), b, 0o644)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// skipCaseInsensitive skips when dir's filesystem folds case, where
+// org/name and Org/Name are the same directory.
+func skipCaseInsensitive(t *testing.T, dir string) {
+	t.Helper()
+	write(t, filepath.Join(dir, "casefold"), nil)
+	if _, err := os.Stat(filepath.Join(dir, "CASEFOLD")); err == nil {
+		t.Skip("filesystem is case-insensitive")
+	}
+	if err := os.Remove(filepath.Join(dir, "casefold")); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func rc(t *testing.T, args ...string) (string, string, int) {
 	t.Helper()
 	return capture(t, func() int { return run(args) })
@@ -38,6 +66,7 @@ func rc(t *testing.T, args ...string) (string, string, int) {
 
 func TestP3_Targets(t *testing.T) {
 	hub := t.TempDir()
+	skipCaseInsensitive(t, hub)
 	commit := strings.Repeat("a", 40)
 	if _, err := fixture.MaterializeHub(hub, "org/name", commit, []fixture.File{{Name: "model.safetensors", Data: goodShard(t)}}); err != nil {
 		t.Fatal(err)
@@ -433,7 +462,7 @@ func TestP3_JSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(d, "m"+strings.ReplaceAll(hostile, "/", "")+".safetensors"), fixture.EncodeHeader(hb, make([]byte, 4)))
+	writeName(t, d, "m"+strings.ReplaceAll(hostile, "/", "")+".safetensors", fixture.EncodeHeader(hb, make([]byte, 4)))
 	cfg, err := json.Marshal(map[string]any{
 		"model_type": hostile, "architectures": []string{hostile}, "layer_types": []string{hostile},
 		"hidden_size": 8, "quantization": map[string]any{"bits": 4, "group_size": 64, "mode": hostile},
@@ -444,7 +473,7 @@ func TestP3_JSON(t *testing.T) {
 	}
 	write(t, filepath.Join(d, "config.json"), cfg)
 	write(t, filepath.Join(d, "model.safetensors.index.json"), []byte(`{"weight_map":{"zz`+"\u202e"+`":"q`+"\u009b"+`.safetensors"}}`))
-	write(t, filepath.Join(d, "x"+hostile+".py"), nil)
+	writeName(t, d, "x"+hostile+".py", nil)
 	out, _, code := rc(t, "inspect", "--path", d, "--json")
 	if code != 0 && code != 1 {
 		t.Fatalf("exit %d", code)

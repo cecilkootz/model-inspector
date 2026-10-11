@@ -44,7 +44,11 @@ func TestLoadTinyQwenHFCache(t *testing.T) {
 		repo   = "Qwen/Tiny-Next"
 		commit = "0123456789abcdef0123456789abcdef01234567"
 	)
-	hub := t.TempDir()
+	// Resolve returns symlink-free paths; macOS temp dirs sit under a symlink.
+	hub, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	snap, err := fixture.MaterializeHub(hub, repo, commit, files)
 	if err != nil {
 		t.Fatal(err)

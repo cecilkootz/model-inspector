@@ -377,3 +377,20 @@ func TestMergeStorageCapsAtFour(t *testing.T) {
 		t.Fatalf("other = %d, classes %+v", other, out)
 	}
 }
+
+func TestUnifiedMemoryFollowsHost(t *testing.T) {
+	saved := AppleSilicon
+	t.Cleanup(func() { AppleSilicon = saved })
+	m := &Model{}
+	for _, host := range []bool{false, true} {
+		AppleSilicon = host
+		if got := m.UnifiedMemory(); got != host {
+			t.Errorf("AppleSilicon=%v: UnifiedMemory() = %v", host, got)
+		}
+	}
+	m.Format = "safetensors (mlx)"
+	AppleSilicon = false
+	if !m.UnifiedMemory() {
+		t.Error("an MLX checkpoint is unified memory on any host")
+	}
+}

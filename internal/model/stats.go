@@ -201,13 +201,17 @@ func (m *Model) MemoryEstimate() MemoryEstimate {
 	return est
 }
 
+// AppleSilicon reports whether this host's CPU and GPU share one memory pool.
+// Golden tests set it false so their output does not depend on the host.
+var AppleSilicon = runtime.GOOS == "darwin" && runtime.GOARCH == "arm64"
+
 // UnifiedMemory is true for MLX checkpoints and for Apple silicon, where
 // CPU and GPU share one pool.
 func (m *Model) UnifiedMemory() bool {
 	if m != nil && formatVariant(m.Format) == "mlx" {
 		return true
 	}
-	return runtime.GOOS == "darwin" && runtime.GOARCH == "arm64"
+	return AppleSilicon
 }
 
 // HostTensor is one lookup table flagged by lookup_table_v1.

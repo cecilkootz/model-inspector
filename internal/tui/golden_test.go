@@ -18,6 +18,12 @@ import (
 
 var updateGolden = flag.Bool("update", false, "rewrite golden files")
 
+// Goldens are recorded for a host without unified memory.
+func TestMain(m *testing.M) {
+	model.AppleSilicon = false
+	os.Exit(m.Run())
+}
+
 func TestGolden(t *testing.T) {
 	tiny := loadFiles(t, mustFiles(t, fixture.TinyQwenMLXQuant))
 	ngram := loadFiles(t, mustNgram(t))
