@@ -26,6 +26,10 @@ const (
 	maxZipDir = 2 << 20
 	// maxDataPkl bounds how many data.pkl entries one archive may have scanned.
 	maxDataPkl = 4
+	// pickleOpenCap is the descriptor's total read budget: the 8 MiB pickle
+	// plus the magic sniff, zip tail, directory and local headers scanZip may also read.
+	// A plain pickle is still limited to MaxPickleBytes by its own reader.
+	pickleOpenCap = MaxPickleBytes + maxZipDir + 22 + 65535 + maxDataPkl*30 + 8
 )
 
 // Kind is how a file is read.
@@ -113,7 +117,7 @@ func scanPyFile(r *Report, path string, roots []string) {
 }
 
 func scanPickleFile(r *Report, path string, roots []string) {
-	f, err := safeopen.OpenUnder(path, MaxPickleBytes, roots...)
+	f, err := safeopen.OpenUnder(path, pickleOpenCap, roots...)
 	if err != nil {
 		r.Incomplete = []string{"could not be read"}
 		return
@@ -130,7 +134,7 @@ func scanPickleFile(r *Report, path string, roots []string) {
 		scanZip(r, f)
 		return
 	}
-	buf, err := io.ReadAll(f)
+	buf, err := io.ReadAll(io.LimitReader(f, MaxPickleBytes+1))
 	if err != nil {
 		r.Incomplete = []string{"could not be read"}
 		return

@@ -26,6 +26,38 @@ func TestReadAllExactAndOverCap(t *testing.T) {
 	}
 }
 
+func TestReadAtTotalBudget(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "f")
+	if err := os.WriteFile(path, bytes.Repeat([]byte("a"), 100), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := Open(path, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	buf := make([]byte, 10)
+	for i := 0; i < 3; i++ {
+		if n, err := f.ReadAt(buf, int64(i)*10); err != nil || n != 10 {
+			t.Fatalf("call %d: %d %v", i, n, err)
+		}
+	}
+	if n, err := f.ReadAt(buf[:1], 0); err == nil || n != 0 {
+		t.Fatalf("over budget: %d %v", n, err)
+	}
+	g, err := Open(path, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.Close()
+	if _, err := g.ReadAt(buf, 101); err == nil {
+		t.Fatal("offset past EOF accepted")
+	}
+	if _, err := g.ReadAt(buf, -1); err == nil {
+		t.Fatal("negative offset accepted")
+	}
+}
+
 func TestOpenRejectsSymlinkToDevice(t *testing.T) {
 	if _, err := os.Stat("/dev/zero"); err != nil {
 		t.Skip("/dev/zero not available")
