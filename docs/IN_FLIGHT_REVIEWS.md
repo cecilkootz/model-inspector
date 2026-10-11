@@ -1,21 +1,13 @@
 # In-flight reviews
 
-Status as of 2026-10-10. #16 lands last, after Layers.
+Status as of 2026-10-10.
 
 ## Merged on main
 
-#1 through #12, and #17.
-
-## Open
-
-- **#13** — fuzz nits. Needs a rebase.
-- **#14** — Notef `formatLit` and the cursor offset. QA approved. Rebased on main at `4056b47`.
-- **#15** — Layers tree. In QA. Branch `cursor/v2-layers-tree-67c7`, head `48624ba`, base main.
-- **#16** — Scan screen. In QA. Branch `cursor/v2-scan-bac1`, stacked on #15.
+#1 through #17. Nothing is open.
 
 ## Next
 
-- A metadata-sanity warn-only PR. The Scan card stays `not run: planned` until that lands.
-- Design's fidelity follow-ups for Layers and Scan.
-- The PR #4 and #6 Makefile nits.
-- Replace the synthetic Config golden with the real Vontra `config.json` once Matthew supplies it.
+- **metadata-sanity** (warn-only). `plannedMetadata` in `internal/scan/scan.go` still returns `planned`, so the Scan card reads `not run: planned`. The check compares config fields with tensor shapes.
+- **Real Config golden.** `fixture.ConfigQwenLike` is synthetic. Replace it with the real Vontra `config.json` once Matthew supplies it.
+- **Case-insensitive hub lookup.** On a case-folding filesystem (macOS APFS), `inspect ORG/NAME` resolves to the `Org/Name` cache, exits 0, and reports the repo id as `ORG/NAME`. Linux exits 3. `TestP3_Targets` skips on case-insensitive filesystems until the resolver decides this.

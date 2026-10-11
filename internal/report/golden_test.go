@@ -12,6 +12,12 @@ import (
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
 )
 
+// Goldens are recorded for a host without unified memory.
+func TestMain(m *testing.M) {
+	model.AppleSilicon = false
+	os.Exit(m.Run())
+}
+
 func TestGoldenJSON(t *testing.T) {
 	cases := []struct {
 		name  string

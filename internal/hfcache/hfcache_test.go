@@ -10,8 +10,19 @@ import (
 	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
+// realTempDir resolves symlinks in the temp dir (macOS /var -> /private/var)
+// so it compares equal to the resolver's output.
+func realTempDir(t *testing.T) string {
+	t.Helper()
+	d, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
 func TestResolveRepoID(t *testing.T) {
-	hub := t.TempDir()
+	hub := realTempDir(t)
 	repo := filepath.Join(hub, "models--Org--Model-4bit")
 	const commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	snap := filepath.Join(repo, "snapshots", commit)
