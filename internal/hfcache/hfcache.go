@@ -6,6 +6,7 @@ package hfcache
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -31,6 +32,9 @@ const (
 	// TargetRepo is always an HF repo id, never a cwd-relative directory.
 	TargetRepo
 )
+
+// MaxDirEntries bounds the directory listing used to confirm a name's exact case.
+const MaxDirEntries = 1 << 16
 
 // MaxRefBytes is the most that will be read from a refs/ file.
 // A commit hash is well under this; anything larger is refused.
@@ -189,11 +193,18 @@ func resolveRepo(arg, hubDir string) (Resolved, error) {
 	if !repoIDRe.MatchString(id) {
 		return Resolved{}, fmt.Errorf("%q is neither a directory nor an org/name repo id", arg)
 	}
-	repoDir := filepath.Join(hubDir, RepoFolderName(id))
-	repoReal, err := filepath.EvalSymlinks(repoDir)
+	notFound := fmt.Errorf("repo %s not found in HF cache %s", id, hubDir)
+	folder := RepoFolderName(id)
+	switch ok, err := hasExactEntry(hubDir, folder); {
+	case errors.Is(err, fs.ErrNotExist) || (err == nil && !ok):
+		return Resolved{}, notFound
+	case err != nil:
+		return Resolved{}, err
+	}
+	repoReal, err := filepath.EvalSymlinks(filepath.Join(hubDir, folder))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return Resolved{}, fmt.Errorf("repo %s not found in HF cache %s", id, hubDir)
+			return Resolved{}, notFound
 		}
 		return Resolved{}, err
 	}
@@ -220,7 +231,7 @@ func resolveRepo(arg, hubDir string) (Resolved, error) {
 		return Resolved{}, fmt.Errorf("repo %s: ref %q escapes refs/", id, ref)
 	}
 
-	commit, err := readCommit(id, ref, rev, refPath, refsReal)
+	commit, err := readCommit(id, ref, rev, refPath, refsReal, repoReal)
 	if err != nil {
 		return Resolved{}, err
 	}
@@ -243,6 +254,9 @@ func resolveRepo(arg, hubDir string) (Resolved, error) {
 	if !safeopen.Within(snapRootReal, snap) {
 		return Resolved{}, fmt.Errorf("repo %s: revision %q escapes snapshots/", id, commit)
 	}
+	if ok, err := hasExactEntry(snapRootReal, commit); err != nil || !ok {
+		return Resolved{}, fmt.Errorf("snapshot %s not present for %s", commit, id)
+	}
 	realSnap, err := filepath.EvalSymlinks(snap)
 	if err != nil {
 		return Resolved{}, fmt.Errorf("snapshot %s not present for %s", commit, id)
@@ -253,10 +267,14 @@ func resolveRepo(arg, hubDir string) (Resolved, error) {
 	return Resolved{Dir: realSnap, RepoID: id, Revision: commit, Ref: ref, FromCache: true}, nil
 }
 
-func readCommit(id, ref, rev, refPath, refsRoot string) (string, error) {
-	// refsRoot contains the opened descriptor. A symlink from refs/ to a
-	// regular file outside the repo is refused, not followed blindly.
-	b, err := safeopen.ReadAll(refPath, MaxRefBytes, refsRoot)
+func readCommit(id, ref, rev, refPath, refsRoot, repoRoot string) (string, error) {
+	var b []byte
+	err := refExact(repoRoot, refsRoot, ref)
+	if err == nil {
+		// refsRoot contains the opened descriptor. A symlink from refs/ to a
+		// regular file outside the repo is refused, not followed blindly.
+		b, err = safeopen.ReadAll(refPath, MaxRefBytes, refsRoot)
+	}
 	switch {
 	case err == nil:
 		commit := strings.TrimSpace(string(b))
@@ -273,6 +291,57 @@ func readCommit(id, ref, rev, refPath, refsRoot string) (string, error) {
 	default:
 		return "", fmt.Errorf("repo %s: refs/%s: %w", id, ref, err)
 	}
+}
+
+// refExact returns fs.ErrNotExist unless "refs" and every segment of ref
+// are listed under exactly those names. A case-folding filesystem would
+// otherwise open refs/MAIN for refs/main.
+func refExact(repoRoot, refsRoot, ref string) error {
+	if ok, err := hasExactEntry(repoRoot, "refs"); err != nil || !ok {
+		return orNotExist(err)
+	}
+	dir := refsRoot
+	for _, seg := range strings.Split(ref, "/") {
+		if ok, err := hasExactEntry(dir, seg); err != nil || !ok {
+			return orNotExist(err)
+		}
+		dir = filepath.Join(dir, seg)
+	}
+	return nil
+}
+
+func orNotExist(err error) error {
+	if err == nil {
+		return fs.ErrNotExist
+	}
+	return err
+}
+
+// hasExactEntry reports whether dir lists an entry named exactly name.
+// Stat on a case-insensitive filesystem also accepts a name that differs
+// only in case, and the cache folder name is the repo identity.
+func hasExactEntry(dir, name string) (bool, error) {
+	d, err := os.Open(dir)
+	if err != nil {
+		return false, err
+	}
+	defer d.Close()
+	for seen := 0; seen < MaxDirEntries; {
+		names, err := d.Readdirnames(256)
+		for _, n := range names {
+			if n == name {
+				return true, nil
+			}
+		}
+		seen += len(names)
+		if errors.Is(err, io.EOF) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+	}
+	return false, fmt.Errorf("%s: more than %d entries", dir, MaxDirEntries)
 }
 
 // validRef rejects absolute paths and any segment containing "..".
