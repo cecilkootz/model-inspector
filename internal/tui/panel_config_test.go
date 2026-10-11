@@ -333,15 +333,15 @@ func TestPanelConfigBudgets(t *testing.T) {
 		_ = x.View()
 		_ = x.View()
 		view := median(9, func() { _ = x.View() })
-		if view > 2*time.Millisecond {
+		if view > budget(2*time.Millisecond) {
 			t.Errorf("%s: cached View %s", tc.name, view)
 		}
 		key := median(9, func() { x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown}) })
-		if key > 500*time.Microsecond {
+		if key > budget(500*time.Microsecond) {
 			t.Errorf("%s: Update key %s", tc.name, key)
 		}
 		resize := median(9, func() { x, _ = x.Update(tea.WindowSizeMsg{Width: 120, Height: 40}) })
-		if resize > 5*time.Millisecond {
+		if resize > budget(5*time.Millisecond) {
 			t.Errorf("%s: Resize %s", tc.name, resize)
 		}
 	}

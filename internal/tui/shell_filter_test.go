@@ -636,16 +636,16 @@ func filterBudget(t *testing.T, name string, x tea.Model) {
 	t.Helper()
 	_ = x.View()
 	_ = x.View()
-	if v := median(9, func() { _ = x.View() }); v > 2*time.Millisecond {
+	if v := median(9, func() { _ = x.View() }); v > budget(2*time.Millisecond) {
 		t.Errorf("%s: cached View %s", name, v)
 	}
-	if v := median(9, func() { x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown}) }); v > 500*time.Microsecond {
+	if v := median(9, func() { x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown}) }); v > budget(500*time.Microsecond) {
 		t.Errorf("%s: Update %s", name, v)
 	}
-	if v := median(9, func() { x, _ = x.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")}) }); v > 500*time.Microsecond {
+	if v := median(9, func() { x, _ = x.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")}) }); v > budget(500*time.Microsecond) {
 		t.Errorf("%s: Update typing %s", name, v)
 	}
-	if v := median(9, func() { x, _ = x.Update(tea.WindowSizeMsg{Width: 120, Height: 40}) }); v > 5*time.Millisecond {
+	if v := median(9, func() { x, _ = x.Update(tea.WindowSizeMsg{Width: 120, Height: 40}) }); v > budget(5*time.Millisecond) {
 		t.Errorf("%s: Resize %s", name, v)
 	}
 }

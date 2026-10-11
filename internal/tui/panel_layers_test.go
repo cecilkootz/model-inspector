@@ -436,13 +436,13 @@ func TestLayersPanelBudgets(t *testing.T) {
 			x := press(shellModel(t, loadFiles(t, files(t)), 140, 40), "3", "right")
 			_ = x.View()
 			_ = x.View()
-			if view := median(9, func() { _ = x.View() }); view > 2*time.Millisecond {
+			if view := median(9, func() { _ = x.View() }); view > budget(2*time.Millisecond) {
 				t.Errorf("cached View %s", view)
 			}
-			if key := median(9, func() { x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown}) }); key > 500*time.Microsecond {
+			if key := median(9, func() { x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown}) }); key > budget(500*time.Microsecond) {
 				t.Errorf("Update %s", key)
 			}
-			if resize := median(9, func() { x, _ = x.Update(tea.WindowSizeMsg{Width: 120, Height: 40}) }); resize > 5*time.Millisecond {
+			if resize := median(9, func() { x, _ = x.Update(tea.WindowSizeMsg{Width: 120, Height: 40}) }); resize > budget(5*time.Millisecond) {
 				t.Errorf("Resize %s", resize)
 			}
 		})

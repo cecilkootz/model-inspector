@@ -744,24 +744,24 @@ func TestShellLoadAndPortraitBudgets(t *testing.T) {
 		x := loadingShell(sz[0], sz[1], loadTestDir, midLoad...)
 		_ = x.View()
 		_ = x.View()
-		if d := median(9, func() { _ = x.View() }); d > 2*time.Millisecond {
+		if d := median(9, func() { _ = x.View() }); d > budget(2*time.Millisecond) {
 			t.Errorf("%v loading cached View %s", sz, d)
 		}
 		i := 0
 		if d := median(9, func() {
 			i++
 			x, _ = x.Update(scanProgMsg{p: model.Progress{Phase: model.PhaseLayout, Done: i, Total: 22}})
-		}); d > 500*time.Microsecond {
+		}); d > budget(500*time.Microsecond) {
 			t.Errorf("%v loading Update %s", sz, d)
 		}
 		if d := median(9, func() {
 			i++
 			x, _ = x.Update(scanProgMsg{p: model.Progress{Phase: model.PhaseLayout, Done: i, Total: 1 << 20}})
 			_ = x.View()
-		}); d > 2*time.Millisecond {
+		}); d > budget(2*time.Millisecond) {
 			t.Errorf("%v loading cold View %s", sz, d)
 		}
-		if d := median(9, func() { x, _ = x.Update(tea.WindowSizeMsg{Width: sz[0] - 1, Height: sz[1]}) }); d > 5*time.Millisecond {
+		if d := median(9, func() { x, _ = x.Update(tea.WindowSizeMsg{Width: sz[0] - 1, Height: sz[1]}) }); d > budget(5*time.Millisecond) {
 			t.Errorf("%v loading Resize %s", sz, d)
 		}
 	}
@@ -780,20 +780,20 @@ func TestShellLoadAndPortraitBudgets(t *testing.T) {
 	x := press(shellModel(t, m, 80, 24), "2")
 	_ = x.View()
 	_ = x.View()
-	if d := median(9, func() { _ = x.View() }); d > 2*time.Millisecond {
+	if d := median(9, func() { _ = x.View() }); d > budget(2*time.Millisecond) {
 		t.Errorf("portrait cached View %s", d)
 	}
-	if d := median(9, func() { x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown}) }); d > 500*time.Microsecond {
+	if d := median(9, func() { x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown}) }); d > budget(500*time.Microsecond) {
 		t.Errorf("portrait Update %s", d)
 	}
-	if d := median(9, func() { x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown}); _ = x.View() }); d > 2*time.Millisecond {
+	if d := median(9, func() { x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown}); _ = x.View() }); d > budget(2*time.Millisecond) {
 		t.Errorf("portrait cold View %s", d)
 	}
 	w := 80
 	if d := median(9, func() {
 		w = 140 - w + 60 // 80 <-> 60
 		x, _ = x.Update(tea.WindowSizeMsg{Width: w, Height: 24})
-	}); d > 5*time.Millisecond {
+	}); d > budget(5*time.Millisecond) {
 		t.Errorf("portrait Resize %s", d)
 	}
 }

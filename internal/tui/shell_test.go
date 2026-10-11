@@ -737,7 +737,7 @@ func TestShellBigModelFirstFrame(t *testing.T) {
 	for _, k := range []string{"", "2", "3", "4"} {
 		start := time.Now()
 		v := press(x, k).View()
-		if d := time.Since(start); d > raceScale*50*time.Millisecond {
+		if d := time.Since(start); d > budget(50*time.Millisecond) {
 			t.Errorf("focus %q: first frame took %s", k, d)
 		}
 		assertFrame(t, v, 140, 40)
@@ -772,19 +772,19 @@ func warmShell(tb testing.TB, m *model.Model) tea.Model {
 func TestShellBudgets(t *testing.T) {
 	x := readyShell(t)
 	view := median(9, func() { _ = x.View() })
-	if view > 2*time.Millisecond {
+	if view > budget(2*time.Millisecond) {
 		t.Errorf("cached View %s", view)
 	}
 	key := median(9, func() {
 		x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown})
 	})
-	if key > 500*time.Microsecond {
+	if key > budget(500*time.Microsecond) {
 		t.Errorf("Update key %s", key)
 	}
 	resize := median(9, func() {
 		x, _ = x.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	})
-	if resize > 5*time.Millisecond {
+	if resize > budget(5*time.Millisecond) {
 		t.Errorf("Resize %s", resize)
 	}
 }
