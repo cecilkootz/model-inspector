@@ -389,6 +389,7 @@ func TestConfigProblems(t *testing.T) {
 		{"deep", fixture.ConfigDeep(), "nesting deeper than 32"},
 		{"array", fixture.ConfigNotObject(), "not a JSON object"},
 		{"empty", fixture.ConfigEmpty(), "no fields"},
+		{"signed nan", []byte(`{"a":-NaN}`), "config.json did not parse."},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

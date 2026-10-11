@@ -358,6 +358,30 @@ func TestNaNIsErrorNode(t *testing.T) {
 	}
 }
 
+// Only bare NaN, Infinity and -Infinity are tolerated as error nodes. Any
+// other sign or number prefix must agree with encoding/json.
+func TestNumberAcceptMatchesEncodingJSON(t *testing.T) {
+	bad := []string{
+		"-NaN", "+NaN", "-nan", "+Infinity", "--Infinity", "-+Infinity", "+-Infinity",
+		"-Inf", "-", "-.5", "01", "-01", "1.", ".5", "1e", "1e+", "0x1", "+1",
+		"[-NaN]", "[+NaN]", "[--Infinity]", "[1,-NaN]", `{"a":-NaN}`, `{"a":+Infinity}`,
+		"1e-NaN", "1e+NaN", "1e-Infinity", "-NaNx", "NaN1", "-Infinity1",
+	}
+	good := []string{"0", "-0", "1.5", "-1e5", "1E+5", "0.1e-2", "[-1,2]"}
+	for _, js := range bad {
+		if _, err := ParseTree([]byte(js), Limits{}); err == nil {
+			t.Errorf("%q accepted", js)
+		}
+	}
+	for _, js := range append(bad, good...) {
+		_, e1 := Unmarshal([]byte(js))
+		_, e2 := ParseTree([]byte(js), Limits{})
+		if (e1 == nil) != (e2 == nil) {
+			t.Errorf("%q: unmarshal=%v tree=%v", js, e1, e2)
+		}
+	}
+}
+
 func TestHtabFullDoesNotSpin(t *testing.T) {
 	h := &htab{max: 4}
 	h.slot = make([]slot, 4)
