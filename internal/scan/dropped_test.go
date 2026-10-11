@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/model"
 )
 
 func TestSpoofedLayerWarningIsNotTheCheck(t *testing.T) {

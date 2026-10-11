@@ -14,7 +14,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
+	"github.com/cecilkootz/model-inspector/internal/fileerr"
 )
 
 // File is an opened regular file. Read stops after max+1 bytes.

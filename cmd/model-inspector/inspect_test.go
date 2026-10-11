@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/report"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/tui"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/version"
+	"github.com/cecilkootz/model-inspector/internal/fixture"
+	"github.com/cecilkootz/model-inspector/internal/report"
+	"github.com/cecilkootz/model-inspector/internal/tui"
+	"github.com/cecilkootz/model-inspector/internal/version"
 )
 
 func TestInspectJSONOnHubFixture(t *testing.T) {

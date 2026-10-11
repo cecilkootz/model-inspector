@@ -1,4 +1,4 @@
-module origin.cursor.com/cecilkootz/model-inspector
+module github.com/cecilkootz/model-inspector
 
 go 1.27.2
 

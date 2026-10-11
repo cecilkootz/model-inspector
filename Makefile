@@ -106,7 +106,7 @@ export MI_ROOT
 # cannot change the shell command or the linker command line. FUZZTIME uses
 # ^[0-9A-Za-z.+_-]+$. The link line is MI_LDFLAGS, not the C LDFLAGS variable.
 
-override MODULE := origin.cursor.com/cecilkootz/model-inspector
+override MODULE := github.com/cecilkootz/model-inspector
 
 # Command-line variables are exported into recipe environments, and that
 # export expands $(shell) and other functions. Drop them so a hostile value

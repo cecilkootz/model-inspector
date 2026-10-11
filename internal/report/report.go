@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/version"
+	"github.com/cecilkootz/model-inspector/internal/fileerr"
+	"github.com/cecilkootz/model-inspector/internal/jsonx"
+	"github.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/scan"
+	"github.com/cecilkootz/model-inspector/internal/version"
 )
 
 const paramsNote = "packed quantized weights counted at dequantized size; quantization scales/biases excluded"

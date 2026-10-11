@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/safeopen"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
+	"github.com/cecilkootz/model-inspector/internal/fileerr"
+	"github.com/cecilkootz/model-inspector/internal/jsonx"
+	"github.com/cecilkootz/model-inspector/internal/safeopen"
+	"github.com/cecilkootz/model-inspector/internal/safetensors"
 )
 
 const (

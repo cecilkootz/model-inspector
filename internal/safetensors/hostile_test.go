@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
+	"github.com/cecilkootz/model-inspector/internal/fileerr"
 )
 
 func TestParseRejectsNullAndEmpty(t *testing.T) {

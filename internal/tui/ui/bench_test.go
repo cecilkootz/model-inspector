@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
 
 func heatBench(n int) HeatGrid {

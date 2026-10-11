@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/hfcache"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/fixture"
+	"github.com/cecilkootz/model-inspector/internal/hfcache"
+	"github.com/cecilkootz/model-inspector/internal/model"
 )
 
 func loadDir(t *testing.T, files map[string][]byte) *model.Model {

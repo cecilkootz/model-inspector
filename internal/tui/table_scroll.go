@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
+	"github.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 // stepTableY applies the same offset change bubbles' table.Update applies

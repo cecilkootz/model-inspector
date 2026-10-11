@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
+	"github.com/cecilkootz/model-inspector/internal/model"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 // derived is everything View needs that used to be recomputed per frame.

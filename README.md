@@ -4,7 +4,7 @@ A terminal UI (Bubble Tea / Bubbles / Lip Gloss) for inspecting local LLM
 weights **without loading them**: identity, architecture config, per-layer
 tensor breakdown, and a structural integrity check.
 
-Module path: `origin.cursor.com/cecilkootz/model-inspector`.
+Module path: `github.com/cecilkootz/model-inspector`.
 
 ## Safety: headers only
 
@@ -36,7 +36,7 @@ It never writes into the Hugging Face cache. Inspecting a ~106 GiB model takes
 Clone the repo, then install from that checkout:
 
 ```sh
-git clone git@origin.cursor.com:cecilkootz/model-inspector.git
+git clone git@github.com:cecilkootz/model-inspector.git
 cd model-inspector
 go install ./cmd/model-inspector
 ```
@@ -95,11 +95,12 @@ this checkout's `bin/` and `coverage.out` in place. `bin/` is gitignored.
 Recipes call `go` on `PATH` and honor `GOTOOLCHAIN=local` (no toolchain
 download).
 
-`go install origin.cursor.com/cecilkootz/model-inspector/cmd/model-inspector@latest`
-fails even with `GOPRIVATE=origin.cursor.com`. Origin does not answer Go's
-import-path discovery (`?go-get=1`), so the toolchain 404s before it can
-fetch the module. The module path stays
-`origin.cursor.com/cecilkootz/model-inspector`.
+The repository is private. To install without a checkout, let git
+authenticate to GitHub and skip the public module proxy:
+
+```sh
+GOPRIVATE=github.com/cecilkootz go install github.com/cecilkootz/model-inspector/cmd/model-inspector@latest
+```
 
 ## Build
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
+	"github.com/cecilkootz/model-inspector/internal/safetensors"
 )
 
 func FuzzStats(f *testing.F) {

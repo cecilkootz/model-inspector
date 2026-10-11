@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
+	"github.com/cecilkootz/model-inspector/internal/fixture"
 )
 
 func writeFile(t *testing.T, path string, b []byte) {

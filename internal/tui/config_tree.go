@@ -9,9 +9,9 @@ import (
 
 	"github.com/rivo/uniseg"
 
-	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
+	"github.com/cecilkootz/model-inspector/internal/jsonx"
+	"github.com/cecilkootz/model-inspector/internal/sanitize"
+	"github.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 const (
