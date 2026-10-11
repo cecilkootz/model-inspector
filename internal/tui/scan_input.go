@@ -131,9 +131,15 @@ func runScanLoad(t Model) tea.Cmd {
 			return scanLoadedMsg{err: fmt.Errorf("scan screen was not initialised")}
 		}
 		m, err := loadModel(t.scn.dir, t.scn.progCh)
-		if t.scn.progCh != nil {
-			close(t.scn.progCh)
-		}
+		// The scan reports its layout pass on the same channel, so it stays
+		// open until the checks finish. Detaching first means a later
+		// re-scan of this model cannot send on the closed channel.
+		defer func() {
+			m.DetachProgress()
+			if t.scn.progCh != nil {
+				close(t.scn.progCh)
+			}
+		}()
 		if err != nil {
 			return scanLoadedMsg{err: err}
 		}

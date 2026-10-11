@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/cecilkootz/model-inspector/internal/fixture"
 	"github.com/cecilkootz/model-inspector/internal/model"
 	"github.com/cecilkootz/model-inspector/internal/scan"
 )
@@ -69,4 +70,41 @@ func TestHostileScanDetailsDoNotPanic(t *testing.T) {
 	if len([]rune(plain)) > scanClip {
 		t.Fatalf("clip %d", len([]rune(plain)))
 	}
+}
+
+// A real load attaches a progress emitter to the model, and the scan's
+// offsets check emits through it. Closing the channel before the scan
+// panicked with "send on closed channel" (Vontra MLX checkpoint, TUI only).
+func TestScanLoadKeepsProgressOpenUntilScanned(t *testing.T) {
+	files, _, err := fixture.TinyQwen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := fixture.Materialize(dir, files); err != nil {
+		t.Fatal(err)
+	}
+	ui := NewLoading(dir, false, false, "", "")
+	ch := make(chan model.Progress, 64)
+	ui.scn.progCh = ch
+	phases := map[string]bool{}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for p := range ch {
+			phases[p.Phase] = true
+		}
+	}()
+	msg := runScanLoad(ui)()
+	<-done // the channel is closed exactly once, after the scan
+	loaded, ok := msg.(scanLoadedMsg)
+	if !ok || loaded.err != nil {
+		t.Fatalf("load: %+v", msg)
+	}
+	if !phases[model.PhaseLayout] {
+		t.Fatalf("layout progress never reached the channel: %v", phases)
+	}
+	// A re-scan after the channel closed must stay silent, not panic.
+	loaded.m.NoteLayout(1, 1, 1, 0, true)
+	scan.Run(loaded.m)
 }
