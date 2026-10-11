@@ -64,7 +64,7 @@ The v2 UI lives in `internal/tui` and `internal/tui/ui`.
 
 ## Build and test
 
-Requires GNU make (`gmake` on macOS). Bare `make` runs `test`. Run tests with `NO_COLOR` unset so colour paths are exercised.
+Requires GNU make 3.81 or later; macOS's `/usr/bin/make` works, BSD make does not. Bare `make` runs `test`. Run tests with `NO_COLOR` unset so colour paths are exercised.
 
 ```sh
 env -u NO_COLOR make test                            # go vet (incl. -printf.funcs=Notef) + go test -race + Makefile self-test

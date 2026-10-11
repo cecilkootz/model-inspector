@@ -41,7 +41,7 @@ cd model-inspector
 go install ./cmd/model-inspector
 ```
 
-GNU make targets (on macOS, `gmake` when `/usr/bin/make` is BSD make):
+GNU make targets (macOS's `/usr/bin/make`, GNU Make 3.81, works; BSD make does not):
 
 ```sh
 make build   # bin/model-inspector
