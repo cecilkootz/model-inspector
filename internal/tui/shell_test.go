@@ -713,7 +713,7 @@ func TestShellBigModelFirstFrame(t *testing.T) {
 	for _, k := range []string{"", "2", "3", "4"} {
 		start := time.Now()
 		v := press(x, k).View()
-		if d := time.Since(start); d > 50*time.Millisecond {
+		if d := time.Since(start); d > raceScale*50*time.Millisecond {
 			t.Errorf("focus %q: first frame took %s", k, d)
 		}
 		assertFrame(t, v, 140, 40)

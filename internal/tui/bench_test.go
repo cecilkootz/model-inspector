@@ -23,7 +23,7 @@ func TestViewUnder50ms(t *testing.T) {
 	sized, _ := ui.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	start := time.Now()
 	view := sized.View()
-	if d := time.Since(start); d > 50*time.Millisecond {
+	if d := time.Since(start); d > raceScale*50*time.Millisecond {
 		t.Fatalf("View took %s", d)
 	}
 	if view == "" {

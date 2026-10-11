@@ -279,7 +279,7 @@ func TestView50kBudget(t *testing.T) {
 	sized, _ := ui.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	t0 := time.Now()
 	view := sized.View()
-	if d := time.Since(t0); d > 50*time.Millisecond {
+	if d := time.Since(t0); d > raceScale*50*time.Millisecond {
 		t.Fatalf("50k View took %s", d)
 	}
 	if view == "" {
