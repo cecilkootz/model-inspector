@@ -25,6 +25,6 @@ model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params            ✓ 
 ╭[4] Config ────────── 32 nodes ─╮│ ·  whether the weights are benign, unmodified or what the      │
 │   model_type           qwen3_5 ││    publisher intended                                          │
 │   layers              2 layers ││ ·  what the model outputs or how it behaves                    │
-│   hidden_size            8 dim ││ ·  tokenizer, chat template, license, or training-data         │
+│   context              128 tok ││ ·  tokenizer, chat template, license, or training-data         │
 ╰────────────────────────────────╯╰────────────────────────────────────────────────────────────────╯
 ↑↓ move · ⏎ detail · ? keys · ] next problem · y copy · 1-4 panels           org/tiny-qwen · 0123456
