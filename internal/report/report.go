@@ -225,7 +225,7 @@ func Build(m *model.Model, res scan.Result, fromCache bool, elapsed time.Duratio
 	d := Document{
 		SchemaVersion: 1,
 		Tool:          toolDoc{Name: version.Name, Version: version.Version},
-		Options:       optionsDoc{Strict: res.Strict, Code: false},
+		Options:       optionsDoc{Strict: res.Strict, Code: true},
 		Source: sourceDoc{
 			Path:           m.Dir,
 			RepoID:         strPtr(m.RepoID),

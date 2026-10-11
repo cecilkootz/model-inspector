@@ -6,7 +6,7 @@
   },
   "options": {
     "strict": false,
-    "code": false
+    "code": true
   },
   "source": {
     "path": "DIR",

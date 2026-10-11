@@ -550,7 +550,7 @@ func (t Model) disclosureSpec() ui.ModalSpec {
 	}
 	secondary := ui.Button(ui.S(sanitize.Program("esc")), ui.S(sanitize.Program("Cancel")), false, true)
 	return ui.ModalSpec{
-		Title:   ui.S(sanitize.Program("Read file contents?")),
+		Title:   ui.S(sanitize.Program("How contents are read")),
 		Body:    ui.S(sanitize.Program(t.disclosureBody())),
 		Buttons: ui.Chrome(primary + "  " + secondary),
 		Width:   min(t.width-4, 72),
@@ -563,10 +563,9 @@ func (t Model) updateDisclosure(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		t.disclosure = false
 	case "enter", "c":
 		if _, enabled := t.disclosureConfirm(); !enabled {
-			t.notice = "content reading ships in a later version"
+			t.notice = "contents are read by the scan; see the Code & pickle contents check"
 			return t, nil
 		}
-		t.notice = "content reading ships in a later version"
 		t.disclosure = false
 	}
 	return t, nil
