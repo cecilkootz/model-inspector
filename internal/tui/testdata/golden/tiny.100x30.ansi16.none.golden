@@ -26,5 +26,5 @@ excludes ple 40 B · excludes hyper 32 B · other 4 B not in the grid
 Memory  weights ≥ 152 B (0.0 GB)                                                                    
   text-only ≥ 128 B                                                                                 
   unified memory (MLX): CPU and GPU share RAM, total is unchanged                                   
-  weights only: no KV cache, activations or runtime overhead                                        
+  weights only; excludes KV cache, activations, runtime overhead                                    
 [1;30m IDENTITY [0m[97m /model [0m              [37m safetensors·mlx [0m[97m 6.07 KiB [0m[1;97m q4 g32 [0m[1;30m ✓ structure 6/9 [0m[37m – headers-only [0m

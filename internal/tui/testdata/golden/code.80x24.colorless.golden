@@ -19,6 +19,6 @@ routed exp  · ·  ·
 4 B  <64K ▒ <4M ▓ <256M █  8 B  ○ linear  ● full  per-layer totals differ by <1%
 flat  attention 4 B  flat · router · · shared exp · · norms ·                   
 Memory  weights ≥ 4 B (0.0 GB)                                                  
-  weights only: no KV cache, activations or runtime overhead                    
   weights only; excludes KV cache, activations, runtime overhead                
+                                                                                
 IDENTITY │ /model         safetensors │ 400 B │ bf16 │ ! 2 warn │ – headers-only

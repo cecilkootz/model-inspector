@@ -12,5 +12,5 @@
                                                             
 [1;97mCALLOUTS[0m  [90m5 notable[0m                                         
 [1;30;43m ▲ [0m [1;97mlanguage_model.model.embed_tokens.weight is 16 B, 10.…[0m  
-[1;30;43m ▲ [0m [1;97mple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% …[0m  
+    [1;97mof weights[0m                                              
 [1;30m IDENTITY [0m         [1;97m q4 g32 [0m[1;30m ✓ structure 6/9 [0m[37m – headers-only [0m

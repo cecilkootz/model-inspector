@@ -148,16 +148,16 @@ func (t Model) scanLayout(width, height int) []string {
 	t.addScanHit("scan:nc", width-ui.Width(framingChip(long))-2, 2+frameY, ui.Width(framingChip(long))+2, 1)
 	if br == "S" || width < 100 {
 		lines = append(lines, "")
-		lines = append(lines, t.cardBlock(width, 1, false)...)
 		block, rel := t.notCoveredBlock(width, t.ncOpen())
+		lines = append(lines, t.cardBlock(width, 1, false, len(lines), height-len(lines)-len(block))...)
 		t.addScanHit("scan:nc", 0, 2+len(lines)+rel, width, 1)
 		lines = append(lines, block...)
 		return lines
 	}
 	lines = append(lines, "")
 	leftW, rightW := scanColumns(width)
-	left := t.cardBlock(leftW, 2, width >= 110)
 	pre := len(lines)
+	left := t.cardBlock(leftW, 2, width >= 110, pre, height-pre)
 	detail, ncRel := t.detailLines(rightW, height)
 	if ncRel >= 0 {
 		t.addScanHit("scan:nc", leftW+2, 2+pre+ncRel, rightW, 1)
@@ -187,70 +187,107 @@ func scanColumns(width int) (left, right int) {
 	return left, right
 }
 
-func (t Model) cardBlock(width, cardRows int, showDur bool) []string {
+// cardBlock lays out whole cards within budget rows, starting at body row
+// top. It starts at the scroll position and moves down until the selected
+// card fits, so the cursor is always on screen. Hit zones are screen rows.
+func (t Model) cardBlock(width, cardRows int, showDur bool, top, budget int) []string {
+	start := min(t.scanScroll, t.scanCursor)
+	for {
+		lines, hits, last := t.cardLayout(width, cardRows, showDur, start, budget)
+		if last >= t.scanCursor || start >= t.scanCursor {
+			for _, h := range hits {
+				t.addScanHit(h.id, h.x, 2+top+h.y, h.w, h.h)
+			}
+			return lines
+		}
+		start++
+	}
+}
+
+// cardLayout returns the lines, hits relative to the block, and the index of
+// the last card drawn in full (-1 if none).
+func (t Model) cardLayout(width, cardRows int, showDur bool, start, budget int) ([]string, []hit, int) {
 	if cardRows < 1 {
 		cardRows = 1
 	}
 	var lines []string
+	var hits []hit
 	if cardRows > 1 {
 		n := len(t.scan.Checks)
 		head := fmt.Sprintf("CHECKS  %d · structure only · in main's order", n)
 		lines = append(lines, scanPaint(head, ui.TextPrimary, true)+" "+scanPaint("", ui.TextMuted, false))
 		lines = append(lines, "")
 	}
+	hint := cardRows > 1 && width >= 40
+	room := budget
+	if hint {
+		room--
+	}
 	checks := indexChecks(t.scan)
 	split := anyPromoted(t.scan)
-	shown := 0
+	last, more := -1, 0
+	full := false
 	for _, ph := range scanPhases {
 		var ids []string
 		for _, id := range ph.ids {
-			if _, ok := checks[id]; ok {
+			if c, ok := checks[id]; ok && c.i >= start {
 				ids = append(ids, id)
 			}
 		}
 		if len(ids) == 0 {
 			continue
 		}
-		// Drop a phase whose cards are all above the scroll window.
-		visible := false
-		for _, id := range ids {
-			if checks[id].i >= t.scanScroll {
-				visible = true
-			}
-		}
-		if !visible {
-			continue
-		}
-		lines = append(lines, scanPaint(ph.name, ui.Accent, true))
+		header := false
 		for _, id := range ids {
 			ch := checks[id]
-			if ch.i < t.scanScroll {
+			if full {
+				more++
 				continue
 			}
-			shown++
 			sel := ch.i == t.scanCursor
 			block := t.cardLines(ch.c, width, cardRows, showDur, sel, split)
-			y0 := 2 + len(lines)
-			for _, ln := range block {
-				lines = append(lines, ln)
+			if t.scanOpen[id] {
+				block = append(block, t.expandLines(ch.c, width)...)
 			}
-			t.addScanHit("scan:card:"+ch.c.ID, 0, y0, width, len(block))
-			t.addScanHit("scan:exp:"+ch.c.ID, 0, y0, 4, 1)
+			need := len(block)
+			if !header {
+				need++
+			}
+			if cardRows > 1 {
+				need++
+			}
+			if len(lines)+need > room && last >= 0 {
+				full = true
+				more++
+				continue
+			}
+			if !header {
+				lines = append(lines, scanPaint(ph.name, ui.Accent, true))
+				header = true
+			}
+			y0 := len(lines)
+			lines = append(lines, block...)
+			hits = append(hits, hit{id: "scan:card:" + ch.c.ID, x: 0, y: y0, w: width, h: len(block)})
+			hits = append(hits, hit{id: "scan:exp:" + ch.c.ID, x: 0, y: y0, w: 4, h: 1})
 			if cardRows > 1 {
 				lines = append(lines, "")
 			}
-			if t.scanOpen[id] {
-				for _, ln := range t.expandLines(ch.c, width) {
-					lines = append(lines, ln)
-				}
-			}
+			last = ch.i
 		}
 	}
-	_ = shown
-	if cardRows > 1 && width >= 40 {
-		lines = append(lines, scanPaint("⏎ details · space expand · e/E all · ] next problem · y copy", ui.TextMuted, false))
+	if hint {
+		text := "⏎ details · space expand · e/E all · ] next problem · y copy"
+		if more > 0 {
+			text = fmt.Sprintf("↓ %d more · ", more) + text
+		}
+		lines = append(lines, scanPaint(text, ui.TextMuted, false))
+	} else if more > 0 && len(lines) < budget {
+		lines = append(lines, scanPaint(fmt.Sprintf("↓ %d more", more), ui.TextMuted, false))
 	}
-	return lines
+	if len(lines) > budget && budget > 0 {
+		lines = lines[:budget]
+	}
+	return lines, hits, last
 }
 
 type indexedCheck struct {

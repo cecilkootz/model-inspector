@@ -1,10 +1,8 @@
 [1 Identity] 2 Config 3 Layers 4 Scan ✓                                                                     ? keys   : commands   m mouse on
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-model-inspector  /model                                                                                                                     
-  model-inspector  revision: — · qwen3_next · safetensors · bf16                                                                            
-    model-inspector                                                                                                                         
-      model-inspector                                                                                                                       
-        model-inspector  [– headers-only]  [▲ 2 callouts]  [⌂ 32.00 KiB host-capable]                                                       
+/model                                                                                                                                      
+revision: — · qwen3_next · safetensors · bf16                                                                                               
+[– headers-only]  [▲ 2 callouts]  [⌂ 32.00 KiB host-capable]                                                                                
                                                                                                                                             
                                                                                                                                             
 SIZE ON DISK           PARAMETERS             QUANT                  LAYERS                 EXPERTS                WEIGHTS                  
@@ -27,10 +25,12 @@ norms       ······ ··  ·
 16 B  <64K ▒ <4M ▓ <256M █  32 B  ○ linear  ● full  per-layer totals differ by <1%                                                          
 excludes ple 32.00 KiB · other 32 B not in the grid                                                                                         
 Memory  weights ≥ 32.17 KiB (0.0 GB)                                                                                                        
-  weights only: no KV cache, activations or runtime overhead                                                                                
   weights only; excludes KV cache, activations, runtime overhead                                                                            
   heuristic lookup_table_v1; runtime support varies; no saving on unified memory                                                            
-layer 1 is 32.02 KiB, 99.5% of weights: ~16.4K-param n-gram embedding table                                                                 
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
+                                                                                                                                            
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             

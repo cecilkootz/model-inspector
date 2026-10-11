@@ -81,16 +81,6 @@ func renderIdentityView(m *model.Model, d derived, width, height int, st idState
 	// Memory is printed once, at the full width. The storage pane used to
 	// include the same paragraph, so the large layout showed it twice.
 	lines = append(lines, legacyMemory(m, d.mem, width)...)
-	// A callout that the pane column clipped is repeated here in full.
-	// One that already fits is left where the pane drew it.
-	joined := strings.Join(lines, "\n")
-	for _, c := range d.callouts {
-		msg := sanitize.From(c.Message).String()
-		if msg != "" && !strings.Contains(joined, msg) {
-			add(msg)
-			joined += "\n" + msg
-		}
-	}
 	if m.Partial {
 		add("incomplete")
 	}
@@ -144,52 +134,27 @@ func subtitle(m *model.Model, d derived) string {
 	return strings.Join(parts, ui.SepWord())
 }
 
+// heroLines is the large-layout header: title, provenance, snapshot path
+// and status pills. The wordmark lives in the tab row, not here.
 func heroLines(m *model.Model, d derived, width int) []string {
-	word := "model-inspector"
-	var lines []string
-	gl := ui.G()
-	for k := 0; k < 5; k++ {
-		var pill string
-		switch {
-		case ui.ColorOff():
-			pill = word
-		case ui.Profile() == "ansi16":
-			pill = ui.Pill(ui.FillKindViolet, ui.L("model-inspector"))
-		default:
-			t := 0.0
-			if k > 0 {
-				t = float64(k) / 4
-			}
-			hex := string(ui.GradBrand.At(t))
-			fg := ui.OnFill(hex)
-			pill = paintWord(word, fg, hex)
-		}
-		indent := strings.Repeat(" ", k*2)
-		rest := ""
-		switch k {
-		case 0:
-			rest = "  " + modelTitle(m)
-		case 1:
-			rest = "  " + subtitle(m, d)
-		case 2:
-			// The title already falls back to the directory when there is
-			// no repo id, so the path row would repeat it.
-			if m.RepoID != "" {
-				path := sanitize.From(m.Dir).String()
-				if ui.ColorOff() {
-					rest = "  " + path
-				} else {
-					rest = "  " + paintFG(path, ui.TextLink)
-				}
-			}
-		case 4:
-			rest = "  " + heroPills(m, d)
-		}
-		line := indent + pill + rest
-		_ = gl
-		lines = append(lines, ui.Fit(line, width))
+	lines := []string{
+		ui.Fit(paintBold(modelTitle(m)), width),
+		ui.Fit(subtitle(m, d), width),
 	}
-	return lines
+	// The title already falls back to the directory when there is no repo
+	// id, so the path row would repeat it.
+	if m.RepoID != "" {
+		path := ui.MiddleTrunc(sanitize.From(m.Dir).String(), width, ui.G().Ellipsis)
+		lines = append(lines, ui.Fit(paintFG(path, ui.TextLink), width))
+	}
+	return append(lines, ui.Fit(heroPills(m, d), width))
+}
+
+func paintBold(s string) string {
+	if ui.ColorOff() {
+		return s
+	}
+	return paintPlain(s, ui.TextPrimary.Hex(), "", true)
 }
 
 func paintWord(word, fg, bg string) string {
@@ -395,6 +360,7 @@ func calloutBlock(m *model.Model, d derived, width int) []string {
 			Kind:  calloutKind(c.Kind),
 			Tag:   sanitize.Program(calloutTag(c.Kind)),
 			Title: msg,
+			Wrap:  3,
 		}
 		lines = append(lines, ui.Callout(spec, width)...)
 	}
@@ -505,7 +471,6 @@ func legacyMemory(m *model.Model, mem model.MemoryEstimate, width int) []string 
 	if mem.UnifiedMemory {
 		add("  unified memory (MLX): CPU and GPU share RAM, total is unchanged")
 	}
-	add("  weights only: no KV cache, activations or runtime overhead")
 	add("  " + mem.Note)
 	if mem.HostCapableBytes > 0 {
 		add("  " + mem.HostCapableNote)

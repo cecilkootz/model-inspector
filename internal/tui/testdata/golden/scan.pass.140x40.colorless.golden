@@ -35,6 +35,6 @@ PROVENANCE
  |  ✓ PASS  Config vs tensor shapes                     <1 ms                                                                               
  |          2 config comparisons match tensor shapes                                                                                        
                                                                                                                                             
- |  – N/R  Chat template & tokenizer                        —                                                                               
- |         no chat template or tokenizer files                                                                                              
+↓ 1 more · ⏎ details · space expand · e/E all · ] next problem · y copy                                                                     
+                                                                                                                                            
 SCAN │ org/pass │ ↑↓ check · ⏎ details · space expand · i not covered safetensors·mlx │ 6.02 KiB │ q4 g32 │ ✓ structure 6/9 │ ◇ headers-only

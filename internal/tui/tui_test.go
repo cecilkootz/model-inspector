@@ -12,6 +12,7 @@ import (
 	"github.com/cecilkootz/model-inspector/internal/fixture"
 	"github.com/cecilkootz/model-inspector/internal/model"
 	"github.com/cecilkootz/model-inspector/internal/scan"
+	"github.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
 func TestLayersViewKeepsHyperConnectionTogether(t *testing.T) {
@@ -247,6 +248,9 @@ func TestShardedNgramIdentity(t *testing.T) {
 	})
 	configure()
 	view := renderIdentity(m, 160)
+	// Callouts wrap inside their pane. Compare that pane's words in order,
+	// since the storage pane sits between wrapped lines in the full view.
+	flat := ui.Strip(view) + "\n" + strings.Join(strings.Fields(ui.Strip(strings.Join(calloutBlock(m, derive(m), 70), "\n"))), " ")
 	for _, want := range []string{
 		"⌂ of which 29.80 GiB are lookup tables that can stay in CPU RAM",
 		"(heuristic) → ≥",
@@ -254,7 +258,7 @@ func TestShardedNgramIdentity(t *testing.T) {
 		"n-gram embedding table 29.80 GiB can stay in CPU RAM (heuristic)",
 		"~51.20B-param n-gram embedding table",
 	} {
-		if !strings.Contains(view, want) {
+		if !strings.Contains(flat, want) {
 			t.Errorf("identity missing %q\n%s", want, view)
 		}
 	}

@@ -572,6 +572,8 @@ type CalloutSpec struct {
 	Title  sanitize.Text
 	Right  sanitize.Text
 	Detail sanitize.Text
+	// Wrap is the most lines the title may take. 0 or 1 truncates it.
+	Wrap int
 }
 
 // Callout renders a pill, title, figure, and a muted detail line.
@@ -579,6 +581,18 @@ func Callout(c CalloutSpec, width int) []string {
 	pill := Pill(c.Kind, c.Tag)
 	title := c.Title.String()
 	right := c.Right.String()
+	var more []string
+	if c.Wrap > 1 && right == "" {
+		// One cell stays free after the title, as on an unwrapped row.
+		if room := width - Width(pill) - 2; room >= 8 && Width(title) > room {
+			parts := wrapWords(title, room)
+			if len(parts) > c.Wrap {
+				parts = parts[:c.Wrap]
+				parts[c.Wrap-1] = Trunc(parts[c.Wrap-1]+" "+G().Ellipsis, room, G().Ellipsis)
+			}
+			title, more = parts[0], parts[1:]
+		}
+	}
 	gap := width - Width(pill) - 1 - Width(title) - 1 - Width(right)
 	if gap < 1 {
 		title = Trunc(title, max(1, width-Width(pill)-Width(right)-3), G().Ellipsis)
@@ -595,8 +609,14 @@ func Callout(c CalloutSpec, width int) []string {
 		}
 	}
 	out := []string{Fit(row, width)}
+	indent := strings.Repeat(" ", Width(pill)+1)
+	for _, m := range more {
+		if !ColorOff() {
+			m = paint(m, TextPrimary.Color(), nil, true)
+		}
+		out = append(out, Fit(indent+m, width))
+	}
 	if d := c.Detail.String(); d != "" {
-		indent := strings.Repeat(" ", Width(pill)+1)
 		line := indent + d
 		if !ColorOff() {
 			line = indent + paint(d, TextMuted.Color(), nil, false)
@@ -955,4 +975,35 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// wrapWords splits s at spaces into lines of at most width cells. A word
+// wider than width is cut.
+func wrapWords(s string, width int) []string {
+	var lines []string
+	cur := ""
+	for _, w := range strings.Fields(s) {
+		for Width(w) > width {
+			if cur != "" {
+				lines = append(lines, cur)
+				cur = ""
+			}
+			cut := Trunc(w, width, "")
+			lines = append(lines, cut)
+			w = string([]rune(w)[len([]rune(cut)):])
+		}
+		switch {
+		case cur == "":
+			cur = w
+		case Width(cur)+1+Width(w) > width:
+			lines = append(lines, cur)
+			cur = w
+		default:
+			cur += " " + w
+		}
+	}
+	if cur != "" {
+		lines = append(lines, cur)
+	}
+	return lines
 }

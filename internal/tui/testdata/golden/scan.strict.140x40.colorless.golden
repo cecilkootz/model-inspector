@@ -36,5 +36,5 @@ PROVENANCE
  |  – N/R  Config vs tensor shapes                          —                                                                               
  |         no config field to compare with tensors                                                                                          
                                                                                                                                             
- |  – N/R  Chat template & tokenizer                        —                                                                               
+↓ 1 more · ⏎ details · space expand · e/E all · ] next problem · y copy                                                                     
 SCAN · STRICT │ org/warn │ ↑↓ check · ⏎ details · space expand · i not covered        safetensors │ 400 B │ bf16 │ ✗ 2 fail │ ◇ headers-only
