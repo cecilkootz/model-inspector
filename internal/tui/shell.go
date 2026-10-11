@@ -239,7 +239,7 @@ func (t Model) shellHeader(width int) string {
 	} else {
 		left = append(left,
 			ui.Span{Text: sanitize.Program(quantHeader(m)), Tone: ui.ToneBody},
-			ui.Span{Text: sanitize.Program("~" + model.HumanCount(m.TotalLogicalParams)), Tone: ui.ToneBody},
+			ui.Span{Text: sanitize.Program("~" + model.HumanCount(m.TotalLogicalParams) + " params"), Tone: ui.ToneBody},
 		)
 	}
 	right := []ui.Span{t.shellVerdict(), {Text: ui.L("headers-only")}}

@@ -1,8 +1,8 @@
-model-inspector · code-exec · 400 B · bf16 · ~2                                                                      ! 2 warn · headers-only
+model-inspector · code-exec · 400 B · bf16 · ~2 params                                                               ! 2 warn · headers-only
 ╭[1] Model ───────────────────────── 1 note ─╮╭[0] Code-executing formats ──────────────────────────────────────────────────────── [WARN] ─╮
 │   Overview                                 ││ DETAIL  selected check                                                                     │
 │   Storage                            400 B ││ Code-executing formats   ! WARN  <1 ms                                                     │
-│   Memory                             ≥ 4 B ││ 3 findings (code-exec formats or auto_map)                                                 │
+│   Callouts                               1 ││ 3 findings (code-exec formats or auto_map)                                                 │
 ╰────────────────────────────────────────────╯│                                                                                            │
 ╭▶[2] Checks ───────────────────── 4✓ 2! 3· ─╮│ CHECKED                                                                                    │
 │   ✓ Shard headers parse              <1 ms ││ ################ 2 files · 1 auto_map entries                                              │

@@ -1,30 +1,30 @@
-model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86                   ✓ checks pass · headers-only
+model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params            ✓ checks pass · headers-only
 ╭▶[1] Model ─────────── 5 notes ─╮╭[0] Overview ───────────────────────────────────────────────────╮
-│ ▶ Overview                     ││ tiny-qwen  org · revision 0123456789ab · qwen3_5 · safetensors │
-│   Storage             6.02 KiB ││                                                                │
-│   Memory               ≥ 152 B ││ SIZE ON DISK   PARAMETERS     QUANT          LAYERS            │
-│   Callouts                   5 ││ 6.02 KiB       ~86            q4 g32         2                 │
-│   Files                      4 ││ 4 files · 2 sh 25 tensors     mlx            ○1 lin · ●1 full  │
+│ ▶ Overview                     ││ org · revision 0123456789ab · qwen3_5 · safetensors·mlx        │
+│   Storage             6.02 KiB ││ /model                                                         │
+│   Memory               ≥ 152 B ││                                                                │
+│   Callouts                   5 ││ SIZE ON DISK         PARAMETERS           QUANT                │
+│   Files                      4 ││ 6.02 KiB             ~86                  q4 g32               │
+│                                ││ 4 files · 2 shards   25 tensors           mlx                  │
 │                                ││                                                                │
-│                                ││ STORAGE  6.02 KiB on disk                                      │
-│                                ││ ██████████████████████████████████████▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▒▒▒░░     │
-│                                ││ █ plain bf16 65.8%   ▓ plain i64 21.1%   ▒ q4 packed 10.5%   ░ │
+│                                ││ LAYERS               EXPERTS                                   │
+│                                ││ 2                    4 · 2/tok                                 │
+│                                ││ ○1 lin · ●1 full     routed                                    │
 │                                ││                                                                │
-│                                ││ CALLOUTS  5 notable                                            │
-│                                ││ [▲] language_model.model.embed_tokens.weight is 16 B, 10.5%    │
-╰────────────────────────────────╯│     of weights                                                 │
-╭[2] Checks ───────────── 6✓ 3· ─╮│ [▲] ple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% of    │
-│   ✓ 6 passed                   ││     weights                                                    │
-│   · 3 not run                  ││ [▲] ple.ple_embedding.ngram_heads_vocab_sizes is 16 B, 10.5%   │
-╰────────────────────────────────╯│     of weights                                                 │
-╭[3] Layers ───────── 2 decoder ─╮│ [MTP] MTP layer present (16 B): used only for speculative      │
-│   embeddings              20 B ││       decoding                                                 │
-│   n-gram table (PLE)      36 B ││ [MTP] vision tower present (8 B)                               │
-│   decoder layers 2        32 B ││                                                                │
-╰────────────────────────────────╯│ BYTES · LAYER × COMPONENT  log2 scale shared by all rows · eac │
-╭[4] Config ────────── 32 nodes ─╮│         ○● ●                                                   │
-│   model_type           qwen3_5 ││ routed  ░· ·  8 B  flat                                        │
-│   layers              2 layers ││ 4 B  <64K ▒ <4M ▓ <256M █  8 B  ○ linear  ● full  per-layer to │
-│   hidden_size            8 dim ││ flat  attention 4 B  flat · router 4 B  flat · shared exp 4 B  │
+│                                ││ STORAGE                                                        │
+╰────────────────────────────────╯│ ████████████████████████████████████████▓▓▓▓▓▓▓▓▓▓▓▓▓▒▒▒▒▒▒▒░░ │
+╭[2] Checks ───────────── 6✓ 3· ─╮│ █ plain bf16 65.8%   ▓ plain i64 21.1%   ▒ q4 packed 10.5%     │
+│   ✓ 6 passed                   ││ ░ scales/biases 2.6%                                           │
+│   · 3 not run                  ││                                                                │
+╰────────────────────────────────╯│ CALLOUTS                                                       │
+╭[3] Layers ───────── 2 decoder ─╮│ ! language_model.model.embed_tokens.weight is 16 B, 10.5% of   │
+│   embeddings              20 B ││   weights                                                      │
+│   n-gram table (PLE)      36 B ││ ! ple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% of      │
+│   decoder layers 2        32 B ││   weights                                                      │
+╰────────────────────────────────╯│ ! ple.ple_embedding.ngram_heads_vocab_sizes is 16 B, 10.5% of  │
+╭[4] Config ────────── 32 nodes ─╮│   weights                                                      │
+│   model_type           qwen3_5 ││ +2 more                                                        │
+│   layers              2 layers ││                                                                │
+│   hidden_size            8 dim ││                                                                │
 ╰────────────────────────────────╯╰────────────────────────────────────────────────────────────────╯
 ↑↓ move · ⏎ detail · ? keys · 1-4 panels · tab next panel                    org/tiny-qwen · 0123456

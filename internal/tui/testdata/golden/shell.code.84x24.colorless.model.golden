@@ -1,0 +1,24 @@
+model-inspector · code-exec · 400 B · bf16 · ~2 params       ! 2 warn · headers-only
+╭▶[1] Model ──────────── 1 note ─╮╭[0] Overview ───────────────────────────────────╮
+│ ▶ Overview                     ││ org · revision 89abcdef0123 · demo ·           │
+│   Storage                400 B ││ safetensors                                    │
+│   Memory                 ≥ 4 B ││ /model                                         │
+│   Callouts                   1 ││                                                │
+│   Files                      5 ││ SIZE ON DISK            PARAMETERS             │
+│                                ││ 400 B                   ~2                     │
+│                                ││ 5 files · 1 shards      1 tensors              │
+│                                ││                                                │
+│                                ││ QUANT                   LAYERS                 │
+╰────────────────────────────────╯│ bf16                    1                      │
+╭[2] Checks ────────── 4✓ 2! 3· ─╮│                         ○0 lin · ●1 full       │
+│   ! Code-executing form… <1 ms ││                                                │
+│   ! Code & pickle conte… <1 ms ││ STORAGE                                        │
+│   ✓ 4 passed                   ││ ██████████████████████████████████████████████ │
+╰────────────────────────────────╯│ █ plain bf16 100%                              │
+╭[3] Layers ───────── 1 decoder ─╮│                                                │
+│   decoder layers 1         4 B ││ CALLOUTS                                       │
+╰────────────────────────────────╯│ ! self_attn.q_proj.weight is 4 B, 100.0% of    │
+╭[4] Config ─────────── 4 nodes ─╮│   weights                                      │
+│   model_type              demo ││                                                │
+╰────────────────────────────────╯╰────────────────────────────────────────────────╯
+↑↓ move · ⏎ detail · ? keys · 1-4 panels · tab next panel    org/code-exec · 89abcde
