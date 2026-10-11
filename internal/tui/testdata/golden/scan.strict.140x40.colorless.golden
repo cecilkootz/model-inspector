@@ -36,5 +36,5 @@ PROVENANCE
  |  – N/R  Config vs tensor shapes                          —                                                                               
  |         no config field to compare with tensors                                                                                          
                                                                                                                                             
-AGENT                                                                                                                                       
+ |  – N/R  Chat template & tokenizer                        —                                                                               
 SCAN · STRICT │ org/warn │ ↑↓ check · ⏎ details · space expand · i not covered        safetensors │ 400 B │ bf16 │ ✗ 1 fail │ ◇ headers-only

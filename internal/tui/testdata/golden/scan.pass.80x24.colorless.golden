@@ -15,10 +15,10 @@ CODE
 PROVENANCE                                                                      
  | – N/R  Hashes vs revision     not run: needs a full read of 6.02 KiB         
  | ✓ PASS Config vs tensor shap… 2 config comparisons match tensor shapes       
-AGENT                                                                           
  | – N/R  Chat template & token… no chat template or tokenizer files            
                                                                                 
  ▸ Not covered by any check (5)                                               i 
+                                                                                
                                                                                 
                                                                                 
 SCAN │ org/pass │ ↑↓ · ⏎ details      6.02 KiB │ q4 g32 │ ✓ 6/9 │ ◇ headers-only

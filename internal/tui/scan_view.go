@@ -275,8 +275,7 @@ var scanPhases = []scanPhase{
 	{"READ", []string{scan.CheckHeader, scan.CheckFiles}},
 	{"STRUCTURE", []string{scan.CheckOffsets, scan.CheckIndex}},
 	{"CODE", []string{scan.CheckCodeExec, scan.CheckCode}},
-	{"PROVENANCE", []string{scan.CheckHash, scan.CheckMetadata}},
-	{"AGENT", []string{scan.CheckAgent}},
+	{"PROVENANCE", []string{scan.CheckHash, scan.CheckMetadata, scan.CheckAgent}},
 }
 
 func (t Model) cardLines(c scan.Check, width, rows int, showDur, sel, split bool) []string {
