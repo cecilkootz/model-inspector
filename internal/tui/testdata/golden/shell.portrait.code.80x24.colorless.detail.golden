@@ -1,0 +1,24 @@
+model-inspector · code-exec · 400 B · bf16 · ~2 params   ! 2 warn · headers-only
+╭▶[0] Code-executing formats ───────────────────────────────────────── [WARN] ─╮
+│ 3 findings (code-exec formats or auto_map)                                   │
+│                                                                              │
+│ PROBLEMS                                                                     │
+│ ! config.json auto_map AutoModelForCausalLM -> modeling_demo.DemoForCausalLM │
+│ ! modeling_demo.py                                                           │
+│ ! weights.bin                                                                │
+│                                                                              │
+│ RULE                                                                         │
+│ file names with code-executing suffixes (.bin .pt .pth .pkl .ckpt .h5 .keras │
+│ .nemo .dill .mar .py, .bin.gz …) and top-level auto_map in config files;     │
+│ nothing opened                                                               │
+│                                                                              │
+│ WHY IT MATTERS                                                               │
+│ These formats can run code when some other tool loads the model. This check  │
+│ matches file names and reads top-level auto_map in config files. It does not │
+│ import or execute anything.                                                  │
+│                                                                              │
+│ DOES NOT PROVE                                                               │
+│ That other files carry no risk, or that flagged files are harmful.           │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+↑↓ scroll · esc back · ? keys · 1-4 panels               org/code-exec · 89abcde

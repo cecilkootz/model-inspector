@@ -118,8 +118,13 @@ func (t Model) frameKey() string {
 }
 
 func (t Model) renderFrame() string {
-	if t.shellOn() {
+	switch {
+	case t.shellTooSmall():
+		return t.renderTooSmall()
+	case t.shellOn():
 		return t.renderShell()
+	case t.shellLoad():
+		return t.renderShellLoading()
 	}
 	if t.width < 60 || t.height < 16 {
 		return frame(t.tooSmall(), t.width, t.height)
@@ -187,6 +192,9 @@ func chip(s string) string {
 }
 
 func (t Model) helpMode() string {
+	if t.shellLoad() {
+		return "LOADING"
+	}
 	if t.shellOn() {
 		return t.shellModeName()
 	}
@@ -194,6 +202,9 @@ func (t Model) helpMode() string {
 }
 
 func (t Model) helpBody() string {
+	if t.shellLoad() {
+		return t.loadHelpBody()
+	}
 	if t.shellOn() {
 		return t.shellHelpBody()
 	}
@@ -675,6 +686,9 @@ func (t Model) scrollAt(x, y, d int) tea.Model {
 	if t.shellOn() {
 		return t.shellScroll(x, y, d)
 	}
+	if t.shellLoad() || t.shellTooSmall() {
+		return t
+	}
 	if y >= t.height-1 {
 		return t
 	}
@@ -786,7 +800,7 @@ func (t Model) addPaletteZones() {
 }
 
 func (t Model) bodyTop() int {
-	if t.shellOn() {
+	if t.shellFrame() {
 		return 1
 	}
 	return 2

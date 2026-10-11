@@ -1,0 +1,20 @@
+model-inspector · tiny-qwen · … ✓ checks pass · headers-only
+╭▶[1] Model ───────────────────────────────────── 5 notes ─╮
+│ ▶ Overview                                               │
+│   Storage                                       6.02 KiB │
+│   Memory                                         ≥ 152 B │
+│   Callouts                                             5 │
+│   Files                                                4 │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+╭[2] Checks ─────────────────────────────────────── 6✓ 3· ─╮
+╭[3] Layers ─────────────────────────────────── 2 decoder ─╮
+╭[4] Config ──────────────────────────────────── 32 nodes ─╮
+↑↓ move · ⏎ detail · ? keys          org/tiny-qwen · 0123456

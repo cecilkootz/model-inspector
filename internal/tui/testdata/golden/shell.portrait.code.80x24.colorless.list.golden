@@ -1,0 +1,24 @@
+model-inspector · code-exec · 400 B · bf16 · ~2 params   ! 2 warn · headers-only
+╭[1] Model ─────────────────────────────────────────────────────────── 1 note ─╮
+│   Overview                                                                   │
+│   Storage                                                              400 B │
+│   Callouts                                                                 1 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭▶[2] Checks ─────────────────────────────────────────────────────── 4✓ 2! 3· ─╮
+│ ▶ ✓ Shard headers parse                                                <1 ms │
+│   ✓ Files present                                                      <1 ms │
+│   ✓ Offsets & sizes                                                    <1 ms │
+│   ✓ Index matches headers                                              <1 ms │
+│   ! Code-executing formats                                             <1 ms │
+│   ! Code & pickle contents                                             <1 ms │
+│   · Hashes vs revision                                                     — │
+│   · Config vs tensor shapes                                                — │
+│   · Chat template & tokenizer                                              — │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭[3] Layers ─────────────────────────────────────────────────────── 1 decoder ─╮
+│   ▸ decoder ×1                                                           4 B │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭[4] Config ───────────────────────────────────────────────────────── 4 nodes ─╮
+│   model_type                                                            demo │
+╰──────────────────────────────────────────────────────────────────────────────╯
+↑↓ move · ⏎ detail · ? keys · ] next problem · y copy    org/code-exec · 89abcde

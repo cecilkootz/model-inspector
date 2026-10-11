@@ -493,21 +493,31 @@ func TestShellMouse(t *testing.T) {
 	}
 }
 
-func TestShellFallbacks(t *testing.T) {
+// Below 84 columns the panels stack (portrait); below 40x12 only the
+// too-small line shows. The tab layout is not a fallback any more.
+func TestShellSizeBoundaries(t *testing.T) {
 	m := shellFixtures(t)["tiny"]
-	x := shellModel(t, m, 83, 30)
-	if x.(Model).shellOn() {
-		t.Fatal("shell on at 83 columns")
-	}
-	if v := strings.Join(screenOf(x), "\n"); !strings.Contains(v, "1 Identity") || strings.Contains(v, "[1] Model") {
-		t.Fatalf("83 columns did not use the tab layout:\n%s", v)
-	}
-	x, _ = x.Update(tea.WindowSizeMsg{Width: 84, Height: 30})
-	if !x.(Model).shellOn() {
-		t.Fatal("shell off at 84 columns")
-	}
-	if v := strings.Join(screenOf(x), "\n"); !strings.Contains(v, "[1] Model") {
-		t.Fatalf("84 columns did not draw the shell:\n%s", v)
+	for _, c := range []struct {
+		w, h             int
+		on, portrait, sm bool
+	}{
+		{84, 30, true, false, false}, {83, 30, true, true, false}, {40, 30, true, true, false},
+		{39, 30, false, true, true}, {100, 12, true, false, false}, {100, 11, false, false, true},
+		{40, 12, true, true, false},
+	} {
+		x := shellModel(t, m, c.w, c.h)
+		cur := x.(Model)
+		if cur.shellOn() != c.on || cur.shellPortrait() != c.portrait || cur.shellTooSmall() != c.sm {
+			t.Errorf("%dx%d: on %v portrait %v small %v", c.w, c.h, cur.shellOn(), cur.shellPortrait(), cur.shellTooSmall())
+		}
+		assertFrame(t, x.View(), c.w, c.h)
+		v := strings.Join(screenOf(x), "\n")
+		if c.on && !strings.Contains(v, "[1] Model") {
+			t.Errorf("%dx%d did not draw the shell:\n%s", c.w, c.h, v)
+		}
+		if strings.Contains(v, "1 Identity") {
+			t.Errorf("%dx%d fell back to the tab layout", c.w, c.h)
+		}
 	}
 	// The default layout is the tab shell.
 	d, _ := New(m, scan.Run(m)).Update(tea.WindowSizeMsg{Width: 140, Height: 40})
@@ -516,8 +526,9 @@ func TestShellFallbacks(t *testing.T) {
 	}
 }
 
-// While loading the tab layout shows today's loading view; the shell takes
-// over when the model arrives, with Model focused.
+// While loading the shell frame is already on screen; the same frame turns
+// into content with Model focused. A load error stays in the shell and keeps
+// exit code 3.
 func TestShellLoadingThenShell(t *testing.T) {
 	files, _, err := fixture.TinyQwen()
 	if err != nil {
@@ -527,23 +538,32 @@ func TestShellLoadingThenShell(t *testing.T) {
 	if err := fixture.Materialize(dir, files); err != nil {
 		t.Fatal(err)
 	}
-	n := NewLoading(dir, false, false, "org/tiny", "")
-	n.apply(Options{Layout: LayoutPanels})
-	x, _ := n.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	if x.(Model).shellOn() {
-		t.Fatal("shell drew while loading")
-	}
-	if v := stripView(x.View()); strings.Contains(v, "[1] Model") {
-		t.Fatalf("loading drew panels:\n%s", v)
-	}
-	x, _ = x.Update(runScanLoad(n)())
-	cur := x.(Model)
-	if !cur.shellOn() || cur.sh.side != 1 || cur.sh.inDetail {
-		t.Fatalf("after load: shell %v side %d detail %v", cur.shellOn(), cur.sh.side, cur.sh.inDetail)
-	}
-	assertFrame(t, x.View(), 120, 30)
-	if v := stripView(x.View()); !strings.Contains(v, "[1] Model") || !strings.Contains(v, "org/tiny") {
-		t.Fatalf("shell after load:\n%s", v)
+	for _, sz := range [][2]int{{120, 30}, {80, 24}} {
+		n := NewLoading(dir, false, false, "org/tiny", "")
+		n.apply(Options{Layout: LayoutPanels})
+		x, _ := n.Update(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
+		if !x.(Model).shellLoad() || x.(Model).shellOn() {
+			t.Fatal("not the loading frame")
+		}
+		v := stripView(x.View())
+		for _, want := range []string{"[1] Model", "waiting for headers", "org/tiny", "q cancel"} {
+			if !strings.Contains(v, want) {
+				t.Fatalf("%v loading frame lacks %q:\n%s", sz, want, v)
+			}
+		}
+		if strings.Contains(v, "1 Identity") {
+			t.Fatalf("%v loading drew the tab layout:\n%s", sz, v)
+		}
+		assertFrame(t, x.View(), sz[0], sz[1])
+		x, _ = x.Update(runScanLoad(n)())
+		cur := x.(Model)
+		if !cur.shellOn() || cur.sh.side != 1 || cur.sh.inDetail {
+			t.Fatalf("after load: shell %v side %d detail %v", cur.shellOn(), cur.sh.side, cur.sh.inDetail)
+		}
+		assertFrame(t, x.View(), sz[0], sz[1])
+		if v := stripView(x.View()); !strings.Contains(v, "[1] Model") || !strings.Contains(v, "tiny") {
+			t.Fatalf("shell after load:\n%s", v)
+		}
 	}
 
 	prev := loadModel
@@ -553,8 +573,12 @@ func TestShellLoadingThenShell(t *testing.T) {
 	bad.apply(Options{Layout: LayoutPanels})
 	y, _ := bad.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	y, _ = y.Update(runScanLoad(bad)())
-	if y.(Model).shellOn() || !strings.Contains(stripView(y.View()), "could not inspect") {
-		t.Fatal("a load error did not show the error card")
+	v := stripView(y.View())
+	if !y.(Model).shellLoad() || !strings.Contains(v, "could not inspect") || !strings.Contains(v, "[0] Load failed") || !strings.Contains(v, "FAIL") {
+		t.Fatalf("a load error did not show the card in the shell:\n%s", v)
+	}
+	if y.(Model).exitCode() != 3 {
+		t.Fatal("load error lost exit code 3")
 	}
 }
 

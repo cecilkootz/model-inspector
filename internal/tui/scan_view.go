@@ -32,6 +32,7 @@ type scanView struct {
 	fromCache bool
 	repo, rev string
 	progCh    chan model.Progress
+	phases    loadPhases
 	detailTop int
 }
 

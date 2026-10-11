@@ -1,0 +1,24 @@
+model-inspector · org/tiny-qwen · reading headers…                      headers-only
+╭▶[1] Model ─────────────────────╮╭[0] Loading ────────────────────────────────────╮
+│   ✓ Walk snapshot     35 files ││ Reading safetensors headers only; no weights   │
+│   ✓ Index                      ││ are loaded.                                    │
+│   ✓ Shard headers        22/22 ││                                                │
+│   • Offsets & layout     14/22 ││ Offsets & layout                               │
+│   ○ Checks                     ││ 14 of 22 shards · 2,361 ranges                 │
+╰────────────────────────────────╯│ █████████████████████████████████▌             │
+╭[2] Checks ─────────────────────╮│                                                │
+│ waiting for headers            ││ /models/hub/mod…ny-qwen/snapshots/0123456789ab │
+│                                ││                                                │
+│                                ││                                                │
+╰────────────────────────────────╯│                                                │
+╭[3] Layers ─────────────────────╮│                                                │
+│ waiting for headers            ││                                                │
+│                                ││                                                │
+│                                ││                                                │
+╰────────────────────────────────╯│                                                │
+╭[4] Config ─────────────────────╮│                                                │
+│ waiting for headers            ││                                                │
+│                                ││                                                │
+│                                ││                                                │
+╰────────────────────────────────╯╰────────────────────────────────────────────────╯
+q cancel · ? keys                                                                   

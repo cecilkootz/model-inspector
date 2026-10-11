@@ -167,7 +167,7 @@ func (t Model) Init() tea.Cmd {
 }
 
 func (t Model) bodyHeight() int {
-	if t.shellOn() {
+	if t.shellFrame() {
 		return t.shellBodyHeight()
 	}
 	if h := t.height - 3; h > 1 {
@@ -213,6 +213,7 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case scanProgMsg:
 		if t.scn != nil && t.scn.loading {
 			t.scn.prog = msg.p
+			t.scn.phases.note(msg.p)
 			t.scn.spin++
 			t.touchScan()
 			return t, waitScanProg(t.scn.progCh)
@@ -269,11 +270,14 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if t.disclosure {
 			return t.updateDisclosure(msg)
 		}
-		if t.ready && (t.width < 60 || t.height < 16) {
+		if t.shellTooSmall() || (t.layout != LayoutPanels && t.ready && (t.width < 60 || t.height < 16)) {
 			if msg.String() == "q" {
 				return t, tea.Quit
 			}
 			return t, nil
+		}
+		if t.shellLoad() {
+			return t.updateLoadKey(msg)
 		}
 		if t.shellOn() {
 			return t.updateShellKey(msg)
@@ -486,7 +490,7 @@ func (t Model) View() string {
 		return fitLine("model-inspector   1 Identity   2 Config   3 Layers   4 Scan", 80)
 	}
 	key := t.frameKey()
-	if t.shellOn() {
+	if t.shellFrame() {
 		key += t.sh.framePart()
 	}
 	if t.cache != nil && t.cache.key == key && t.cache.frame != "" {

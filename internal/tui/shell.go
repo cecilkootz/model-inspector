@@ -23,11 +23,12 @@ const (
 )
 
 const (
-	shellMinW     = 84 // narrower falls back to the tab layout
-	shellMinH     = 16
-	shellCompactH = 24 // shorter: unfocused panels keep only their title row
-	shellSideMin  = 34
-	shellSideMax  = 48
+	shellMinW      = 40 // narrower or shorter than shellMinH shows only "terminal too small"
+	shellMinH      = 12
+	shellPortraitW = 84 // narrower: the side panels stack and the detail pane replaces them
+	shellCompactH  = 24 // shorter: unfocused panels keep only their title row
+	shellSideMin   = 34
+	shellSideMax   = 48
 )
 
 // shellState is the panels layout. Like cfg and lay it hangs off Model by
@@ -76,13 +77,15 @@ func (t *Model) shellFocus(n int) {
 	}
 }
 
-// shellOn is true when the panels layout is drawing. Loading, a load error
-// and small terminals use the tab layout.
+// shellOn is true when the panels layout is drawing a loaded model.
+// shellLoad covers loading and a load error; shellTooSmall the rest.
 func (t Model) shellOn() bool {
 	return t.layout == LayoutPanels && t.ready && t.m != nil && t.sh != nil &&
 		t.width >= shellMinW && t.height >= shellMinH &&
 		(t.scn == nil || t.scn.loadErr == "")
 }
+
+func (t Model) shellPortrait() bool { return t.width < shellPortraitW }
 
 func shellSideWidth(w int) int { return clampInt(w/3, shellSideMin, shellSideMax) }
 
@@ -92,23 +95,95 @@ func (t Model) renderShell() string {
 	W, H := t.width, t.height
 	sh := t.sh
 	ps := (&t).sidePanels()
-	sideW := shellSideWidth(W)
-	detW := W - sideW
+	portrait := t.shellPortrait()
+	sideW, detX := shellSideWidth(W), shellSideWidth(W)
+	detW := W - detX
+	if portrait {
+		sideW, detX, detW = W, 0, W
+	}
 	bodyH := H - 2
-	iw := sideW - 4
 	open := sh.side - 1
+	showDetail := !portrait || sh.inDetail
+	showSide := !portrait || !sh.inDetail
 
+	sh.hits = sh.hits[:0]
+	sh.panelRect, sh.detailRect = [4]ui.Rect{}, ui.Rect{}
+	var side []string
+	if showSide {
+		side = t.shellStack(open, sideW, bodyH, !sh.inDetail,
+			func(i int) (sanitize.Text, ui.Safe) { return ps[i].title(), ui.Chrome(ps[i].counter()) },
+			func(i, iw int) []string { return ps[i].summary(iw) },
+			func(i, y, h, iw int) []string { return t.shellList(ps[i], i, y, h, iw) })
+	}
+
+	active := ps[open]
+	var detail []string
+	if showDetail {
+		ih := bodyH - 2
+		lines := active.detail(detW-4, ih)
+		if _, drives := active.(detailDriver); drives {
+			sh.top = 0
+		} else {
+			sh.top = clampInt(sh.top, 0, max(0, len(lines)-ih))
+			lines = lines[min(sh.top, len(lines)):]
+		}
+		title, tag := ui.L("Detail"), ui.Safe{}
+		if dt, ok := active.(detailTitled); ok {
+			title, tag = dt.selection()
+		}
+		detail = ui.Panel(ui.PanelSpec{
+			Num: 0, Title: title, Counter: tag, Body: lines,
+			Width: detW, Height: bodyH, Focused: sh.inDetail,
+		})
+		sh.detailRect = ui.Rect{X: detX, Y: 1, W: detW, H: bodyH}
+	}
+
+	body := t.joinColumns(side, detail, bodyH)
+	overlay := t.help || t.palette.open || t.disclosure
+	if overlay {
+		body = clipLines(t.overlay(body), bodyH, W)
+	}
+	t.fillShellZones(overlay)
+	return t.shellHeader(W) + "\n" + body + "\n" + t.shellKeyLine(active)
+}
+
+// joinColumns puts the side column and the detail pane side by side. In
+// portrait only one of them is drawn.
+func (t Model) joinColumns(side, detail []string, bodyH int) string {
+	rows := make([]string, bodyH)
+	for i := range rows {
+		switch {
+		case side == nil:
+			rows[i] = detail[i]
+		case detail == nil:
+			rows[i] = side[i]
+		default:
+			rows[i] = side[i] + detail[i]
+		}
+	}
+	return strings.Join(rows, "\n")
+}
+
+// shellStack draws the four side panels top to bottom and records their
+// rectangles. The open panel takes the rows the others leave; the others show
+// a summary of at most three rows, or just their title row on short terminals.
+func (t Model) shellStack(open, sideW, bodyH int, focused bool,
+	head func(i int) (sanitize.Text, ui.Safe),
+	sum func(i, iw int) []string,
+	list func(i, y, h, iw int) []string) []string {
+	sh := t.sh
+	iw := sideW - 4
 	var sums [4][]string
 	var hs [4]int
 	used := 0
-	for i, p := range ps {
+	for i := range hs {
 		if i == open {
 			continue
 		}
-		if H < shellCompactH {
+		if t.height < shellCompactH {
 			hs[i] = 1
 		} else {
-			s := p.summary(iw)
+			s := sum(i, iw)
 			if len(s) > 3 {
 				s = s[:3]
 			}
@@ -119,58 +194,27 @@ func (t Model) renderShell() string {
 	}
 	hs[open] = max(3, bodyH-used)
 
-	sh.hits = sh.hits[:0]
 	var side []string
 	y := 1
-	for i, p := range ps {
-		h := hs[i]
+	for i, h := range hs {
+		title, counter := head(i)
 		spec := ui.PanelSpec{
-			Num: i + 1, Title: p.title(), Counter: ui.Chrome(p.counter()),
-			Width: sideW, Height: h, Focused: i == open && !sh.inDetail,
+			Num: i + 1, Title: title, Counter: counter,
+			Width: sideW, Height: h, Focused: i == open && focused,
 		}
 		if f := sh.filter[i]; f.active() {
-			spec.Counter = filterCounter(f.text, p.title(), sideW)
+			spec.Counter = filterCounter(f.text, title, sideW)
 		}
 		sh.panelRect[i] = ui.Rect{X: 0, Y: y, W: sideW, H: h}
 		if i == open {
-			spec.Body = t.shellList(p, i, y, h, iw)
+			spec.Body = list(i, y, h, iw)
 		} else {
 			spec.Body = sums[i]
 		}
 		side = append(side, ui.Panel(spec)...)
 		y += h
 	}
-
-	active := ps[open]
-	ih := bodyH - 2
-	lines := active.detail(detW-4, ih)
-	if _, drives := active.(detailDriver); drives {
-		sh.top = 0
-	} else {
-		sh.top = clampInt(sh.top, 0, max(0, len(lines)-ih))
-		lines = lines[min(sh.top, len(lines)):]
-	}
-	title, tag := ui.L("Detail"), ui.Safe{}
-	if dt, ok := active.(detailTitled); ok {
-		title, tag = dt.selection()
-	}
-	detail := ui.Panel(ui.PanelSpec{
-		Num: 0, Title: title, Counter: tag, Body: lines,
-		Width: detW, Height: bodyH, Focused: sh.inDetail,
-	})
-	sh.detailRect = ui.Rect{X: sideW, Y: 1, W: detW, H: bodyH}
-
-	rows := make([]string, bodyH)
-	for i := range rows {
-		rows[i] = side[i] + detail[i]
-	}
-	body := strings.Join(rows, "\n")
-	overlay := t.help || t.palette.open || t.disclosure
-	if overlay {
-		body = clipLines(t.overlay(body), bodyH, W)
-	}
-	t.fillShellZones(overlay)
-	return t.shellHeader(W) + "\n" + body + "\n" + t.shellKeyLine(active)
+	return side
 }
 
 // shellList draws the open panel's rows through a window that keeps the
@@ -620,7 +664,7 @@ func (t Model) shellScroll(x, y, d int) Model {
 	sh := t.sh
 	ps := (&t).sidePanels()
 	open := ps[sh.side-1]
-	if x >= sh.detailRect.X {
+	if dr := sh.detailRect; x >= dr.X && x < dr.X+dr.W {
 		wasDetail := sh.inDetail
 		sh.inDetail = true
 		(&t).shellMove(open, d)

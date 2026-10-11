@@ -1,0 +1,20 @@
+model-inspector · code-exec · 400 B… ! 2 warn · headers-only
+╭[1] Model ─────────────────────────────────────── 1 note ─╮
+╭▶[2] Checks ─────────────────────────────────── 4✓ 2! 3· ─╮
+│ ▶ ✓ Shard headers parse                            <1 ms │
+│   ✓ Files present                                  <1 ms │
+│   ✓ Offsets & sizes                                <1 ms │
+│   ✓ Index matches headers                          <1 ms │
+│   ! Code-executing formats                         <1 ms │
+│   ! Code & pickle contents                         <1 ms │
+│   · Hashes vs revision                                 — │
+│   · Config vs tensor shapes                            — │
+│   · Chat template & tokenizer                          — │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+╭[3] Layers ─────────────────────────────────── 1 decoder ─╮
+╭[4] Config ───────────────────────────────────── 4 nodes ─╮
+↑↓ move · ⏎ detail · ? keys          org/code-exec · 89abcde

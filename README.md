@@ -149,9 +149,12 @@ an empty locale stays Unicode.
 `--layout tabs` is the default. `--layout panels` opens the v3 shell:
 a header line, four stacked side panels (`[1] Model`, `[2] Checks`,
 `[3] Layers`, `[4] Config`), a detail pane `[0]` that shows the focused
-panel's selection, and a key line for the focused panel. It needs at least
-84 columns and 16 rows; below that it falls back to the tab layout, and
-while the model is still loading it shows the loading view.
+panel's selection, and a key line for the focused panel. While the model
+loads, the same frame lists the loader phases in `[1] Model` and the detail
+pane shows the active phase; it turns into the content when loading ends.
+Below 84 columns the side panels stack at full width and `enter` or `0`
+replaces the stack with the detail pane (`esc` returns). Below 40 columns or
+12 rows it shows only `terminal too small` and `q quit`.
 
 `1`-`4` focus a side panel, `0` or `enter` focuses the detail pane, and
 `tab` / `shift+tab` cycle. `esc` returns from the detail pane. `up` / `down`
