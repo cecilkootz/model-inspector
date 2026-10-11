@@ -269,7 +269,9 @@ follows the overall result.
    suffixes such as `.bin.gz`, `.tar.gz`, `.pt.zip`, `.ckpt.zip`, `.pth.zip`, `.bin.zip`, and `.pth.tar`) and by top-level `auto_map` read from
    config files (warn, or fail under `--strict`; a config file that exists
    but cannot be read or parsed warns instead of passing as none); code and pickle contents (not
-   run); hashes vs revision (planned); config vs tensor shapes (planned).
+   run); hashes vs revision (planned); config vs tensor shapes (`hidden_size`,
+   `vocab_size`, and `num_hidden_layers` against the embedding, `lm_head`, and
+   decoder layer tensors; warn only).
    Skip and planned do not turn a pass into a failure. An empty directory
    or GGUF-only directory is not reported as a pass.
 
@@ -287,7 +289,7 @@ internal/safeopen       single-fd regular-file reads with a size cap
 internal/sanitize       terminal-safe text for file-derived strings
 internal/model          loader, grouping, quant inference, config fields
 internal/report         schema_version 1 JSON and the text summary
-internal/scan           structural checks (+ planned stubs)
+internal/scan           structural checks (+ planned hash stub)
 internal/tui            Bubble Tea screens
 internal/version        tool name and version written into JSON
 ```
@@ -297,7 +299,6 @@ internal/version        tool name and version written into JSON
 - GGUF support (header + tensor info parsing)
 - Hash / provenance verification against the HF commit (LFS sha256)
 - Code and pickle contents (names are flagged today; contents are not read)
-- Config vs tensor-shape checks
 - Behavior probes against a served copy (not a scan check)
 - Agent / tool config inspection (chat template, tool-call format, generation config)
 - Offload planner: given a VRAM/unified-memory size, plan which layers/experts fit

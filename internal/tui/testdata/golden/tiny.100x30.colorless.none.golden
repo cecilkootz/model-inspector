@@ -27,4 +27,4 @@ Memory  weights ≥ 152 B (0.0 GB)
   text-only ≥ 128 B                                                                                 
   unified memory (MLX): CPU and GPU share RAM, total is unchanged                                   
   weights only: no KV cache, activations or runtime overhead                                        
-IDENTITY │ /model             safetensors·mlx │ 6.07 KiB │ q4 g32 │ ✓ structure 5/8 │ – headers-only
+IDENTITY │ /model             safetensors·mlx │ 6.07 KiB │ q4 g32 │ ✓ structure 6/8 │ – headers-only

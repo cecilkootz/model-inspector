@@ -1189,6 +1189,8 @@ func ruleShort(id string) string {
 		return "weight_map entries found in headers"
 	case scan.CheckCodeExec:
 		return "names only; nothing imported or run"
+	case scan.CheckMetadata:
+		return "config dims = tensor shapes; warn only"
 	default:
 		return ""
 	}

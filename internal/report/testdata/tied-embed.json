@@ -133,8 +133,8 @@
       "pass": 4,
       "warn": 0,
       "fail": 0,
-      "skip": 2,
-      "planned": 2
+      "skip": 3,
+      "planned": 1
     },
     "checks": [
       {
@@ -196,9 +196,9 @@
       {
         "id": "metadata-sanity",
         "name": "Config vs tensor shapes",
-        "status": "planned",
-        "effective_status": "planned",
-        "summary": "not run: planned",
+        "status": "skip",
+        "effective_status": "skip",
+        "summary": "no config field to compare with tensors",
         "details": []
       }
     ]

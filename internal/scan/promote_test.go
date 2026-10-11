@@ -36,11 +36,15 @@ func TestSkipPromotedWhenShardsExist(t *testing.T) {
 		t.Fatalf("code-content was promoted: %+v", code)
 	}
 	meta := findCheck(t, res, CheckMetadata)
-	if meta.Status != StatusPlanned || meta.EffectiveStatus != StatusPlanned {
-		t.Fatalf("planned was promoted: %+v", meta)
+	if meta.Status != StatusSkip || meta.EffectiveStatus != StatusSkip {
+		t.Fatalf("metadata skip was promoted: %+v", meta)
 	}
-	if meta.Summary != "not run: planned" {
+	if meta.Summary != "no usable config.json" {
 		t.Fatalf("metadata summary %q", meta.Summary)
+	}
+	hash := findCheck(t, res, CheckHash)
+	if hash.Status != StatusPlanned || hash.EffectiveStatus != StatusPlanned {
+		t.Fatalf("planned was promoted: %+v", hash)
 	}
 }
 

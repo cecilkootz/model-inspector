@@ -93,7 +93,7 @@ func RunOptions(m *model.Model, opt Options) Result {
 		timed(func() Check { return codeExecFormats(m) }, 0),
 		timed(func() Check { return codeContent(m) }, 0),
 		timed(func() Check { return plannedHash(m) }, 0),
-		timed(func() Check { return plannedMetadata(m) }, 0),
+		timed(func() Check { return metadataSanity(m) }, 0),
 	}
 	for i := range checks {
 		checks[i].EffectiveStatus = checks[i].Status
@@ -149,7 +149,7 @@ func Why(id string) string {
 	case CheckHash:
 		return "A hash would show whether the bytes match the revision. It is not run, because it would read every weight byte."
 	case CheckMetadata:
-		return "Comparing config fields with tensor shapes is planned for a later version. A decoder index above 4096 is reported here, not as a missing file."
+		return "A loader builds the model from config.json and then fills it from the weights. If the two disagree, it fails or loads something other than what the config describes. A decoder index above 4096 is reported here, not as a missing file."
 	default:
 		return ""
 	}
@@ -170,6 +170,8 @@ func Rule(id string) string {
 		return "file names with code-executing suffixes (.bin .pt .pth .pkl .ckpt .h5 .keras .nemo .dill .mar .py, .bin.gz …) and top-level auto_map in config files; nothing opened"
 	case CheckCode:
 		return "static pickle disassembly and .py import scan; never executes or unpickles"
+	case CheckMetadata:
+		return "hidden_size = token embedding width; vocab_size = token embedding and lm_head rows; num_hidden_layers = distinct decoder indices (plus num_nextn_predict_layers); text_config, llm_config, language_config before root; MLX packs compared dequantized; mismatches warn"
 	default:
 		return ""
 	}
@@ -190,6 +192,8 @@ func NotProven(id string) string {
 		return "that other files carry no risk, or that flagged files are harmful"
 	case CheckCode:
 		return "that loading these files with another tool is harmless"
+	case CheckMetadata:
+		return "that the fields not compared agree, or that the config describes how the weights were trained"
 	default:
 		return ""
 	}
@@ -564,20 +568,55 @@ func plannedHash(m *model.Model) Check {
 	}
 }
 
-func plannedMetadata(m *model.Model) Check {
-	c := Check{
-		ID: CheckMetadata, Name: "Config vs tensor shapes", Status: StatusPlanned,
-		Summary: "not run: planned",
-	}
+func metadataSanity(m *model.Model) Check {
+	c := Check{ID: CheckMetadata, Name: "Config vs tensor shapes", Status: StatusSkip}
 	if m == nil {
+		c.Summary = "no model loaded"
 		return c
 	}
+	if len(m.DroppedLayers) > 0 {
+		return droppedLayers(m, c)
+	}
+	switch {
+	case len(m.Shards) == 0:
+		c.Summary = "no safetensors shards found"
+		return c
+	case m.Config == nil:
+		c.Summary = "no usable config.json"
+		return c
+	}
+	r := m.ConfigShapes()
+	var problems []string
+	for _, cmp := range r.Comparisons {
+		if !cmp.Match {
+			problems = append(problems, fmt.Sprintf("%s is %d, %s is %d", cmp.Path, cmp.Want, cmp.What, cmp.Got))
+		}
+	}
+	problems = append(problems, r.Invalid...)
+	total := len(r.Comparisons) + len(r.Invalid)
+	switch {
+	case total == 0:
+		c.Summary = "no config field to compare with tensors"
+	case len(problems) > 0:
+		c.Status = StatusWarn
+		c.Summary = fmt.Sprintf("%d of %d config comparisons disagree", len(problems), total)
+	default:
+		c.Status = StatusPass
+		c.Summary = fmt.Sprintf("%d config comparisons match tensor shapes", total)
+		if total == 1 {
+			c.Summary = "1 config comparison matches tensor shapes"
+		}
+	}
+	c.Details = capDetails(append(problems, r.Skipped...))
+	return c
+}
+
+// droppedLayers reports decoder indices above model.MaxLayerIndex. The
+// files are present; the index itself is what the inspection dropped, so
+// the layer count is incomplete and no config comparison is made.
+// The summary is built from the typed indexes, not by matching warning text.
+func droppedLayers(m *model.Model, c Check) Check {
 	drops := m.DroppedLayers
-	if len(drops) == 0 {
-		return c
-	}
-	// The files are present. The index itself is what the inspection dropped.
-	// The summary is built from the typed indexes, not by matching warning text.
 	c.Name = "Layer index"
 	c.Status = StatusFail
 	details := make([]string, len(drops))

@@ -21,4 +21,4 @@ model-inspector  [1 Identity] 2 Config 3 Layers 4 Scan +              m mouse on
   |   w  focus other pane                                                   |   
   |   < >  resize split                                                     |   
   |   z  zoom focused pane                                                  |   
-HELP | /model               6.07 KiB | q4 g32 | + structure 5/8 | - headers-only
+HELP | /model               6.07 KiB | q4 g32 | + structure 6/8 | - headers-only
