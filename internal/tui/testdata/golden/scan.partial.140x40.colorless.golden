@@ -1,11 +1,11 @@
 model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✗1]                                                   ? keys   : commands   m mouse on
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                                                                                                                                             
-  ✗ STRUCTURE PROBLEMS FOUND · INSPECTION INCOMPLETE   3 passed · 1 warn · 1 fail · 3 not run                                               
+  ✗ STRUCTURE PROBLEMS FOUND · INSPECTION INCOMPLETE   3 passed · 1 warn · 1 fail · 4 not run                                               
                                                                                                                                             
   Structure only: files complete, headers well-formed, internally consistent. Not a malware or behavior scan.  i  what this does not cover  
                                                                                                                                             
-CHECKS  8 · structure only · in main's order                  DETAIL  selected check                                                        
+CHECKS  9 · structure only · in main's order                  DETAIL  selected check                                                        
                                                               Shard headers parse   ✓ PASS  <1 ms                                           
 READ                                                          2/2 headers read (length + JSON)                                              
  |  ✓ PASS  Shard headers parse                         <1 ms                                                                               
@@ -35,6 +35,6 @@ PROVENANCE
  |  – N/R  Config vs tensor shapes                          —                                                                               
  |         no usable config.json                                                                                                            
                                                                                                                                             
-⏎ details · space expand · e/E all · ] next problem · y copy                                                                                
-                                                                                                                                            
+AGENT                                                                                                                                       
+ |  – N/R  Chat template & tokenizer                        —                                                                               
 SCAN │ org/partial │ ↑↓ check · ⏎ details · space expand · i not covered            5.27 KiB (incomplete) │ bf16 │ ✗ 1 fail │ ◇ headers-only

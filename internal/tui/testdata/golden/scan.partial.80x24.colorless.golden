@@ -15,10 +15,10 @@ CODE
 PROVENANCE                                                                      
  | – N/R  Hashes vs revision     not run: needs a full read of 5.27 KiB         
  | – N/R  Config vs tensor shap… no usable config.json                          
+AGENT                                                                           
+ | – N/R  Chat template & token… no chat template or tokenizer files            
                                                                                 
  ▸ Not covered by any check (5)                                               i 
-                                                                                
-                                                                                
                                                                                 
                                                                                 
 SCAN │ ↑↓ · ⏎ details   5.27 KiB (incomplete) │ bf16 │ ✗ 1 fail │ ◇ headers-only

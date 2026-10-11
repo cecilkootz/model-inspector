@@ -21,4 +21,4 @@ model-inspector  [1 Identity] 2 Config 3 Layers 4 Scan ✓              m mouse 
                                                                                 
                                                                                 
                                                                                 
-COMMAND │ /model            6.07 KiB │ q4 g32 │ ✓ structure 6/8 │ – headers-only
+COMMAND │ /model            6.07 KiB │ q4 g32 │ ✓ structure 6/9 │ – headers-only

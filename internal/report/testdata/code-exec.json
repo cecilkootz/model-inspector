@@ -6,7 +6,7 @@
   },
   "options": {
     "strict": false,
-    "code": true
+    "code": false
   },
   "source": {
     "path": "DIR",
@@ -124,9 +124,9 @@
     "disclaimer": "Structural integrity checks only: file completeness, header well-formedness and internal consistency. Not a malware or behavior scan; does not establish what the weights do or who produced them.",
     "counts": {
       "pass": 4,
-      "warn": 2,
+      "warn": 1,
       "fail": 0,
-      "skip": 1,
+      "skip": 3,
       "planned": 1
     },
     "checks": [
@@ -177,13 +177,10 @@
       {
         "id": "code-content",
         "name": "Code & pickle contents",
-        "status": "warn",
-        "effective_status": "warn",
-        "summary": "1 not fully scanned: weights.bin",
-        "details": [
-          "needs trust_remote_code: yes (auto_map → modeling_demo.py)",
-          "weights.bin → not a valid pickle stream: unknown opcode 0x6e at byte 0"
-        ]
+        "status": "skip",
+        "effective_status": "skip",
+        "summary": "not run (open Code & pickles, or pass --code)",
+        "details": []
       },
       {
         "id": "hash-vs-revision",
@@ -199,6 +196,14 @@
         "status": "skip",
         "effective_status": "skip",
         "summary": "no config field to compare with tensors",
+        "details": []
+      },
+      {
+        "id": "agent-surface",
+        "name": "Chat template & tokenizer",
+        "status": "skip",
+        "effective_status": "skip",
+        "summary": "no chat template or tokenizer files",
         "details": []
       }
     ]

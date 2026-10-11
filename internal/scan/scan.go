@@ -34,6 +34,7 @@ const (
 	CheckCode     = "code-content"
 	CheckHash     = "hash-vs-revision"
 	CheckMetadata = "metadata-sanity"
+	CheckAgent    = "agent-surface"
 )
 
 // Disclaimer is shown wherever scan results are displayed.
@@ -94,6 +95,7 @@ func RunOptions(m *model.Model, opt Options) Result {
 		timed(func() Check { return codeContent(m) }, 0),
 		timed(func() Check { return plannedHash(m) }, 0),
 		timed(func() Check { return metadataSanity(m) }, 0),
+		timed(func() Check { return agentSurface(m) }, 0),
 	}
 	for i := range checks {
 		checks[i].EffectiveStatus = checks[i].Status
@@ -150,6 +152,8 @@ func Why(id string) string {
 		return "A hash would show whether the bytes match the revision. It is not run, because it would read every weight byte."
 	case CheckMetadata:
 		return "A loader builds the model from config.json and then fills it from the weights. If the two disagree, it fails or loads something other than what the config describes. A decoder index above 4096 is reported here, not as a missing file."
+	case CheckAgent:
+		return "A chat template is code that runs on every prompt. When the model is used as an agent it can define tools, add hidden system text, embed URLs, or change which tokens stop generation, and none of that is in the weights."
 	default:
 		return ""
 	}
@@ -172,6 +176,8 @@ func Rule(id string) string {
 		return "line scan of .py (imports; network, process, code-loading, env and encoding names; URLs) and a bounded opcode walk of pickles and torch zip data.pkl (GLOBAL/STACK_GLOBAL names, REDUCE/BUILD/INST/OBJ/NEWOBJ counts). fail: a pickle references os, subprocess, builtins, sys, socket and similar, or an auto_map .py uses network/process/code-loading names. warn: other .py with those names, pickle imports outside torch/numpy, or anything truncated, compressed or unsupported. Never executes, imports, unpickles or decompresses"
 	case CheckMetadata:
 		return "hidden_size = token embedding width; vocab_size = token embedding and lm_head rows; num_hidden_layers = distinct decoder indices (plus num_nextn_predict_layers); text_config, llm_config, language_config before root; MLX packs compared dequantized; mismatches warn"
+	case CheckAgent:
+		return "tokenizer_config.json, chat_template.jinja/.json, generation_config.json, special_tokens_map.json and tokenizer.json (added tokens and vocab size only), each read under a cap (64 MiB; templates 256 KiB); template text is matched for URLs, emails, IPs, base64 runs, invisible characters, instruction-like words and hard-coded tool names; templates across files, stop tokens, and added token ids against embedding rows and vocab_size are compared; any hit warns, never fails"
 	default:
 		return ""
 	}
@@ -194,6 +200,8 @@ func NotProven(id string) string {
 		return "that these files do no harm when loaded. It reads names only: it cannot see obfuscated or runtime-constructed imports, and does not read compressed or unsupported formats (.gz .zip deflate .h5 .npy .pyc …)"
 	case CheckMetadata:
 		return "that the fields not compared agree, or that the config describes how the weights were trained"
+	case CheckAgent:
+		return "what the template does when rendered (it is never rendered), what the weights do with tools, or instructions trained into the weights; the word and pattern matches are heuristics"
 	default:
 		return ""
 	}

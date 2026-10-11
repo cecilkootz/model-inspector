@@ -1,7 +1,7 @@
-model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✗2]             m mouse on
+model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✗1]             m mouse on
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 == STRICT (--strict): warnings count as failures ==                             
-  ✗ FAILS UNDER --strict   4 passed · 0 warn · 2 fail (2 was warn) · 2 not run  
+  ✗ FAILS UNDER --strict   4 passed · 0 warn · 1 fail (1 was warn) · 4 not run  
   Structure only · not a malware or behavior scan                       i more  
                                                                                 
 READ                                                                            
@@ -12,13 +12,13 @@ STRUCTURE
  | ✓ PASS     Index matches headers  1/1 index entries found in shard headers   
 CODE                                                                            
  | ! WARN→FAIL Code-executing formats 3 findings (code-exec formats or auto_ma… 
- | ! WARN→FAIL Code & pickle contents 2 not fully scanned: modeling_demo.py (+… 
+ | – N/R      Code & pickle contents not run (open Code & pickles, or pass --…  
 PROVENANCE                                                                      
  | – N/R      Hashes vs revision     not run: needs a full read of 400 B        
  | – N/R      Config vs tensor shap… no config field to compare with tensors    
+AGENT                                                                           
+ | – N/R      Chat template & token… no chat template or tokenizer files        
                                                                                 
  ▸ Not covered by any check (5)                                               i 
                                                                                 
-                                                                                
-                                                                                
-SCAN · STRICT │ ↑↓ · ⏎ details          400 B │ bf16 │ ✗ 2 fail │ ◇ headers-only
+SCAN · STRICT │ ↑↓ · ⏎ details          400 B │ bf16 │ ✗ 1 fail │ ◇ headers-only
