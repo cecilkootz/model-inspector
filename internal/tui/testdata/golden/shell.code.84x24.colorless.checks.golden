@@ -1,24 +1,24 @@
 model-inspector · code-exec · 400 B · bf16 · ~2 params       ! 2 warn · headers-only
 ╭[1] Model ───────────── 1 note ─╮╭[0] Shard headers parse ──────────────────── ✓ ─╮
-│   Overview                     ││ DETAIL  selected check                         │
-│   Storage                400 B ││ Shard headers parse   ✓ PASS  <1 ms            │
-│   Callouts                   1 ││ 1/1 headers read (length + JSON)               │
+│   Overview                     ││ 1/1 headers read (length + JSON)               │
+│   Storage                400 B ││                                                │
+│   Callouts                   1 ││ PROBLEMS                                       │
+╰────────────────────────────────╯│ none                                           │
+╭▶[2] Checks ───────── 4✓ 2! 3· ─╮│                                                │
+│ ▶ ✓ Shard headers parse  <1 ms ││ RULE                                           │
+│   ✓ Files present        <1 ms ││ 8-byte length ≤ 100 MiB and ≤ file size;       │
+│   ✓ Offsets & sizes      <1 ms ││ header is one JSON object, no duplicate keys,  │
+│   ✓ Index matches heade… <1 ms ││ each tensor has dtype, shape and data_offsets  │
+│   ! Code-executing form… <1 ms ││                                                │
+│   ! Code & pickle conte… <1 ms ││ WHY IT MATTERS                                 │
+│   · Hashes vs revision       — ││ A header that is not valid JSON, or a length   │
+│   · Config vs tensor shapes  — ││ that does not fit the file, means that shard   │
+│   · Chat template & tokeniz… — ││ cannot be mapped.                              │
 ╰────────────────────────────────╯│                                                │
-╭▶[2] Checks ───────── 4✓ 2! 3· ─╮│ CHECKED                                        │
-│ ▶ ✓ Shard headers parse  <1 ms ││ ################ 1/1 headers read (length + J… │
-│   ✓ Files present        <1 ms ││                                                │
-│   ✓ Offsets & sizes      <1 ms ││ RULE                                           │
-│   ✓ Index matches heade… <1 ms ││ 8-byte length ≤ 100 MiB and ≤ file size;       │
-│   ! Code-executing form… <1 ms ││ header is one JSON object, no duplicate        │
-│   ! Code & pickle conte… <1 ms ││ keys, each tensor has dtype, shape and         │
-│   · Hashes vs revision       — ││ data_offsets                                   │
-│   · Config vs tensor shapes  — ││                                                │
-│   · Chat template & tokeniz… — ││ PROBLEMS  none                                 │
+╭[3] Layers ───────── 1 decoder ─╮│ DOES NOT PROVE                                 │
+│   decoder layers 1         4 B ││ That tensor values are sensible or finite.     │
 ╰────────────────────────────────╯│                                                │
-╭[3] Layers ───────── 1 decoder ─╮│ WHY IT MATTERS                                 │
-│   decoder layers 1         4 B ││ A header that is not valid JSON, or a length   │
-╰────────────────────────────────╯│ that does not fit the file, means that shard   │
-╭[4] Config ─────────── 4 nodes ─╮│ cannot be mapped.                              │
-│   model_type              demo ││                                                │
+╭[4] Config ─────────── 4 nodes ─╮│ NOT COVERED BY ANY CHECK (5)                   │
+│   model_type              demo ││ Structural integrity checks only: file         │
 ╰────────────────────────────────╯╰────────────────────────────────────────────────╯
 ↑↓ move · ⏎ detail · ? keys · ] next problem · y copy        org/code-exec · 89abcde

@@ -1,13 +1,10 @@
 package tui
 
 import (
-	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/cecilkootz/model-inspector/internal/model"
 	"github.com/cecilkootz/model-inspector/internal/sanitize"
-	"github.com/cecilkootz/model-inspector/internal/scan"
 	"github.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
@@ -53,10 +50,6 @@ func (t Model) paneView(w, h int) Model {
 	return c
 }
 
-func tonedCount(n int, glyph string, tok ui.Token) string {
-	return ui.PaintToken(strconv.Itoa(n)+glyph, tok, nil, false)
-}
-
 func upDown() string {
 	if ui.UTF8() {
 		return "↑↓"
@@ -86,180 +79,6 @@ func plainRow(name, value sanitize.Text, width int) string {
 }
 
 func muted(s string) string { return ui.PaintToken(s, ui.TextMuted, nil, false) }
-
-// Checks
-
-type checksPanel struct{ t *Model }
-
-func (p *checksPanel) num() int { return 2 }
-
-func (p *checksPanel) title() sanitize.Text { return ui.L("Checks") }
-
-func nrGlyph() string {
-	if ui.UTF8() {
-		return "·"
-	}
-	return ui.G().NR
-}
-
-// checkMark is the row glyph for a check's effective status.
-func checkMark(c scan.Check) (string, ui.Tone) {
-	g := ui.G()
-	switch c.EffectiveStatus {
-	case scan.StatusPass:
-		return g.Pass, ui.ToneMuted
-	case scan.StatusWarn:
-		return g.Warn, ui.ToneWarn
-	case scan.StatusFail:
-		return g.Fail, ui.ToneFail
-	default:
-		return nrGlyph(), ui.ToneMuted
-	}
-}
-
-func isProblem(c scan.Check) bool {
-	return c.EffectiveStatus == scan.StatusWarn || c.EffectiveStatus == scan.StatusFail
-}
-
-func (p *checksPanel) counter() string {
-	var pass, warn, fail, nr int
-	for _, c := range p.t.scan.Checks {
-		switch c.EffectiveStatus {
-		case scan.StatusPass:
-			pass++
-		case scan.StatusWarn:
-			warn++
-		case scan.StatusFail:
-			fail++
-		default:
-			nr++
-		}
-	}
-	g := ui.G()
-	var parts []string
-	if pass > 0 {
-		parts = append(parts, tonedCount(pass, g.Pass, ui.TextMuted))
-	}
-	if fail > 0 {
-		parts = append(parts, tonedCount(fail, g.Fail, ui.Fail))
-	}
-	if warn > 0 {
-		parts = append(parts, tonedCount(warn, g.Warn, ui.Warn))
-	}
-	if nr > 0 {
-		parts = append(parts, tonedCount(nr, nrGlyph(), ui.TextMuted))
-	}
-	return strings.Join(parts, " ")
-}
-
-func (p *checksPanel) row(c scan.Check, width int, selected bool) string {
-	glyph, tone := checkMark(c)
-	return ui.ListRow(ui.RowSpec{
-		Glyph: sanitize.Program(glyph), Tone: tone,
-		Name: sanitize.Program(c.Name), Value: sanitize.Program(durationText(c)),
-		Selected: selected,
-	}, width)
-}
-
-func (p *checksPanel) rows(width int) []string {
-	cur := p.cursor()
-	out := make([]string, 0, len(p.t.scan.Checks))
-	for i, c := range p.t.scan.Checks {
-		out = append(out, p.row(c, width, i == cur))
-	}
-	return out
-}
-
-// summary lists problems first, then how many passed and how many were not
-// run. More than three problems collapse into a "+N more" row.
-func (p *checksPanel) summary(width int) []string {
-	var out []string
-	pass, nr := 0, 0
-	for _, c := range p.t.scan.Checks {
-		switch {
-		case isProblem(c):
-			out = append(out, p.row(c, width, false))
-		case c.EffectiveStatus == scan.StatusPass:
-			pass++
-		default:
-			nr++
-		}
-	}
-	if len(out) > 3 {
-		more := len(out) - 2
-		out = append(out[:2], ui.ListRow(ui.RowSpec{
-			Glyph: sanitize.Program(ui.G().Warn), Tone: ui.ToneWarn,
-			Name: sanitize.Program(fmt.Sprintf("+%d more problems", more)),
-		}, width))
-	}
-	if pass > 0 {
-		out = append(out, ui.ListRow(ui.RowSpec{
-			Glyph: sanitize.Program(ui.G().Pass), Name: sanitize.Program(strconv.Itoa(pass) + " passed"),
-		}, width))
-	}
-	if nr > 0 {
-		out = append(out, ui.ListRow(ui.RowSpec{
-			Glyph: sanitize.Program(nrGlyph()), Name: sanitize.Program(strconv.Itoa(nr) + " not run"),
-		}, width))
-	}
-	if len(out) > 3 {
-		out = out[:3]
-	}
-	return out
-}
-
-func (p *checksPanel) cursor() int {
-	return clampInt(p.t.scanCursor, 0, max(0, len(p.t.scan.Checks)-1))
-}
-
-func (p *checksPanel) move(d int) {
-	p.t.scanCursor = clampInt(p.t.scanCursor+d, 0, max(0, len(p.t.scan.Checks)-1))
-}
-
-func (p *checksPanel) detail(w, h int) []string {
-	v := p.t.paneView(w, h)
-	lines, _ := v.detailLines(w, h)
-	return lines
-}
-
-func (p *checksPanel) selected() (scan.Check, bool) {
-	cs := p.t.scan.Checks
-	if len(cs) == 0 {
-		return scan.Check{}, false
-	}
-	return cs[p.cursor()], true
-}
-
-func (p *checksPanel) selection() (sanitize.Text, ui.Safe) {
-	c, ok := p.selected()
-	if !ok {
-		return ui.L("Checks"), ui.Safe{}
-	}
-	kind := ui.PillNR
-	switch c.EffectiveStatus {
-	case scan.StatusPass:
-		kind = ui.PillPass
-	case scan.StatusWarn:
-		kind = ui.PillWarn
-	case scan.StatusFail:
-		kind = ui.PillFail
-	}
-	return sanitize.Program(c.Name), ui.Chrome(ui.StatusPill(kind))
-}
-
-func (p *checksPanel) keys() []ui.KeyHint {
-	return moveHints(hint("]", "next problem"), hint("y", "copy"))
-}
-
-func (p *checksPanel) problems() []int {
-	var out []int
-	for i, c := range p.t.scan.Checks {
-		if isProblem(c) {
-			out = append(out, i)
-		}
-	}
-	return out
-}
 
 // Layers
 

@@ -1,30 +1,30 @@
 model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params            ✓ checks pass · headers-only
 ╭[1] Model ──────────── 5 notes ─╮╭[0] Shard headers parse ──────────────────────────────────── ✓ ─╮
-│   Overview                     ││ DETAIL  selected check                                         │
-│   Storage             6.02 KiB ││ Shard headers parse   ✓ PASS  <1 ms                            │
-│   Callouts                   5 ││ 2/2 headers read (length + JSON)                               │
-╰────────────────────────────────╯│                                                                │
-╭▶[2] Checks ──────────── 6✓ 3· ─╮│ CHECKED                                                        │
-│ ▶ ✓ Shard headers parse  <1 ms ││ ################ 2/2 headers read (length + JSON)              │
-│   ✓ Files present        <1 ms ││                                                                │
-│   ✓ Offsets & sizes      <1 ms ││ RULE                                                           │
-│   ✓ Index matches heade… <1 ms ││ 8-byte length ≤ 100 MiB and ≤ file size; header is one JSON    │
-│   ✓ Code-executing form… <1 ms ││ object, no duplicate keys, each tensor has dtype, shape and    │
-│   · Code & pickle contents   — ││ data_offsets                                                   │
-│   · Hashes vs revision       — ││                                                                │
-│   ✓ Config vs tensor sh… <1 ms ││ PROBLEMS  none                                                 │
+│   Overview                     ││ 2/2 headers read (length + JSON)                               │
+│   Storage             6.02 KiB ││                                                                │
+│   Callouts                   5 ││ PROBLEMS                                                       │
+╰────────────────────────────────╯│ none                                                           │
+╭▶[2] Checks ──────────── 6✓ 3· ─╮│                                                                │
+│ ▶ ✓ Shard headers parse  <1 ms ││ RULE                                                           │
+│   ✓ Files present        <1 ms ││ 8-byte length ≤ 100 MiB and ≤ file size; header is one JSON    │
+│   ✓ Offsets & sizes      <1 ms ││ object, no duplicate keys, each tensor has dtype, shape and    │
+│   ✓ Index matches heade… <1 ms ││ data_offsets                                                   │
+│   ✓ Code-executing form… <1 ms ││                                                                │
+│   · Code & pickle contents   — ││ WHY IT MATTERS                                                 │
+│   · Hashes vs revision       — ││ A header that is not valid JSON, or a length that does not fit │
+│   ✓ Config vs tensor sh… <1 ms ││ the file, means that shard cannot be mapped.                   │
 │   · Chat template & tokeniz… — ││                                                                │
-│                                ││ WHY IT MATTERS                                                 │
-│                                ││ A header that is not valid JSON, or a length that does not     │
-╰────────────────────────────────╯│ fit the file, means that shard cannot be mapped.               │
-╭[3] Layers ───────── 2 decoder ─╮│                                                                │
-│   embeddings              20 B ││ DOES NOT PROVE  that tensor values are sensible or finite      │
-│   n-gram table (PLE)      36 B ││                                                                │
-│   decoder layers 2        32 B ││                                                                │
-╰────────────────────────────────╯│  ▸ Not covered by any check (5)                             i  │
-╭[4] Config ────────── 32 nodes ─╮│                                                                │
-│   model_type           qwen3_5 ││                                                                │
-│   layers              2 layers ││                                                                │
-│   hidden_size            8 dim ││                                                                │
+│                                ││ DOES NOT PROVE                                                 │
+│                                ││ That tensor values are sensible or finite.                     │
+╰────────────────────────────────╯│                                                                │
+╭[3] Layers ───────── 2 decoder ─╮│ NOT COVERED BY ANY CHECK (5)                                   │
+│   embeddings              20 B ││ Structural integrity checks only: file completeness, header    │
+│   n-gram table (PLE)      36 B ││ well-formedness and internal consistency. Not a malware or     │
+│   decoder layers 2        32 B ││ behavior scan; does not establish what the weights do or who   │
+╰────────────────────────────────╯│ produced them.                                                 │
+╭[4] Config ────────── 32 nodes ─╮│ ·  whether the weights are benign, unmodified or what the      │
+│   model_type           qwen3_5 ││    publisher intended                                          │
+│   layers              2 layers ││ ·  what the model outputs or how it behaves                    │
+│   hidden_size            8 dim ││ ·  tokenizer, chat template, license, or training-data         │
 ╰────────────────────────────────╯╰────────────────────────────────────────────────────────────────╯
 ↑↓ move · ⏎ detail · ? keys · ] next problem · y copy · 1-4 panels           org/tiny-qwen · 0123456
