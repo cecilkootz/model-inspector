@@ -91,7 +91,7 @@ $(error refusing Makefile path)
 endif
 export MI_ROOT
 
-# GNU make is required. On macOS, use gmake when /usr/bin/make is BSD make.
+# GNU make 3.81 or later is required; macOS's /usr/bin/make works, BSD make does not.
 #
 # Bare `make` runs `test` (override check, vet, and race tests). That is the
 # historical default, plus the override check below.
