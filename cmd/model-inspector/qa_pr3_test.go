@@ -153,6 +153,48 @@ func TestP3_Targets(t *testing.T) {
 	}
 }
 
+// TestP3_RepoIDExactCase runs on case-insensitive filesystems too, where
+// stat("models--ORG--NAME") finds models--Org--Name. A wrong-case id must
+// miss like it does on Linux, and never be reported as the repo id.
+func TestP3_RepoIDExactCase(t *testing.T) {
+	hub := t.TempDir()
+	commit := strings.Repeat("a", 40)
+	if _, err := fixture.MaterializeHub(hub, "Org/Name", commit, []fixture.File{{Name: "model.safetensors", Data: goodShard(t)}}); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+	repoID := func(out string) string {
+		var d struct {
+			Source struct {
+				RepoID string `json:"repo_id"`
+			} `json:"source"`
+		}
+		_ = json.Unmarshal([]byte(out), &d)
+		return d.Source.RepoID
+	}
+
+	out, errS, code := rc(t, "inspect", "Org/Name", "--hub-dir", hub, "--json")
+	if code != 0 || repoID(out) != "Org/Name" {
+		t.Fatalf("exact id: exit %d\nstderr %q\nstdout %s", code, errS, out)
+	}
+	for _, args := range [][]string{
+		{"ORG/NAME"},
+		{"org/name"},
+		{"ORG/NAME@main"},
+		{"ORG/NAME@" + commit},
+		{"Org/Name@MAIN"},
+		{"--repo", "ORG/NAME"},
+	} {
+		out, errS, code := rc(t, append(append([]string{"inspect"}, args...), "--hub-dir", hub, "--json")...)
+		if code != 3 {
+			t.Errorf("%q: exit %d, want 3\nstderr %q\nstdout %s", args, code, strings.TrimSpace(errS), out)
+		}
+		if strings.Contains(out, "repo_id") || repoID(out) != "" {
+			t.Errorf("%q: reported a document: %s", args, out)
+		}
+	}
+}
+
 func sourceClass(out, hub, cwd string) string {
 	var d map[string]any
 	if json.Unmarshal([]byte(out), &d) != nil {

@@ -14,6 +14,9 @@ func FuzzResolve(f *testing.F) {
 	f.Add("Org/Model@0123456789abcdef0123456789abcdef01234567")
 	f.Add("Org/Model@../../../../tmp")
 	f.Add("Org/Model@..%2F..%2Ftmp")
+	// Case-folding filesystems matched these to models--Org--Model and refs/main.
+	f.Add("OrG/Model")
+	f.Add("Org/Model@MAIN")
 	// The hub is built once per process. Creating it inside the fuzz
 	// function did a TempDir, two MkdirAll, and a WriteFile on every input.
 	// The minimizer then ran that for every subset of a new string and

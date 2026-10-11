@@ -152,3 +152,50 @@ func TestCommitMustStayUnderSnapshots(t *testing.T) {
 		t.Fatalf("snapshot symlink escaped: %+v", r)
 	}
 }
+
+// A case-folding filesystem (APFS) opens models--Org--Name for ORG/NAME.
+// The folder name is the identity, so only the exact name resolves.
+func TestResolveExactCase(t *testing.T) {
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+	mk := func(t *testing.T, refs, ref, snapName string) string {
+		t.Helper()
+		hub := t.TempDir()
+		repo := filepath.Join(hub, "models--Org--Name")
+		if err := os.MkdirAll(filepath.Join(repo, "snapshots", snapName), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(repo, refs), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(repo, refs, ref), []byte(commit+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return hub
+	}
+	good := mk(t, "refs", "main", commit)
+	r, err := Resolve("Org/Name", good)
+	if err != nil || r.RepoID != "Org/Name" || r.Revision != commit {
+		t.Fatalf("exact id: %+v %v", r, err)
+	}
+	for _, arg := range []string{"ORG/NAME", "org/name", "Org/name", "ORG/NAME@main", "ORG/NAME@" + commit} {
+		for _, mode := range []TargetMode{TargetAuto, TargetRepo} {
+			if r, err := ResolveTarget(arg, good, mode); err == nil {
+				t.Errorf("%s mode %d resolved: %+v", arg, mode, r)
+			}
+		}
+	}
+	if r, err := Resolve("Org/Name@MAIN", good); err == nil {
+		t.Errorf("ref MAIN resolved: %+v", r)
+	}
+
+	cases := []struct{ name, hub string }{
+		{"refs dir", mk(t, "REFS", "main", commit)},
+		{"ref file", mk(t, "refs", "MAIN", commit)},
+		{"snapshot", mk(t, "refs", "main", strings.ToUpper(commit))},
+	}
+	for _, c := range cases {
+		if r, err := Resolve("Org/Name", c.hub); err == nil {
+			t.Errorf("%s case mismatch resolved: %+v", c.name, r)
+		}
+	}
+}
