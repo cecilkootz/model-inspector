@@ -43,25 +43,107 @@ type Note struct{ msg string }
 // Error returns the formatted sentence.
 func (n Note) Error() string { return n.msg }
 
+// formatLit is unexported so a caller can pass only an untyped string
+// constant. A string variable does not convert to formatLit, which keeps a
+// non-constant format from compiling. Inside this package an explicit
+// conversion still compiles; the AST test rejects that.
+//
+// go:linkname, a generic call-through, reflect, and unsafe can reach Notef
+// without converting to formatLit. The AST test catches a generic
+// call-through, reflect, and unsafe, because each names Notef as a value.
+// It does not see a go:linkname directive, so the same test fails if one
+// targets this package.
+type formatLit string
+
 // Notef formats a program sentence. The format string is trusted and must be
-// a constant literal. Every argument is formatted and then passed through
-// From, except numbers and bools, which stay raw so verbs such as %d keep
-// working. %c is untrusted even for a number: the character is sanitized.
-// A width or precision star stays a raw integer, which is what fmt requires.
-func Notef(format string, args ...any) error {
-	roles := scanFormat(format)
+// a constant literal. Arguments that implement fmt.Stringer, error,
+// fmt.Formatter, or fmt.GoStringer are sanitized even when the underlying
+// kind is numeric or bool, because fmt will call the method and print its
+// text. Other numbers and bools stay raw so verbs such as %d keep working.
+// %c is untrusted even for a number: the character is sanitized. A width or
+// precision star stays a raw integer, which is what fmt requires.
+// Text, *Text, and []Text, including Program, are already safe and are not
+// passed through From again. A nil argument is left for fmt, which prints
+// "<nil>". Nil is decided from the value, never from the formatted text.
+func Notef(format formatLit, args ...any) error {
+	spec := string(format)
+	roles := scanFormat(spec)
 	safe := make([]any, len(args))
 	for i, a := range args {
-		switch {
-		case roles.star[i]:
-			safe[i] = a
-		case roles.char[i] || !isNumberOrBool(a):
-			safe[i] = sanitized{a}
-		default:
-			safe[i] = a
-		}
+		safe[i] = safeArg(a, roles.star[i], roles.char[i])
 	}
-	return Note{msg: fmt.Sprintf(format, safe...)}
+	return Note{msg: fmt.Sprintf(spec, safe...)}
+}
+
+func safeArg(a any, star, char bool) any {
+	if star || isText(a) {
+		return a
+	}
+	if call, nilWord := formatsItself(a); call || nilWord {
+		if nilWord {
+			return "<nil>"
+		}
+		return sanitized{a}
+	}
+	if isNilLike(a) {
+		return a
+	}
+	if char || !isNumberOrBool(a) {
+		return sanitized{a}
+	}
+	return a
+}
+
+func isText(a any) bool {
+	switch a.(type) {
+	case Text, *Text, []Text:
+		return true
+	default:
+		return false
+	}
+}
+
+// formatsItself reports whether fmt would print a method's text instead of
+// the underlying number or bool. call means the method may be invoked and
+// its text sanitized. nilWord means a is a nil pointer: the method is not
+// called, and the caller prints a literal "<nil>". A nil receiver often
+// panics, and fmt's recovered "<nil>" would otherwise pass through From
+// and become "<U+003C>nil>".
+func formatsItself(a any) (call, nilWord bool) {
+	switch a.(type) {
+	case fmt.Stringer, error, fmt.Formatter, fmt.GoStringer:
+	default:
+		return false, false
+	}
+	if isNilPointer(a) {
+		return false, true
+	}
+	return true, false
+}
+
+func isNilPointer(a any) bool {
+	if a == nil {
+		return false
+	}
+	v := reflect.ValueOf(a)
+	return v.Kind() == reflect.Pointer && v.IsNil()
+}
+
+// isNilLike reports a nil value: the interface itself, or a nil pointer,
+// interface, map, slice, chan, or func. The formatted text is irrelevant.
+// A nil pointer that implements Stringer or error is handled in
+// formatsItself, which prints a literal "<nil>" and does not call the method.
+func isNilLike(a any) bool {
+	if a == nil {
+		return true
+	}
+	v := reflect.ValueOf(a)
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func, reflect.Interface:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // sanitized prints v with the verb fmt selected, then tokenizes that text.

@@ -61,7 +61,7 @@ Flags:
 --path, --repo, and a positional target are mutually exclusive.
 
 Exit codes:
-  0  inspected, and no check failed (warnings are fine unless --strict). The interactive TUI exits 0. When stdout is not a terminal, the default command is the text summary and uses the inspect codes below.
+  0  inspected, and no check failed (warnings are fine unless --strict). The interactive TUI exits 0 when the snapshot loads, even if a check failed; CI should use inspect or --json. When stdout is not a terminal, the default command is the text summary and uses the inspect codes below.
   1  inspected, and a check failed (or a warning under --strict); the summary is still printed
   2  usage: bad flags, a missing or empty target, an empty --path or --repo, an invalid repo id, or an ambiguous path/repo id
   3  the target could not be inspected (missing, not a directory, GGUF-only, or no weights)
@@ -116,20 +116,12 @@ func run(args []string) int {
 	if opts.noColor {
 		tui.SetNoColor(true)
 	}
-	start := time.Now()
-	m, fromCache, err := load(opts)
-	if err != nil {
-		return resolveExit(err)
-	}
-	res := scan.RunOptions(m, scan.Options{Strict: opts.strict})
-	doc := report.Build(m, res, fromCache, time.Since(start))
-	// Build can saturate a group total and mark Partial after the scan that
-	// produced res. Re-run so the TUI shows the same verdict as doc.Scan.
-	if m.Partial && res.Overall != scan.StatusFail {
-		res = scan.RunOptions(m, scan.Options{Strict: opts.strict})
-	}
 	interactive := cmd == "tui" && !opts.json && isatty.IsTerminal(os.Stdout.Fd())
 	if interactive {
+		r, err := hfcache.ResolveTarget(opts.target, opts.hubDir, opts.mode)
+		if err != nil {
+			return resolveExit(err)
+		}
 		var runOpt []tui.Options
 		if opts.noMouse || opts.noClipboard {
 			opt := tui.Options{NoClipboard: opts.noClipboard}
@@ -139,12 +131,22 @@ func run(args []string) int {
 			}
 			runOpt = append(runOpt, opt)
 		}
-		if err := tui.Run(m, res, runOpt...); err != nil {
+		code, err := startTUI(r.Dir, opts.strict, r.FromCache, r.RepoID, r.Revision, runOpt...)
+		if err != nil {
 			fail(err)
 			return 1
 		}
-		return 0
+		return code
 	}
+	start := time.Now()
+	m, fromCache, err := load(opts)
+	if err != nil {
+		return resolveExit(err)
+	}
+	res := scan.RunOptions(m, scan.Options{Strict: opts.strict})
+	// Build re-runs the checks when a total overflowed while the summary
+	// was assembled, so partial and doc.Scan stay on the same inspection.
+	doc := report.Build(m, res, fromCache, time.Since(start))
 	if opts.json {
 		b, err := report.Marshal(doc)
 		if err != nil {
@@ -158,17 +160,16 @@ func run(args []string) int {
 	} else {
 		fmt.Fprint(os.Stdout, report.Text(doc))
 	}
-	if msg, blocked := report.Blocked(doc); blocked {
-		fail(errors.New(msg))
-		return 3
-	}
 	// The document's scan is the source of truth: Build re-runs the checks
 	// when a total overflowed while the summary was assembled, so partial
 	// and the exit code cannot disagree with the printed result.
-	if doc.Scan.Overall == string(scan.StatusFail) {
-		return 1
+	code := report.ExitCode(doc)
+	if code == 3 {
+		if msg, blocked := report.Blocked(doc); blocked {
+			fail(errors.New(msg))
+		}
 	}
-	return 0
+	return code
 }
 
 var errHelp = errors.New("help")
@@ -278,6 +279,12 @@ func takeValue(args []string, i int, name string) (string, int, error) {
 		return "", i, fmt.Errorf("%s needs a value", name)
 	}
 	return args[i+1], i + 1, nil
+}
+
+// startTUI opens the interactive screen. Tests replace it to prove a
+// resolution error never reaches it.
+var startTUI = func(dir string, strict, fromCache bool, repo, rev string, opt ...tui.Options) (int, error) {
+	return tui.RunLoading(dir, strict, fromCache, repo, rev, opt...)
 }
 
 func load(o options) (*model.Model, bool, error) {

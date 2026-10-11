@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/safetensors"
@@ -51,6 +52,9 @@ type Check struct {
 	EffectiveStatus Status   `json:"effective_status"`
 	Summary         string   `json:"summary"`
 	Details         []string `json:"details,omitempty"`
+	// Duration is the attributable loader phase plus this check's own time.
+	// It is omitted from JSON so goldens stay deterministic.
+	Duration time.Duration `json:"-"`
 }
 
 // Counts is the raw status tally. Strict does not change it.
@@ -82,17 +86,18 @@ func RunOptions(m *model.Model, opt Options) Result {
 		m.HostCapable()
 	}
 	checks := []Check{
-		headerParse(m),
-		filePresence(m),
-		offsetsBounds(m),
-		indexConsistency(m),
-		codeExecFormats(m),
-		codeContent(m),
-		plannedHash(m),
-		plannedMetadata(m),
+		timedPhase(m, CheckHeader, func() Check { return headerParse(m) }),
+		timedPhase(m, CheckFiles, func() Check { return filePresence(m) }),
+		timedPhase(m, CheckOffsets, func() Check { return offsetsBounds(m) }),
+		timedPhase(m, CheckIndex, func() Check { return indexConsistency(m) }),
+		timed(func() Check { return codeExecFormats(m) }, 0),
+		timed(func() Check { return codeContent(m) }, 0),
+		timed(func() Check { return plannedHash(m) }, 0),
+		timed(func() Check { return plannedMetadata(m) }, 0),
 	}
 	for i := range checks {
 		checks[i].EffectiveStatus = checks[i].Status
+		promoteSkip(m, &checks[i])
 		if opt.Strict && checks[i].Status == StatusWarn {
 			checks[i].EffectiveStatus = StatusFail
 		}
@@ -150,16 +155,111 @@ func Why(id string) string {
 	}
 }
 
+// Rule is what the check compared. Unknown ids and checks with no rule return "".
+func Rule(id string) string {
+	switch id {
+	case CheckHeader:
+		return "8-byte length ≤ 100 MiB and ≤ file size; header is one JSON object, no duplicate keys, each tensor has dtype, shape and data_offsets"
+	case CheckFiles:
+		return "every shard the index names is a regular file inside the snapshot (links only into blobs/); unreferenced .safetensors warn; Partial fails"
+	case CheckOffsets:
+		return "each range lies inside its data section; end − start = dtype size × elements; no overlap; gaps/trailing bytes and unknown dtypes warn"
+	case CheckIndex:
+		return "every weight_map entry is found in that shard's header; header tensors not mapped to their shard, and a total_size mismatch, warn"
+	case CheckCodeExec:
+		return "file names with code-executing suffixes (.bin .pt .pth .pkl .ckpt .h5 .keras .nemo .dill .mar .py, .bin.gz …) and top-level auto_map in config files; nothing opened"
+	case CheckCode:
+		return "static pickle disassembly and .py import scan; never executes or unpickles"
+	default:
+		return ""
+	}
+}
+
+// NotProven is the limit of a check. Unknown ids and checks with no limit return "".
+func NotProven(id string) string {
+	switch id {
+	case CheckHeader:
+		return "that tensor values are sensible or finite"
+	case CheckFiles:
+		return "that files match what the publisher uploaded"
+	case CheckOffsets:
+		return "that the bytes are the intended values"
+	case CheckIndex:
+		return "that the index itself is authentic"
+	case CheckCodeExec:
+		return "that other files carry no risk, or that flagged files are harmful"
+	case CheckCode:
+		return "that loading these files with another tool is harmless"
+	default:
+		return ""
+	}
+}
+
+func timed(fn func() Check, extra time.Duration) Check {
+	start := time.Now()
+	c := fn()
+	c.Duration = time.Since(start) + extra
+	return c
+}
+
+func timedPhase(m *model.Model, id string, fn func() Check) Check {
+	c := timed(fn, 0)
+	c.Duration += phase(m, id)
+	return c
+}
+
+func phase(m *model.Model, id string) time.Duration {
+	if m == nil {
+		return 0
+	}
+	switch id {
+	case CheckHeader:
+		return m.Timings.Headers
+	case CheckFiles:
+		return m.Timings.Walk
+	case CheckOffsets:
+		// Layout time is this check's own loop. NoteLayout records it;
+		// adding it again would count the pass twice.
+		return 0
+	case CheckIndex:
+		return m.Timings.Index
+	default:
+		return 0
+	}
+}
+
+// promoteSkip applies the v1.2 rule: a structural check that skipped while
+// shards exist becomes an effective warn. Raw Status stays skip. Planned
+// checks are never promoted. index-shard-consistency with exactly one shard
+// and no index file stays skip.
+func promoteSkip(m *model.Model, c *Check) {
+	if m == nil || c == nil || c.Status != StatusSkip || len(m.Shards) == 0 {
+		return
+	}
+	switch c.ID {
+	case CheckHeader, CheckFiles, CheckOffsets, CheckIndex:
+	default:
+		return
+	}
+	if c.ID == CheckIndex && len(m.Shards) == 1 && m.Index == nil && m.IndexErr == nil {
+		return
+	}
+	c.EffectiveStatus = StatusWarn
+	c.Summary += " (skipped although shards exist)"
+}
+
 // rollup is the worst effective status of executed checks.
-// Skip and planned do not change it. When no shard was inspected and
+// A raw skip or planned check does not change it, unless v1.2 promoted
+// that skip to an effective warn or fail. When no shard was inspected and
 // nothing warned or failed, the result stays skip: an empty directory
 // or a GGUF-only directory is not reported as a pass.
 func rollup(checks []Check, inspected bool) Status {
 	overall := StatusPass
 	executed := false
 	for _, c := range checks {
-		switch c.Status {
-		case StatusSkip, StatusPlanned:
+		promoted := (c.Status == StatusSkip || c.Status == StatusPlanned) &&
+			(c.EffectiveStatus == StatusWarn || c.EffectiveStatus == StatusFail)
+		if (c.Status == StatusSkip || c.Status == StatusPlanned) && !promoted {
 			continue
 		}
 		executed = true
@@ -293,6 +393,13 @@ func offsetsBounds(m *model.Model) Check {
 	var problems, warnings []string
 	ranges := 0
 	checked := 0
+	start := time.Now()
+	total := 0
+	for _, s := range m.Shards {
+		if s.Header != nil {
+			total++
+		}
+	}
 	for _, s := range m.Shards {
 		if s.Header == nil {
 			continue
@@ -302,6 +409,12 @@ func offsetsBounds(m *model.Model) Check {
 		p, w := safetensors.CheckLayout(s.Name, s.Header, s.Size-s.Header.DataStart())
 		problems = append(problems, p...)
 		warnings = append(warnings, w...)
+		if m != nil {
+			m.NoteLayout(checked, total, ranges, time.Since(start), checked == total)
+		}
+	}
+	if m != nil && total == 0 {
+		m.NoteLayout(0, 0, 0, time.Since(start), true)
 	}
 	if checked == 0 {
 		c.Status, c.Summary = StatusSkip, "no shard headers to check"

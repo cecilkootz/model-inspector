@@ -82,8 +82,8 @@ func TestGolden(t *testing.T) {
 	}
 	cases = append(cases,
 		spec{name: "layers.80x24.truecolor.down2", m: tiny, w: 80, h: 24, profile: "truecolor", keys: []string{"3", "j", "j"}, want: []string{"3 Layers"}},
-		spec{name: "layers.80x24.colorless.down2", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"3", "j", "j"}, want: []string{"3 Layers", ">layer 0"}},
-		spec{name: "layers.80x24.colorless.down5", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"3", "j", "j", "j", "j", "j"}, want: []string{"3 Layers", ">hyper_connec"}},
+		spec{name: "layers.80x24.colorless.down2", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"3", "j", "j"}, want: []string{"3 Layers", ">▾ decoder"}},
+		spec{name: "layers.80x24.colorless.down5", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"3", "j", "j", "j", "j", "j"}, want: []string{"3 Layers", ">▸ norms"}},
 		spec{name: "code.80x24.colorless", m: code, w: 80, h: 24, profile: "colorless", want: []string{"!"}},
 		spec{name: "toosmall.59x15.colorless", m: tiny, w: 59, h: 15, profile: "colorless", want: []string{"needs at least 60×16", "59×15"}},
 		spec{name: "config.80x24.colorless", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"2"}, want: []string{"model_type", "KEY FIELDS"}},
@@ -183,6 +183,13 @@ func TestQwenShapeHeat(t *testing.T) {
 
 func renderGolden(t *testing.T, m *model.Model, w, h int, profile string, keys []string) string {
 	t.Helper()
+	return renderPrepared(t, m, scan.Run(m), w, h, profile, keys)
+}
+
+// renderPrepared draws a frame from an already-built scan result. Durations
+// are zeroed so a slow machine does not change "<1 ms".
+func renderPrepared(t *testing.T, m *model.Model, res scan.Result, w, h int, profile string, keys []string) string {
+	t.Helper()
 	prevNC, hadNC := os.LookupEnv("NO_COLOR")
 	t.Cleanup(func() {
 		if hadNC {
@@ -219,7 +226,10 @@ func renderGolden(t *testing.T, m *model.Model, w, h int, profile string, keys [
 		lipgloss.SetColorProfile(termenv.TrueColor)
 	}
 	lipgloss.SetHasDarkBackground(true)
-	ui := New(m, scan.Run(m))
+	for i := range res.Checks {
+		res.Checks[i].Duration = 0
+	}
+	ui := New(m, res)
 	var x tea.Model = ui
 	x, _ = x.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	for _, k := range keys {

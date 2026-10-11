@@ -1,16 +1,16 @@
 model-inspector  1 Identity 2 Config 3 Layers [4 Scan +]    
 ============================================================
+Scan > Code & pickles  [ names only ]                       
                                                             
-                                                            
-  +------------------------------------------------------+  
-  | Read file contents?                                 |   
-  |                                                     |   
-  | So far only names and sizes were read. Nothing i    |   
-  |                                                     |   
-  |                                                     |   
-  | [ c / enter  content reading ships in a later versio|   
-  +------------------------------------------------------+  
+- Nothing flagged. No code-executing formats or auto_map ent
                                                             
                                                             
                                                             
-SCAN | Code & pickles arrives in a later version | + structu
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+                                                            
+CODE | up/down | enter details | c code | + 5/8 | o headers-

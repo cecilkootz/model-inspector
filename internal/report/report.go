@@ -430,6 +430,19 @@ func Marshal(d Document) ([]byte, error) {
 	return sanitize.EscapeJSON(buf.Bytes()), nil
 }
 
+// ExitCode is the inspect status for a document: 3 when the format was not
+// inspected, 1 when the scan's overall status is fail, otherwise 0.
+// The text summary, JSON overall, and this code are the same document.
+func ExitCode(d Document) int {
+	if _, blocked := Blocked(d); blocked {
+		return 3
+	}
+	if d.Scan.Overall == string(scan.StatusFail) {
+		return 1
+	}
+	return 0
+}
+
 // Blocked reports whether the CLI should exit 3 after printing the summary.
 func Blocked(d Document) (string, bool) {
 	if d.Format.Name == "gguf" {

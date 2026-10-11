@@ -1,0 +1,40 @@
+model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✗1]                                                   ? keys   : commands   m mouse on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                                                                                                                                            
+  ✗ STRUCTURE PROBLEMS FOUND   3 passed · 0 warn · 1 fail · 4 not run                    1/1 shards · 1 ranges · 0/0 index entries · 101 B  
+                                                                                                                                            
+  Structure only: files complete, headers well-formed, internally consistent. Not a malware or behavior scan.  i  what this does not cover  
+                                                                                                                                            
+CHECKS  8 · structure only · in main's order                  DETAIL  selected check                                                        
+                                                              Shard headers parse   ✓ PASS  <1 ms                                           
+READ                                                          1/1 headers read (length + JSON)                                              
+ |  ✓ PASS  Shard headers parse                         <1 ms                                                                               
+ |          1/1 headers read (length + JSON)                    CHECKED                                                                     
+                                                              ################ 1/1 headers read (length + JSON)                             
+ |  ✓ PASS  Files present                               <1 ms                                                                               
+ |          1 safetensors files present, 0 broken links         RULE                                                                        
+                                                              8-byte length ≤ 100 MiB and ≤ file size; header is one JSON object, no        
+STRUCTURE                                                     duplicate keys, each tensor has dtype, shape and data_offsets                 
+ |  ✗ FAIL  Offsets & sizes                             <1 ms                                                                               
+ |          1 of 1 ranges have problems                         PROBLEMS  none                                                              
+                                                                                                                                            
+ |  – N/R  Index matches headers                            —   WHY IT MATTERS                                                              
+ |         no index file (single-file model)                    A header that is not valid JSON, or a length that does not fit the file,    
+                                                              means that shard cannot be mapped.                                            
+CODE                                                                                                                                        
+ |  ✓ PASS  Code-executing formats                      <1 ms   DOES NOT PROVE  that tensor values are sensible or finite                   
+ |          none: weights are safetensors, no .py                                                                                           
+                                                                                                                                            
+ |  – N/R  Code & pickle contents                           —    ▸ Not covered by any check (5)                                           i 
+ |         nothing to read (no flagged files)                                                                                               
+                                                                                                                                            
+PROVENANCE                                                                                                                                  
+ |  – N/R  Hashes vs revision                               —                                                                               
+ |         not run: needs a full read of 101 B                                                                                              
+                                                                                                                                            
+ |  – N/R  Config vs tensor shapes                          —                                                                               
+ |         not run: planned                                                                                                                 
+                                                                                                                                            
+⏎ details · space expand · e/E all · ] next problem · y copy                                                                                
+                                                                                                                                            
+SCAN │ org/fail │ ↑↓ check · ⏎ details · space expand · i not covered                 safetensors │ 101 B │ bf16 │ ✗ 1 fail │ ◇ headers-only

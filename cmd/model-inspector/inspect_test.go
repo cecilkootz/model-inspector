@@ -11,6 +11,7 @@ import (
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/fixture"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/report"
+	"origin.cursor.com/cecilkootz/model-inspector/internal/tui"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/version"
 )
 
@@ -431,4 +432,23 @@ func capture(t *testing.T, fn func() int) (stdout, stderr string, code int) {
 	}()
 	code = fn()
 	return stdout, stderr, code
+}
+
+func TestResolveErrorDoesNotOpenTUI(t *testing.T) {
+	called := false
+	prev := startTUI
+	startTUI = func(dir string, strict, fromCache bool, repo, rev string, opt ...tui.Options) (int, error) {
+		called = true
+		return 0, nil
+	}
+	t.Cleanup(func() { startTUI = prev })
+	_, stderr, code := capture(t, func() int {
+		return run([]string{"tui", "Qwen/Missing", "--hub-dir", t.TempDir()})
+	})
+	if called {
+		t.Fatal("a path-resolution error opened the TUI")
+	}
+	if code != 3 {
+		t.Fatalf("exit %d\n%s", code, stderr)
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/fileerr"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/jsonx"
@@ -172,12 +173,26 @@ type Model struct {
 	// a later render cannot append warnings or flip Partial on its own.
 	hostReady bool
 	hostCache []HostTensor
+
+	// Timings are the loader phases a scan check can attribute. Layout is
+	// filled when offsets are checked, which does no extra I/O.
+	Timings Timings
+	prog    *emitter
 }
 
 // Load inspects dir. Errors in individual shards are recorded, not fatal.
 // dir is resolved with EvalSymlinks before the walk, so a symlinked root
 // is inspected at its target.
-func Load(dir string) (*Model, error) {
+func Load(dir string) (*Model, error) { return load(dir, nil) }
+
+// LoadWithProgress is Load plus progress events. ch may be nil. Events are
+// sent at most every 50 ms, and the last event of each phase has Done == Total.
+// The send never blocks the walk: a full channel keeps the newest count.
+func LoadWithProgress(dir string, ch chan<- Progress) (*Model, error) {
+	return load(dir, ch)
+}
+
+func load(dir string, ch chan<- Progress) (*Model, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
@@ -193,14 +208,22 @@ func Load(dir string) (*Model, error) {
 	if !fi.IsDir() {
 		return nil, fmt.Errorf("%s is not a directory", dir)
 	}
-	m := &Model{Dir: real, DTypes: map[string]*DTypeStat{}, BitsHistogram: map[int]int{}}
+	m := &Model{Dir: real, DTypes: map[string]*DTypeStat{}, BitsHistogram: map[int]int{}, prog: newEmitter(ch)}
+	t0 := time.Now()
 	if err := m.scanFiles(); err != nil {
 		return nil, err
 	}
+	m.Timings.Walk = time.Since(t0)
+	m.emit(Progress{Phase: PhaseWalk, Done: len(m.Files), Total: len(m.Files)}, true)
 	m.loadConfig()
 	m.loadAuxConfigs()
+	t0 = time.Now()
 	m.loadIndex()
+	m.Timings.Index = time.Since(t0)
+	m.emit(Progress{Phase: PhaseIndex, Done: 1, Total: 1}, true)
+	t0 = time.Now()
 	m.loadShards()
+	m.Timings.Headers = time.Since(t0)
 	m.buildTensors()
 	m.buildGroups()
 	m.detectFormat()
@@ -241,6 +264,7 @@ func (m *Model) scanFiles() error {
 			return nil
 		}
 		nfiles++
+		m.emit(Progress{Phase: PhaseWalk, Done: nfiles, Total: nfiles}, false)
 		if nfiles > maxFiles {
 			m.Partial = true
 			m.warnf("stopped after %d entries", maxFiles)
@@ -575,13 +599,15 @@ func (m *Model) loadShards() {
 	}
 	sort.Strings(ordered)
 	roots := m.allowedRoots()
-	for _, n := range ordered {
+	ranges := 0
+	for i, n := range ordered {
 		s := &Shard{Name: n}
 		full, ok := joinWithin(m.Dir, n)
 		if !ok {
 			s.Err = fmt.Errorf("refusing non-local shard name %q", n)
 			m.warnf("shard %s: %v", n, s.Err)
 			m.addShard(s)
+			m.emit(Progress{Phase: PhaseHeaders, Done: i + 1, Total: len(ordered), Ranges: ranges}, i+1 == len(ordered))
 			continue
 		}
 		f, listed := byName[n]
@@ -589,12 +615,14 @@ func (m *Model) loadShards() {
 			s.Err = fmt.Errorf("not present in the model directory")
 			m.warnf("shard %s: %v", n, s.Err)
 			m.addShard(s)
+			m.emit(Progress{Phase: PhaseHeaders, Done: i + 1, Total: len(ordered), Ranges: ranges}, i+1 == len(ordered))
 			continue
 		}
 		if f.Broken {
 			s.Err = fmt.Errorf("not a readable regular file inside the model directory")
 			m.warnf("shard %s: %v", n, s.Err)
 			m.addShard(s)
+			m.emit(Progress{Phase: PhaseHeaders, Done: i + 1, Total: len(ordered), Ranges: ranges}, i+1 == len(ordered))
 			continue
 		}
 		s.Path = full
@@ -602,7 +630,11 @@ func (m *Model) loadShards() {
 		if s.Err != nil {
 			m.warnf("shard %s: %v", n, s.Err)
 		}
+		if s.Header != nil {
+			ranges += len(s.Header.Tensors)
+		}
 		m.addShard(s)
+		m.emit(Progress{Phase: PhaseHeaders, Done: i + 1, Total: len(ordered), Ranges: ranges}, i+1 == len(ordered))
 	}
 }
 

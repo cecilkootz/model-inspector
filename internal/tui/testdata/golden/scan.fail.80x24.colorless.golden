@@ -1,0 +1,24 @@
+model-inspector  1 Identity 2 Config 3 Layers [4 Scan ✗1]             m mouse on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✗ STRUCTURE PROBLEMS FOUND   3 passed · 0 warn · 1 fail · 4 not run           
+  Structure only · not a malware or behavior scan                       i more  
+                                                                                
+READ                                                                            
+▶| ✓ PASS Shard headers parse    1/1 headers read (length + JSON)               
+ | ✓ PASS Files present          1 safetensors files present, 0 broken links    
+STRUCTURE                                                                       
+ | ✗ FAIL Offsets & sizes        1 of 1 ranges have problems                    
+ | – N/R  Index matches headers  no index file (single-file model)              
+CODE                                                                            
+ | ✓ PASS Code-executing formats none: weights are safetensors, no .py          
+ | – N/R  Code & pickle contents nothing to read (no flagged files)             
+PROVENANCE                                                                      
+ | – N/R  Hashes vs revision     not run: needs a full read of 101 B            
+ | – N/R  Config vs tensor shap… not run: planned                               
+                                                                                
+ ▸ Not covered by any check (5)                                               i 
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+SCAN │ org/fail │ ↑↓ · ⏎ details        101 B │ bf16 │ ✗ 1 fail │ ◇ headers-only

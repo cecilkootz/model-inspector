@@ -158,20 +158,18 @@ func TestLayersCursorCache(t *testing.T) {
 	after := x.View()
 	if before == after {
 		got := x.(Model)
-		t.Fatalf("layers highlight did not move after Down, Down (cursor %d groups %d esc %v)", got.groupTable.Cursor(), len(got.m.Groups), strings.Contains(after, "\x1b"))
+		t.Fatalf("layers highlight did not move after Down, Down (cursor %d groups %d esc %v)", got.lay.row, len(got.m.Groups), strings.Contains(after, "\x1b"))
 	}
 	got := x.(Model)
-	if got.groupTable.Cursor() != 2 {
-		t.Fatalf("cursor %d", got.groupTable.Cursor())
+	if got.lay == nil || got.lay.row == 0 {
+		t.Fatalf("cursor %d", got.lay.row)
 	}
-	want := got.m.Groups[2]
+	beforeEnter := got.currentLayer()
+	wasOpen := got.lay.isOpen(beforeEnter.path)
 	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	got = x.(Model)
-	if got.detail == nil || got.detail.Key != want.Key {
-		t.Fatalf("enter opened %v, want %s", got.detail, want.Key)
-	}
-	if len(got.detail.Tensors) < 2 {
-		return
+	if (beforeEnter.kind == rowGroup || beforeEnter.kind == rowSub) && got.lay.isOpen(beforeEnter.path) == wasOpen {
+		t.Fatalf("enter did not toggle %s", beforeEnter.path)
 	}
 	tensorBefore := x.View()
 	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown})

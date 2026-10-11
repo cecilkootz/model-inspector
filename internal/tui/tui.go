@@ -5,17 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"origin.cursor.com/cecilkootz/model-inspector/internal/model"
-	"origin.cursor.com/cecilkootz/model-inspector/internal/sanitize"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/scan"
 	"origin.cursor.com/cecilkootz/model-inspector/internal/tui/ui"
 )
@@ -66,10 +63,6 @@ type Model struct {
 	identityVP viewport.Model
 	configVP   viewport.Model
 
-	groupTable  table.Model
-	tensorTable table.Model
-	detail      *model.Group
-
 	mouse          bool
 	noClipboard    bool
 	motion         bool
@@ -88,6 +81,8 @@ type Model struct {
 	lastClickID    string
 	lastClickAt    time.Time
 	cfg            *configState
+	lay            *layersState
+	scn            *scanView
 }
 
 type frameCache struct {
@@ -147,27 +142,24 @@ func New(m *model.Model, res scan.Result) Model {
 		m: m, scan: res, width: 100, height: 30, scanOpen: map[string]bool{},
 		mouse: mouseDefault(), noClipboard: osc52EnvOff(), motion: motion, motionFrame: frame,
 		ratio: 55, derived: &d, cache: &frameCache{}, zones: &ui.Zones{},
-		now: time.Now, cfg: newConfigState(),
+		now: time.Now, cfg: newConfigState(), lay: newLayersState(),
+		scn: &scanView{},
 	}
 	t.identityVP = viewport.New(t.width, t.bodyHeight())
 	t.configVP = viewport.New(t.width, t.bodyHeight())
 	t.identityVP.SetContent(renderIdentity(m, t.width))
-
-	styles := table.DefaultStyles()
-	styles.Header = styles.Header.Bold(true).Foreground(lipgloss.AdaptiveColor{Dark: "99", Light: "55"})
-	styles.Selected = styles.Selected.Foreground(lipgloss.AdaptiveColor{Dark: "230", Light: "255"}).Background(lipgloss.AdaptiveColor{Dark: "62", Light: "61"})
-	t.groupTable = table.New(table.WithColumns(groupColumns(t.width)), table.WithRows(groupRows(m)),
-		table.WithFocused(true), table.WithHeight(t.bodyHeight()), table.WithStyles(styles))
-	t.tensorTable = table.New(table.WithColumns(tensorColumns(t.width)),
-		table.WithFocused(true), table.WithHeight(t.bodyHeight()-1), table.WithStyles(styles))
 	return t
 }
 
 func (t Model) Init() tea.Cmd {
+	var cmds []tea.Cmd
 	if t.motion && t.motionFrame < 6 {
-		return tick()
+		cmds = append(cmds, tick())
 	}
-	return nil
+	if c := t.loadCmds(); c != nil {
+		cmds = append(cmds, c)
+	}
+	return tea.Batch(cmds...)
 }
 
 func (t Model) bodyHeight() int {
@@ -182,20 +174,12 @@ func (t *Model) resize() {
 	for _, vp := range []*viewport.Model{&t.identityVP, &t.configVP} {
 		vp.Width, vp.Height = t.width, h
 	}
-	t.identityVP.SetContent(t.identityBody())
+	if t.active == tabIdentity {
+		t.identityVP.SetContent(t.identityBody())
+	}
 	if t.cache != nil {
 		t.cache.key = ""
 	}
-	t.groupTable.SetColumns(groupColumns(t.width))
-	t.groupTable.SetWidth(t.width)
-	t.groupTable.SetHeight(h)
-	t.tensorTable.SetColumns(tensorColumns(t.width))
-	t.tensorTable.SetWidth(t.width)
-	th := h - 1
-	if th < 1 {
-		th = 1
-	}
-	t.tensorTable.SetHeight(th)
 }
 
 func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -212,6 +196,24 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.cfg.spin = true
 			t.touchConfig()
 		}
+		return t, nil
+	case scanArmMsg:
+		if t.scn != nil && t.scn.loading && t.m == nil {
+			t.scn.armed = true
+			t.touchScan()
+		}
+		return t, nil
+	case scanProgMsg:
+		if t.scn != nil && t.scn.loading {
+			t.scn.prog = msg.p
+			t.scn.spin++
+			t.touchScan()
+			return t, waitScanProg(t.scn.progCh)
+		}
+		return t, nil
+	case scanLoadedMsg:
+		return t.onScanLoaded(msg)
+	case nil:
 		return t, nil
 	case tea.MouseMsg:
 		return t.updateMouse(msg)
@@ -240,6 +242,12 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if t.configSearching() {
 			return t.updateConfigSearch(msg)
+		}
+		if t.layersSearching() {
+			return t.updateLayersSearch(msg)
+		}
+		if t.layersJumping() {
+			return t.updateLayersJump(msg)
 		}
 		if t.palette.open {
 			return t.updatePalette(msg)
@@ -287,6 +295,17 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.touchConfig()
 				return t, nil
 			}
+			if t.active == tabLayers && t.layersCloseTop() {
+				return t, nil
+			}
+			if t.active == tabLayers && t.layersTreeOn() {
+				return t.updateLayersKey(msg)
+			}
+			if t.active == tabLayers && t.focusSecondary {
+				t.focusSecondary = false
+				t.touchLayers()
+				return t, nil
+			}
 			if t.zoom {
 				t.zoom = false
 				return t, nil
@@ -295,9 +314,8 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.drill = false
 				return t, nil
 			}
-			if t.detail != nil {
-				t.detail = nil
-				return t, nil
+			if t.active == tabScan && t.scn != nil && (t.scn.drill || t.scn.code) {
+				return t.updateScan(msg)
 			}
 			return t, nil
 		case "backspace":
@@ -305,8 +323,8 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				t.drill = false
 				return t, nil
 			}
-			if t.detail != nil {
-				t.detail = nil
+			if t.active == tabLayers && t.layersTreeOn() {
+				return t.updateLayersKey(msg)
 			}
 			return t, nil
 		case "w":
@@ -334,6 +352,27 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						t.cfg.ratio = 70
 					}
 					t.touchConfig()
+				}
+				return t, nil
+			}
+			if t.active == tabLayers {
+				if t.lay != nil && (ui.Breakpoint(t.width, t.height) == "M" || ui.Breakpoint(t.width, t.height) == "L") {
+					d := -5
+					if msg.String() == ">" {
+						d = 5
+					}
+					if !t.lay.ratioSet {
+						t.lay.ratio = t.layersRatio()
+						t.lay.ratioSet = true
+					}
+					t.lay.ratio += d
+					if t.lay.ratio < 30 {
+						t.lay.ratio = 30
+					}
+					if t.lay.ratio > 70 {
+						t.lay.ratio = 70
+					}
+					t.touchLayers()
 				}
 				return t, nil
 			}
@@ -365,14 +404,20 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.active = (t.active + numTabs - 1) % numTabs
 			return t, nil
 		case "right", "l":
-			if t.treeFocused() {
+			if t.active == tabConfig && t.treePane() {
 				return t.updateConfigKey(msg)
+			}
+			if t.layersTreeOn() {
+				return t.updateLayersKey(msg)
 			}
 			t.active = (t.active + 1) % numTabs
 			return t, nil
 		case "left", "h":
-			if t.treeFocused() {
+			if t.active == tabConfig && t.treePane() {
 				return t.updateConfigKey(msg)
+			}
+			if t.layersTreeOn() {
+				return t.updateLayersKey(msg)
 			}
 			t.active = (t.active + numTabs - 1) % numTabs
 			return t, nil
@@ -382,6 +427,9 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if t.active == tabConfig && !t.help {
 				return t.updateConfigKey(msg)
+			}
+			if t.active == tabLayers && !t.help {
+				return t.updateLayersKey(msg)
 			}
 			if !t.help && t.active == tabIdentity && ui.Breakpoint(t.width, t.height) == "S" {
 				t.drill = true
@@ -399,17 +447,7 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return t.updateScan(msg)
 		}
 		if t.active == tabLayers {
-			switch msg.String() {
-			case "enter":
-				if t.detail == nil {
-					if i := t.groupTable.Cursor(); i >= 0 && i < len(t.m.Groups) {
-						t.detail = t.m.Groups[i]
-						t.tensorTable.SetRows(tensorRows(t.detail))
-						t.tensorTable.SetCursor(0)
-					}
-				}
-				return t, nil
-			}
+			return t.updateLayersKey(msg)
 		}
 	}
 
@@ -420,59 +458,10 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch t.active {
 	case tabIdentity:
 		t.identityVP, cmd = t.identityVP.Update(msg)
-	case tabConfig:
+	case tabConfig, tabLayers:
 		return t, nil
-	case tabLayers:
-		if t.detail != nil {
-			t.tensorTable, cmd = t.tensorTable.Update(msg)
-		} else {
-			t.groupTable, cmd = t.groupTable.Update(msg)
-		}
 	}
 	return t, cmd
-}
-
-func (t Model) updateScan(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	n := len(t.scan.Checks)
-	switch msg.String() {
-	case "up", "k":
-		if t.scanCursor > 0 {
-			t.scanCursor--
-		}
-	case "down", "j":
-		if n > 0 && t.scanCursor < n-1 {
-			t.scanCursor++
-		}
-	case "pgup", "b", "u":
-		t.scanCursor -= t.bodyHeight() / 2
-		if t.scanCursor < 0 {
-			t.scanCursor = 0
-		}
-	case "pgdown", "f", "d":
-		t.scanCursor += t.bodyHeight() / 2
-		if n > 0 && t.scanCursor >= n {
-			t.scanCursor = n - 1
-		}
-	case "home", "g":
-		t.scanCursor = 0
-	case "end", "G":
-		if n > 0 {
-			t.scanCursor = n - 1
-		}
-	case "enter":
-		if n > 0 && t.scanCursor >= 0 && t.scanCursor < n {
-			id := t.scan.Checks[t.scanCursor].ID
-			if t.scanOpen == nil {
-				t.scanOpen = map[string]bool{}
-			}
-			t.scanOpen[id] = !t.scanOpen[id]
-		}
-	case "c":
-		t.notice = "Code & pickles arrives in a later version"
-		t.disclosure = true
-	}
-	t.ensureScanVisible()
-	return t, nil
 }
 
 func (t Model) View() string {
@@ -498,58 +487,6 @@ func (t Model) View() string {
 	return s
 }
 
-func (t Model) layersBody() string {
-	if strings.HasPrefix(t.m.Format, "gguf") {
-		return "GGUF parsing is coming. model-inspector read file sizes only."
-	}
-	if len(t.m.Tensors) == 0 {
-		return "No tensors: this directory has no safetensors shards."
-	}
-	if t.detail != nil {
-		head := sanitize.From(t.detail.Key).String() + fmt.Sprintf(" · %d tensors · %s", len(t.detail.Tensors), model.HumanBytes(t.detail.Bytes))
-		return head + "\n" + markTableCursor(t.tensorTable.View(), t.tensorTable)
-	}
-	return markTableCursor(t.groupTable.View(), t.groupTable)
-}
-
-// markTableCursor puts a ">" on the selected row when colour is off.
-// The table's selection is a background fill, which the ASCII profile drops,
-// so a NO_COLOR frame would otherwise hide the cursor. The marker follows
-// the row index: the first cell is truncated with an ellipsis, so the
-// rendered text is not the full name.
-func markTableCursor(view string, tbl table.Model) string {
-	cursor := tbl.Cursor()
-	rows := tbl.Rows()
-	if !ui.ColorOff() || cursor < 0 || cursor >= len(rows) || len(rows[cursor]) == 0 {
-		return view
-	}
-	lines := strings.Split(view, "\n")
-	idx := tableCursorLine(tbl)
-	if idx < 1 || idx >= len(lines) {
-		return view
-	}
-	lines[idx] = markGreater(lines[idx])
-	return strings.Join(lines, "\n")
-}
-
-// tableCursorLine is the view line of the selected row. Line 0 is the
-// header. bubbles keeps the rendered window start and the viewport scroll
-// unexported; the visible row is cursor-start-YOffset.
-func tableCursorLine(tbl table.Model) int {
-	v := reflect.ValueOf(tbl)
-	start := int(v.FieldByName("start").Int())
-	yoff := int(v.FieldByName("viewport").FieldByName("YOffset").Int())
-	return 1 + tbl.Cursor() - start - yoff
-}
-
-func markGreater(line string) string {
-	// The first cell's left pad becomes the marker so the columns stay put.
-	if strings.HasPrefix(line, " ") {
-		return ">" + line[1:]
-	}
-	return line
-}
-
 func configUnreadable(m *model.Model) bool {
 	for _, w := range m.Warnings {
 		if strings.Contains(w, "config.json") {
@@ -568,81 +505,4 @@ func cutBlock(s string, width int) string {
 		lines[i] = truncWidth(ln, width)
 	}
 	return strings.Join(lines, "\n")
-}
-
-func groupColumns(width int) []table.Column {
-	cols := []table.Column{
-		{Title: "Group", Width: 0}, {Title: "Kind", Width: 10}, {Title: "Tensors", Width: 8},
-		{Title: "Params*", Width: 9}, {Title: "Bytes", Width: 11}, {Title: "Experts", Width: 7}, {Title: "QWeights", Width: 8},
-	}
-	return flex(cols, width, 12)
-}
-
-func tensorColumns(width int) []table.Column {
-	cols := []table.Column{
-		{Title: "Tensor", Width: 0}, {Title: "DType", Width: 6}, {Title: "Shape", Width: 20},
-		{Title: "Bytes", Width: 11}, {Title: "Role", Width: 8},
-	}
-	return flex(cols, width, 20)
-}
-
-// flex gives column 0 whatever width remains (cells have 1 char padding each side).
-// Every column width is clamped to at least 0.
-func flex(cols []table.Column, width, minW int) []table.Column {
-	if width < 0 {
-		width = 0
-	}
-	if minW < 0 {
-		minW = 0
-	}
-	used := 0
-	for i := 1; i < len(cols); i++ {
-		if cols[i].Width < 0 {
-			cols[i].Width = 0
-		}
-		used += cols[i].Width
-	}
-	w := width - used - 2*len(cols)
-	if w < minW {
-		w = minW
-	}
-	if w < 0 {
-		w = 0
-	}
-	if len(cols) > 0 {
-		cols[0].Width = w
-	}
-	return cols
-}
-
-func groupRows(m *model.Model) []table.Row {
-	rows := make([]table.Row, 0, len(m.Groups))
-	for _, g := range m.Groups {
-		exp := ""
-		if g.HasExperts {
-			exp = "yes"
-		}
-		rows = append(rows, table.Row{
-			sanitize.From(g.Key).String(), g.Kind, fmt.Sprint(len(g.Tensors)), model.HumanCount(g.LogicalParams),
-			model.HumanBytes(g.Bytes), exp, fmt.Sprint(g.QuantizedTensors)})
-	}
-	return rows
-}
-
-func tensorRows(g *model.Group) []table.Row {
-	rows := make([]table.Row, 0, len(g.Tensors))
-	for _, t := range g.Tensors {
-		name := t.Name
-		if g.Kind == model.KindLayer {
-			name = model.ShortName(name)
-		}
-		role := t.Role
-		if t.Role == model.RoleQuantWeight {
-			role = fmt.Sprintf("q%d", t.Bits)
-		}
-		rows = append(rows, table.Row{
-			sanitize.From(name).String(), sanitize.From(t.DType).String(), sanitize.From(fmt.Sprint(t.Shape)).String(),
-			model.HumanBytes(t.ByteLen()), role})
-	}
-	return rows
 }

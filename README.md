@@ -174,6 +174,8 @@ The CLI does not use it for user input; it uses `hfcache.ResolveTarget`.
 | 2 | Usage: unknown flag, missing or empty target, empty `--path` or `--repo`, invalid repo id, or an ambiguous path/repo id. |
 | 3 | Could not inspect: not found, not a directory, GGUF-only, or no weight files. GGUF and empty directories still print a summary. |
 
+The interactive TUI's exit status reflects whether the snapshot loaded, not the scan verdict. CI should use `inspect` or `--json`.
+
 ### Keys
 
 `tab` / `shift+tab` or `1`-`4` switch screens. In a tree, `←` / `→` and
@@ -186,8 +188,14 @@ which), `tab` inside that input switches to filter, and `n` / `N` step
 through matches. `y` copies the jq path and `Y` copies the value, both
 through OSC 52. `--no-clipboard` or `MODEL_INSPECTOR_NO_OSC52=1` turns
 those sequences off. `r` toggles the sanitized raw text.
-`↑` / `↓` scroll or select. On Layers, `enter` opens a group and `esc` or
-backspace goes back. `esc` never quits: it closes help, the command palette,
+`↑` / `↓` scroll or select. On Layers the same fold keys apply, plus
+`space` toggles a node, `e` / `E` expand or collapse, `+` / `-` open or
+close one depth, and `p` jumps to the parent. `s` cycles natural, bytes,
+params, and name; `S` reverses that order. `o` keeps outliers, `t` cycles
+the attention filter, `x` lists stored parts, and `#` jumps to a layer.
+`/` searches, `n` / `N` step matches, and `y` / `Y` copy the name or the
+value.
+`esc` never quits: it closes help, the command palette,
 or a disclosure, then leaves a drill-down. `?` opens the key list. `q`
 closes help when help is open, and otherwise quits. `ctrl+c` always quits.
 `:` or `ctrl+k` opens the command palette. `w` moves focus between panes,
@@ -196,9 +204,16 @@ the mouse. The mouse is on unless you pass `--no-mouse` or set
 `MODEL_INSPECTOR_MOUSE=0`. Hold Shift to select text while the mouse is on.
 OSC 52 copy is on unless you pass `--no-clipboard` or set
 `MODEL_INSPECTOR_NO_OSC52=1`.
-On Scan, `c` asks before reading file contents. That reader is not in this
-version, and the status line says code and pickle contents arrive in a
-later version. The window must be at least 60×16; below that the screen
+On Scan, `space` expands the selected check, `e` expands every check, and
+`E` collapses them. `]` and `[` jump to the next or previous problem. `i`
+toggles the "not covered" panel. `c` opens the code and pickle name list;
+`y` copies the selected check and `Y` copies the whole scan as text.
+Enter focuses that check's detail (a full-screen drill below 100 columns)
+and, on a code check, opens the name list. Confirming the list asks before
+any contents are read. That reader is not in this version: the confirm
+button stays disabled and says content reading ships in a later version.
+A directory that takes more than a moment shows a progress row while the
+headers are read. The window must be at least 60×16; below that the screen
 says so and only `q` works.
 
 `MODEL_INSPECTOR_THEME` is `dark` or `light`. `MODEL_INSPECTOR_MOTION=0`
@@ -239,8 +254,12 @@ follows the overall result.
    `layers.N.ple.ple_embedding`), norms, hyper_connection (the model-level
    mixer, including `hc_norm`), lm_head, mtp, vision, and other. Enter
    shows each tensor's name, dtype, shape, bytes, and role (`q4`, `qscales`,
-   `qbiases`). The Layers column layout itself is unchanged in this version.
-4. **Scan**: structural checks, with a one-line reason on expand.
+   `qbiases`). The tree sits under a layer-by-component bytes heatmap on
+   one shared log2 scale. Rows show a dtype pill, an attention or expert
+   type, a sibling bar, bytes, and percent of weights.
+4. **Scan**: structural checks. The selected check shows its rule, its
+   problems, why it matters, and what it does not prove. `space` expands a
+   short form of that on the card.
    **This is not a malware or behavior scan.** The disclaimer says so.
    Checks: shard headers parse; files present (including a shard the index
    does not name); offsets and sizes (bounds, dtype×shape, overlap, gaps,

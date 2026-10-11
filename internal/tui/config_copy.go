@@ -82,6 +82,9 @@ func (t Model) canCopy() bool {
 	if os.Getenv("TERM") == "dumb" {
 		return false
 	}
+	if t.active == tabLayers && t.lay != nil && t.lay.copyTTY != nil {
+		return *t.lay.copyTTY
+	}
 	if t.cfg != nil && t.cfg.copyTTY != nil {
 		return *t.cfg.copyTTY
 	}
@@ -93,6 +96,9 @@ func (t Model) canCopy() bool {
 }
 
 func (t Model) copyWriter() io.Writer {
+	if t.active == tabLayers && t.lay != nil && t.lay.copyTo != nil {
+		return t.lay.copyTo
+	}
 	if t.cfg != nil && t.cfg.copyTo != nil {
 		return t.cfg.copyTo
 	}
