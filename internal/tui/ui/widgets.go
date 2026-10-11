@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/rivo/uniseg"
 
 	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
@@ -104,37 +103,6 @@ func Est() string {
 		return "(est)"
 	}
 	return paint(g.Est, TextMuted.Color(), nil, false)
-}
-
-// GradText colours each grapheme from g. Literals only.
-func GradText(s Safe, g Gradient, bold bool) string {
-	if ColorOff() {
-		return s.String()
-	}
-	if Profile() == "ansi16" {
-		return Pill(FillKindViolet, sanitize.Program(strings.TrimSpace(s.String())))
-	}
-	gr := uniseg.NewGraphemes(s.String())
-	var n int
-	var gs []string
-	for gr.Next() {
-		gs = append(gs, gr.Str())
-		n++
-	}
-	if n == 0 {
-		return ""
-	}
-	var b strings.Builder
-	for i, grapheme := range gs {
-		t := 0.0
-		if n > 1 {
-			t = float64(i) / float64(n-1)
-		}
-		hex := string(g.At(t))
-		fg := OnFill(hex)
-		b.WriteString(paintHex(grapheme, fg, hex, bold))
-	}
-	return b.String()
 }
 
 // Meter draws a gradient bar of width cells. frac outside [0,1] clamps,

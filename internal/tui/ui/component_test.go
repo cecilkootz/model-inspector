@@ -90,9 +90,6 @@ func TestWidgetsRender(t *testing.T) {
 		t.Run(p.name, func(t *testing.T) {
 			p.set(t)
 			Configure()
-			if g := GradText(txt("model-inspector"), GradBrand, true); g == "" {
-				t.Fatal("empty grad")
-			}
 			if Title(txt("STORAGE"), txt("on disk"), 40) == "" {
 				t.Fatal("empty title")
 			}
@@ -102,7 +99,7 @@ func TestWidgetsRender(t *testing.T) {
 			if Button(txt("c"), txt("later"), true, false) == "" {
 				t.Fatal("empty disabled button")
 			}
-			if _, over := Meter(1.4, 12, GradBrand); !over {
+			if _, over := Meter(1.4, 12, GradMeter); !over {
 				t.Fatal("meter overflow")
 			}
 			if s, over := Meter(0.25, 8, GradQ); s == "" || over {

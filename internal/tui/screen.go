@@ -818,11 +818,8 @@ func (t Model) topRow() string {
 	if showWord {
 		if ui.ColorOff() {
 			b.WriteString("model-inspector  ")
-		} else if ui.Profile() == "ansi16" {
-			b.WriteString(ui.GradText(ui.S(ui.L("model-inspector")), ui.GradBrand, true))
-			b.WriteString("  ")
 		} else {
-			b.WriteString(ui.GradText(ui.S(ui.L("model-inspector")), ui.GradBrand, true))
+			b.WriteString(ui.PaintToken("model-inspector", ui.Accent, nil, true))
 			b.WriteString("  ")
 		}
 	}

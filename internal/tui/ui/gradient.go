@@ -113,14 +113,12 @@ func BlendAt(stops []Stop, t float64) string {
 }
 
 var (
-	brandStops = []Stop{{0, AccentTok.DarkHex}, {1, AccentTok.DarkHex}}
 	meterStops = []Stop{{0, Ramp2.DarkHex}, {1, Ramp5.DarkHex}}
 	qStops     = []Stop{{0, Ramp2.DarkHex}, {1, Ramp4.DarkHex}}
 	sStops     = []Stop{{0, Ramp3.DarkHex}, {1, Ramp5.DarkHex}}
 	heatDark   = rampStops(func(t Token) string { return t.DarkHex })
 	heatLight  = rampStops(func(t Token) string { return t.LightHex })
 
-	GradBrand = NewGradient(brandStops...)
 	GradMeter = NewGradient(meterStops...)
 	GradQ     = NewGradient(qStops...)
 	GradS     = NewGradient(sStops...)
@@ -139,6 +137,3 @@ func Heat() Gradient {
 	}
 	return GradHeatL
 }
-
-// BrandStops exposes the wordmark stops for tests.
-func BrandStops() []Stop { return append([]Stop(nil), brandStops...) }

@@ -18,6 +18,16 @@ type Token struct {
 	LightHex string
 	ANSI256  string
 	ANSI     string // empty means "no fill" in 16-colour mode
+
+	// ANSI256Light replaces ANSI256 in the light theme when set.
+	ANSI256Light string
+}
+
+func (t Token) ansi256Light() string {
+	if t.ANSI256Light != "" {
+		return t.ANSI256Light
+	}
+	return t.ANSI256
 }
 
 // Color is the lipgloss adaptive colour for this token.
@@ -38,7 +48,7 @@ func (t Token) Color() lipgloss.TerminalColor {
 		},
 		Light: lipgloss.CompleteColor{
 			TrueColor: light,
-			ANSI256:   t.ANSI256,
+			ANSI256:   t.ansi256Light(),
 			ANSI:      ansi,
 		},
 	}
@@ -60,8 +70,8 @@ var (
 	Line      = Token{DarkHex: "#4A505C", LightHex: "#B9C0B2", ANSI256: "239", ANSI: "8"}
 	Text1     = Token{DarkHex: "#E8EAED", LightHex: "#15181C", ANSI256: "254", ANSI: "15"}
 	Text2     = Token{DarkHex: "#A7ADB7", LightHex: "#4A5260", ANSI256: "248", ANSI: "7"}
-	Text3     = Token{DarkHex: "#737A86", LightHex: "#6B7380", ANSI256: "243", ANSI: "8"}
-	AccentTok = Token{DarkHex: "#8FD14F", LightHex: "#3F7D12", ANSI256: "113", ANSI: "10"}
+	Text3     = Token{DarkHex: "#838B99", LightHex: "#626A76", ANSI256: "245", ANSI256Light: "242", ANSI: "8"}
+	AccentTok = Token{DarkHex: "#8FD14F", LightHex: "#3C7711", ANSI256: "113", ANSI: "10"}
 	WarnTok   = Token{DarkHex: "#E8AA43", LightHex: "#8A5A00", ANSI256: "179", ANSI: "3"}
 	WarnBG    = Token{DarkHex: "#3A2E17", LightHex: "#F6E8CC", ANSI256: "58", ANSI: ""}
 	FailTok   = Token{DarkHex: "#F0625F", LightHex: "#B4232A", ANSI256: "203", ANSI: "1"}
@@ -131,8 +141,11 @@ var paletteTokens = []Token{
 // neutrals toward lavender.
 func ansi256Of(hex string) (string, bool) {
 	for _, t := range paletteTokens {
-		if strings.EqualFold(hex, t.DarkHex) || strings.EqualFold(hex, t.LightHex) {
+		if strings.EqualFold(hex, t.DarkHex) {
 			return t.ANSI256, true
+		}
+		if strings.EqualFold(hex, t.LightHex) {
+			return t.ansi256Light(), true
 		}
 	}
 	return "", false

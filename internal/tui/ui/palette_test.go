@@ -13,8 +13,8 @@ func TestPalettePinned(t *testing.T) {
 		{"line", Line, "#4A505C", "#B9C0B2", "239", "8"},
 		{"text-1", Text1, "#E8EAED", "#15181C", "254", "15"},
 		{"text-2", Text2, "#A7ADB7", "#4A5260", "248", "7"},
-		{"text-3", Text3, "#737A86", "#6B7380", "243", "8"},
-		{"accent", AccentTok, "#8FD14F", "#3F7D12", "113", "10"},
+		{"text-3", Text3, "#838B99", "#626A76", "245", "8"},
+		{"accent", AccentTok, "#8FD14F", "#3C7711", "113", "10"},
 		{"warn", WarnTok, "#E8AA43", "#8A5A00", "179", "3"},
 		{"warn-bg", WarnBG, "#3A2E17", "#F6E8CC", "58", ""},
 		{"fail", FailTok, "#F0625F", "#B4232A", "203", "1"},
@@ -28,5 +28,8 @@ func TestPalettePinned(t *testing.T) {
 		if c.tok.DarkHex != c.dark || c.tok.LightHex != c.light || c.tok.ANSI256 != c.c256 || c.tok.ANSI != c.c16 {
 			t.Errorf("%s = %+v, want %s %s %s %q", c.name, c.tok, c.dark, c.light, c.c256, c.c16)
 		}
+	}
+	if Text3.ansi256Light() != "242" {
+		t.Errorf("text-3 light 256 = %s, want 242", Text3.ansi256Light())
 	}
 }
