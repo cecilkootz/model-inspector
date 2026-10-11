@@ -119,6 +119,16 @@ func resolvedPath(f *os.File, fallback string) (string, error) {
 // Read reads at most max+1 bytes from the file.
 func (f *File) Read(p []byte) (int, error) { return f.r.Read(p) }
 
+// ReadAt reads len(p) bytes at off from the same descriptor, independent of
+// the sequential position. len(p) may not exceed the cap given to Open, so a
+// caller cannot size a buffer from file contents past that bound.
+func (f *File) ReadAt(p []byte, off int64) (int, error) {
+	if off < 0 || int64(len(p)) > f.max {
+		return 0, fmt.Errorf("safeopen: read of %d bytes at %d exceeds the %d-byte cap", len(p), off, f.max)
+	}
+	return f.f.ReadAt(p, off)
+}
+
 // Close closes the descriptor.
 func (f *File) Close() error { return f.f.Close() }
 
