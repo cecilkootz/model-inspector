@@ -110,6 +110,7 @@ The interactive TUI exits 0 when the snapshot loads, and 3 when the load-error c
 - QA reviews before merge. QA blocks only on sanitizer bypasses, crashes or panics, OOM or hangs, and wrong numbers. Nits are batched into a follow-up PR.
 - Add a regression test or fuzz seed for every bug fixed, in the matching `qa_prN_test.go` or in `hostile_test.go`. The N in existing `qa_prN_test.go` files is a Cursor Origin PR number, not a GitHub one.
 - Only Matthew merges.
+- Merge only when every CI check on the PR is green. Branch protection is unavailable on this private free-plan repo, so this is not enforced; reviewers confirm `gh pr checks` before recommending a merge.
 - Stacked PRs stay based on the parent branch. After the parent merges, retarget the child to main.
 - Design specs live in the shared workspace (`ux-spec-v1.md`, `v2/*.md`) and are owned by the Inspector Design agent.
 - Current in-flight status is in `docs/IN_FLIGHT_REVIEWS.md`. Check it before touching an area with an open PR.
