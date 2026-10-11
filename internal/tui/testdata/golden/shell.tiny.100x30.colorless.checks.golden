@@ -18,9 +18,9 @@ model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params            ✓ 
 │                                ││ That tensor values are sensible or finite.                     │
 ╰────────────────────────────────╯│                                                                │
 ╭[3] Layers ───────── 2 decoder ─╮│ NOT COVERED BY ANY CHECK (5)                                   │
-│   embeddings              20 B ││ Structural integrity checks only: file completeness, header    │
-│   n-gram table (PLE)      36 B ││ well-formedness and internal consistency. Not a malware or     │
-│   decoder layers 2        32 B ││ behavior scan; does not establish what the weights do or who   │
+│     n-gram table (PLE)    36 B ││ Structural integrity checks only: file completeness, header    │
+│   ▸ decoder ×2            32 B ││ well-formedness and internal consistency. Not a malware or     │
+│     hyper_connection      24 B ││ behavior scan; does not establish what the weights do or who   │
 ╰────────────────────────────────╯│ produced them.                                                 │
 ╭[4] Config ────────── 32 nodes ─╮│ ·  whether the weights are benign, unmodified or what the      │
 │   model_type           qwen3_5 ││    publisher intended                                          │

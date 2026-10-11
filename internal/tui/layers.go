@@ -86,6 +86,8 @@ type layersState struct {
 	snap     *layersSnap
 	copyTo   io.Writer
 	copyTTY  *bool
+
+	side layersSide // the panels layout's tree; the tab layout never reads it
 }
 
 type lrow struct {
@@ -1881,6 +1883,10 @@ func (t *Model) copyLayers(value bool) {
 	}
 	t.lay.ensure(t.m)
 	payload, kind := t.layerPayload(value)
+	t.copyLayerPayload(payload, kind)
+}
+
+func (t *Model) copyLayerPayload(payload, kind string) {
 	if payload == "" {
 		t.notice = "nothing to copy"
 		t.touchLayers()

@@ -18,9 +18,9 @@ model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params            ✓ 
 │   · 3 not run                  ││                                                                │
 ╰────────────────────────────────╯│ CALLOUTS                                                       │
 ╭[3] Layers ───────── 2 decoder ─╮│ ! language_model.model.embed_tokens.weight is 16 B, 10.5% of   │
-│   embeddings              20 B ││   weights                                                      │
-│   n-gram table (PLE)      36 B ││ ! ple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% of      │
-│   decoder layers 2        32 B ││   weights                                                      │
+│     n-gram table (PLE)    36 B ││   weights                                                      │
+│   ▸ decoder ×2            32 B ││ ! ple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% of      │
+│     hyper_connection      24 B ││   weights                                                      │
 ╰────────────────────────────────╯│ ! ple.ple_embedding.ngram_heads_vocab_sizes is 16 B, 10.5% of  │
 ╭[4] Config ────────── 32 nodes ─╮│   weights                                                      │
 │   model_type           qwen3_5 ││ +2 more                                                        │
