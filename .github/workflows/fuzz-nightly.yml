@@ -23,7 +23,7 @@ env:
 
 jobs:
   fuzz:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     # make fuzz runs the 10 targets one after another: 10 x 10m cap plus build.
     timeout-minutes: 130
     steps:
