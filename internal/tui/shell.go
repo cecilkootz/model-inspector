@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -36,6 +38,8 @@ type shellState struct {
 	top      int // detail scroll, for panels whose detail is plain lines
 	modelCur int
 	scroll   [4]int
+	filter   [4]shellFilter
+	fcache   [4]filterCache
 
 	panelRect  [4]ui.Rect
 	detailRect ui.Rect
@@ -48,7 +52,7 @@ func (s *shellState) framePart() string {
 	if s == nil {
 		return ""
 	}
-	return fmt.Sprintf("|sh %d %v %d %d", s.side, s.inDetail, s.top, s.modelCur)
+	return fmt.Sprintf("|sh %d %v %d %d %q", s.side, s.inDetail, s.top, s.modelCur, s.filterFingerprint())
 }
 
 func (s *shellState) focusSide(n int) {
@@ -65,6 +69,7 @@ func (s *shellState) focusSide(n int) {
 // behind Layers and Config at the panel's selection.
 func (t *Model) shellFocus(n int) {
 	changed := n != t.sh.side
+	t.filterStopEditing()
 	t.sh.focusSide(n)
 	if changed {
 		t.sidePanels()[n-1].move(0)
@@ -123,6 +128,9 @@ func (t Model) renderShell() string {
 			Num: i + 1, Title: p.title(), Counter: ui.Chrome(p.counter()),
 			Width: sideW, Height: h, Focused: i == open && !sh.inDetail,
 		}
+		if f := sh.filter[i]; f.active() {
+			spec.Counter = filterCounter(f.text, p.title(), sideW)
+		}
 		sh.panelRect[i] = ui.Rect{X: 0, Y: y, W: sideW, H: h}
 		if i == open {
 			spec.Body = t.shellList(p, i, y, h, iw)
@@ -166,31 +174,62 @@ func (t Model) renderShell() string {
 }
 
 // shellList draws the open panel's rows through a window that keeps the
-// cursor visible, and records a hit rectangle per drawn row.
+// cursor visible, and records a hit rectangle per drawn row. A filter narrows
+// the rows and, while it is edited, takes the last body row for its input.
 func (t Model) shellList(p sidePanel, i, y, h, iw int) []string {
 	sh := t.sh
 	rows := p.rows(iw)
 	n := h - 2
-	if len(rows) == 0 {
-		return []string{plainRow(ui.L("none"), sanitize.Text{}, iw)}
+	var input []string
+	if sh.filter[i].editing && n >= 2 {
+		n--
+		input = []string{filterInputRow(sh.filter[i].text, iw)}
+	}
+	order, skip := (&t).listOrder(p, len(rows))
+	if len(order) == 0 {
+		msg := ui.L("none")
+		if sh.filter[i].active() {
+			msg = ui.L("no matches")
+		}
+		body := []string{plainRow(msg, sanitize.Text{}, iw)}
+		if input != nil {
+			body = append(body, make([]string, n-1)...)
+		}
+		return append(body, input...)
 	}
 	cur := clampInt(p.cursor(), 0, len(rows)-1)
-	start := clampInt(sh.scroll[i], 0, max(0, len(rows)-n))
-	if cur < start {
-		start = cur
+	cp := min(sort.SearchInts(order, cur), len(order)-1)
+	// A label directly above the cursor row stays on screen with it.
+	anchor := cp
+	for anchor > 0 && skip != nil && skip[order[anchor-1]] {
+		anchor--
 	}
-	if cur >= start+n {
-		start = cur - n + 1
+	start := clampInt(sh.scroll[i], 0, max(0, len(order)-n))
+	if cp < start {
+		start = cp
+	}
+	if cp >= start+n {
+		start = cp - n + 1
+	}
+	if anchor < start && cp < anchor+n {
+		start = anchor
 	}
 	sh.scroll[i] = start
-	end := min(len(rows), start+n)
-	for r := start; r < end; r++ {
+	end := min(len(order), start+n)
+	body := make([]string, 0, h-2)
+	for pos := start; pos < end; pos++ {
+		r := order[pos]
+		body = append(body, rows[r])
 		sh.hits = append(sh.hits, hit{
 			id: "sh:row:" + strconv.Itoa(p.num()) + ":" + strconv.Itoa(r),
-			x:  1, y: y + 1 + r - start, w: t.sh.panelRect[i].W - 2, h: 1,
+			x:  1, y: y + 1 + pos - start, w: sh.panelRect[i].W - 2, h: 1,
 		})
 	}
-	return rows[start:end]
+	if input != nil {
+		body = append(body, make([]string, n-len(body))...)
+		body = append(body, input...)
+	}
+	return body
 }
 
 func (t Model) fillShellZones(overlay bool) {
@@ -268,9 +307,11 @@ func (t Model) shellKeyLine(p sidePanel) string {
 	if t.notice != "" {
 		return ui.KeyLine(nil, sanitize.From(t.notice), t.width)
 	}
-	hints := p.keys()
+	hints := t.shellKeys(p)
 	if t.sh.inDetail {
 		hints = detailHints(p)
+	} else if t.sh.filter[p.num()-1].editing {
+		hints = t.filterEditHints()
 	}
 	return ui.KeyLine(hints, shellOrigin(t.m), t.width)
 }
@@ -316,6 +357,12 @@ func (t Model) shellHelpBody() string {
 			continue
 		}
 		line(h.Key.String(), h.Desc.String())
+	}
+	if _, ok := p.(filterable); ok {
+		b.WriteString("\nFILTER\n")
+		line("/", "filter the list by name")
+		line(enterKey(), "keep the filter")
+		line("esc", "clear the filter")
 	}
 	b.WriteString("\nDETAIL PANE\n")
 	for _, h := range detailHints(p) {
@@ -386,6 +433,9 @@ func (t *Model) runShellCommand(id string) bool {
 func (t *Model) shellJump(dir int) {
 	c := (&checksPanel{t})
 	probs := c.problems()
+	if sel := t.selectable(c); sel != nil {
+		probs = slices.DeleteFunc(probs, func(i int) bool { _, ok := slices.BinarySearch(sel, i); return !ok })
+	}
 	if len(probs) == 0 {
 		t.notice = "no warnings or failures"
 		return
@@ -412,7 +462,9 @@ func (t *Model) shellJump(dir int) {
 func (t *Model) shellMove(p sidePanel, d int) {
 	sh := t.sh
 	if !sh.inDetail {
-		p.move(d)
+		if !t.filterMove(p, d) {
+			p.move(d)
+		}
 		sh.top = 0
 		return
 	}
@@ -448,10 +500,19 @@ func (t Model) updateShellKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	sh := t.sh
 	p := (&t).sidePanels()[sh.side-1]
 	page := max(1, t.shellBodyHeight()/2)
+	if !sh.inDetail && sh.filter[sh.side-1].editing {
+		(&t).filterKey(p, msg)
+		return t, nil
+	}
 	if f, ok := p.(sideFolder); ok && !sh.inDetail && f.foldSide(k) {
+		(&t).filterSnap(p)
 		return t, nil
 	}
 	switch k {
+	case "/":
+		if !sh.inDetail {
+			(&t).filterOpen(p)
+		}
 	case "q":
 		return t, tea.Quit
 	case "?":
@@ -472,6 +533,9 @@ func (t Model) updateShellKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			drv.foldDetail(k)
 		}
 	case "esc":
+		if !sh.inDetail && sh.filter[sh.side-1].active() {
+			(&t).filterClear(sh.side - 1)
+		}
 		sh.inDetail = false
 	case "tab", "shift+tab":
 		// Order is 1-4 then the detail pane.
@@ -526,6 +590,7 @@ func (t Model) shellClick(id string, double bool) Model {
 	if t.help || t.palette.open || t.disclosure {
 		return t
 	}
+	(&t).filterStopEditing()
 	switch {
 	case id == "sh:detail":
 		sh.inDetail = true

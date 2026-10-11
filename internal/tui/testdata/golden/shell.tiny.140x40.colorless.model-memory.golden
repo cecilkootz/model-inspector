@@ -37,4 +37,4 @@ model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params                
 │   layers                          2 layers ││                                                                                            │
 │   context                          128 tok ││                                                                                            │
 ╰────────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────────────────────────────╯
-↑↓ move · ⏎ detail · ? keys · 1-4 panels · tab next panel                                                            org/tiny-qwen · 0123456
+↑↓ move · ⏎ detail · ? keys · / filter · 1-4 panels · tab next panel                                                 org/tiny-qwen · 0123456
