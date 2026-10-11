@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cecilkootz/model-inspector/internal/agentcfg"
 	"github.com/cecilkootz/model-inspector/internal/fileerr"
 	"github.com/cecilkootz/model-inspector/internal/jsonx"
 	"github.com/cecilkootz/model-inspector/internal/safeopen"
@@ -127,6 +128,9 @@ type Model struct {
 	Config    map[string]any
 	// auxParsed holds tokenizer/processor/preprocessor configs that parsed.
 	auxParsed map[string]map[string]any
+	// Agent is the chat template, tokenizer and generation files, read once
+	// at load. It is never nil after Load.
+	Agent *agentcfg.Surface
 	// UncheckedAutoMap lists config files that exist but could not be read
 	// or parsed, so top-level auto_map was not checked. The inspection is
 	// partial, and code-exec warns instead of passing as "none".
@@ -217,6 +221,7 @@ func load(dir string, ch chan<- Progress) (*Model, error) {
 	m.emit(Progress{Phase: PhaseWalk, Done: len(m.Files), Total: len(m.Files)}, true)
 	m.loadConfig()
 	m.loadAuxConfigs()
+	m.Agent = agentcfg.Read(m.Dir, m.allowedRoots())
 	t0 = time.Now()
 	m.loadIndex()
 	m.Timings.Index = time.Since(t0)
