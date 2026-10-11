@@ -113,26 +113,22 @@ func BlendAt(stops []Stop, t float64) string {
 }
 
 var (
-	brandStops = []Stop{{0, "#F25D94"}, {1, "#6B48F0"}}
-	meterStops = []Stop{{0, "#5FD7D7"}, {1, "#A594FF"}}
-	qStops     = []Stop{{0, "#5B3FD9"}, {1, "#A594FF"}}
-	sStops     = []Stop{{0, "#E0457F"}, {1, "#FF8DB5"}}
-	heatDark   = []Stop{
-		{0, "#2E3A78"}, {0.25, "#3A3F9E"}, {0.5, "#7D56F4"},
-		{0.7, "#F25D94"}, {0.85, "#FF9F5A"}, {1, "#FFE38A"},
-	}
-	heatLight = []Stop{
-		{0, "#E6E4FF"}, {0.3, "#B7A8FF"}, {0.55, "#7D56F4"},
-		{0.8, "#C2185B"}, {1, "#7A1E3A"},
-	}
+	meterStops = []Stop{{0, Ramp2.DarkHex}, {1, Ramp5.DarkHex}}
+	qStops     = []Stop{{0, Ramp2.DarkHex}, {1, Ramp4.DarkHex}}
+	sStops     = []Stop{{0, Ramp3.DarkHex}, {1, Ramp5.DarkHex}}
+	heatDark   = rampStops(func(t Token) string { return t.DarkHex })
+	heatLight  = rampStops(func(t Token) string { return t.LightHex })
 
-	GradBrand = NewGradient(brandStops...)
 	GradMeter = NewGradient(meterStops...)
 	GradQ     = NewGradient(qStops...)
 	GradS     = NewGradient(sStops...)
 	GradHeatD = NewGradient(heatDark...)
 	GradHeatL = NewGradient(heatLight...)
 )
+
+func rampStops(hex func(Token) string) []Stop {
+	return []Stop{{0, hex(Ramp1)}, {0.25, hex(Ramp2)}, {0.5, hex(Ramp3)}, {0.75, hex(Ramp4)}, {1, hex(Ramp5)}}
+}
 
 // Heat returns the heatmap ramp for the active theme.
 func Heat() Gradient {
@@ -141,6 +137,3 @@ func Heat() Gradient {
 	}
 	return GradHeatL
 }
-
-// BrandStops exposes the wordmark stops for tests.
-func BrandStops() []Stop { return append([]Stop(nil), brandStops...) }

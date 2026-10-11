@@ -359,7 +359,7 @@ func heatCell(v int64, cw, lo, hi int, gl Glyphs, dim bool) string {
 	if ColorOff() || Profile() == "ansi16" {
 		ch := gl.Heat[bucket(v)]
 		if Profile() == "ansi16" {
-			cols := []string{"4", "5", "13", "11"}
+			cols := []string{Ramp2.ANSI, Ramp3.ANSI, Ramp4.ANSI, Ramp5.ANSI}
 			ch = paintANSI(ch, cols[bucket(v)])
 		}
 		if cw == 2 {
@@ -378,12 +378,33 @@ func heatCell(v int64, cw, lo, hi int, gl Glyphs, dim bool) string {
 	if t > 1 {
 		t = 1
 	}
-	hex := string(Heat().At(t))
+	hex := heatColor(t)
 	block := " "
 	if cw == 2 {
 		block = "  "
 	}
 	return paintHex(block, "", hex, false)
+}
+
+// heatColor is the heat colour at t. ANSI-256 snaps to the authored ramp
+// indices: termenv's nearest-index search on blended hexes flips on
+// floating-point differences between platforms.
+func heatColor(t float64) string {
+	if Profile() == "ansi256" {
+		ramp := [...]Token{Ramp1, Ramp2, Ramp3, Ramp4, Ramp5}
+		i := int(math.Round(t * float64(len(ramp)-1)))
+		if i < 0 {
+			i = 0
+		}
+		if i >= len(ramp) {
+			i = len(ramp) - 1
+		}
+		if Dark() {
+			return ramp[i].ANSI256
+		}
+		return ramp[i].ansi256Light()
+	}
+	return string(Heat().At(t))
 }
 
 func paintANSI(ch, ansi string) string {
@@ -438,7 +459,7 @@ func heatLegend(lo, hi int, gl Glyphs, note string) string {
 	}
 	var ramp strings.Builder
 	for i := 0; i < 16; i++ {
-		hex := string(Heat().At(float64(i) / 15))
+		hex := heatColor(float64(i) / 15)
 		ramp.WriteString(paintHex(" ", "", hex, false))
 	}
 	return humanPow(loB) + " " + ramp.String() + " " + humanPow(hiB) + "  " + gl.Linear + " linear  " + gl.Full + " full"

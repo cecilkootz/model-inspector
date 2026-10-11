@@ -1,8 +1,8 @@
-[1;97;45m 1 Identity [0m [94m 2 Config [0m [94m 3 Layers [0m [94m 4 Scan ✓ [0m                                                               ? keys   : commands   m mouse on
-[94m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
-[1;97m/model[0m                                                                                                                                      
+[1;30;102m 1 Identity [0m [37m 2 Config [0m [37m 3 Layers [0m [37m 4 Scan ✓ [0m                                                               ? keys   : commands   m mouse on
+[92m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[1;95m/model[0m                                                                                                                                      
 revision: — · qwen3_5 · safetensors·mlx · q4 g32                                                                                            
-[1;37;40m – headers-only [0m  [1;30;43m ▲ 5 callouts [0m                                                                                                            
+[1;37m – headers-only [0m  [1;30;43m ▲ 5 callouts [0m                                                                                                            
                                                                                                                                             
 ▌                      ▌                      ▌                      ▌                      ▌                      ▌                        
 ▌SIZE ON DISK          ▌PARAMETERS            ▌QUANT                 ▌LAYERS                ▌EXPERTS               ▌WEIGHTS                 
@@ -10,20 +10,20 @@ revision: — · qwen3_5 · safetensors·mlx · q4 g32
 ▌4 files · 2 shards    ▌25 tensors            ▌affine                ▌○1 lin · ●1 full      ▌routed                ▌weights only            
 ▌                      ▌                      ▌                      ▌                      ▌                      ▌                        
                                                                                                                                             
-[1;97;45m STORAGE [0m 6.07 KiB                                          [1;97mCALLOUTS[0m  [90m5 notable[0m                                                             
-[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[94m▒[0m[94m▒[0m[94m▒[0m[94m▒[0m[94m▒[0m[95m▒[0m[95m░[0m      [1;30;43m ▲ [0m [1;97mlanguage_model.model.embed_tokens.weight is 16 B, 10.5% of weights[0m          
-[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m█[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[91m▓[0m[94m▒[0m[94m▒[0m[94m▒[0m[94m▒[0m[94m▒[0m[95m▒[0m[95m░[0m      [1;30;43m ▲ [0m [1;97mple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% of weights[0m             
+[1;30;102m STORAGE [0m 6.07 KiB                                          [1;97mCALLOUTS[0m  [90m5 notable[0m                                                             
+[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[32m▒[0m[33m▒[0m[33m▒[0m[32m▒[0m[32m▒[0m[32m▒[0m[33m░[0m      [1;30;43m ▲ [0m [1;97mlanguage_model.model.embed_tokens.weight is 16 B, 10.5% of weights[0m          
+[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m█[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[37m▓[0m[32m▒[0m[33m▒[0m[33m▒[0m[32m▒[0m[32m▒[0m[32m▒[0m[33m░[0m      [1;30;43m ▲ [0m [1;97mple.ple_embedding.ngram_heads_offsets is 16 B, 10.5% of weights[0m             
 █ plain bf16 65.8%   ▓ plain i64 21.1%   ▒ q4 packed 10.5%  [1;30;43m ▲ [0m [1;97mple.ple_embedding.ngram_heads_vocab_sizes is 16 B, 10.5% of weights[0m         
-                                                            [1;97;45m MTP [0m [1;97mMTP layer present (16 B): used only for speculative decoding[0m              
-                                                            [1;97;45m MTP [0m [1;97mvision tower present (8 B)[0m                                                
+                                                            [1;30;102m MTP [0m [1;97mMTP layer present (16 B): used only for speculative decoding[0m              
+                                                            [1;30;102m MTP [0m [1;97mvision tower present (8 B)[0m                                                
                                                                                                                                             
 BYTES · LAYER × COMPONENT  log2 scale shared by all rows · each colour step = 2× · per-layer totals differ by 400.0%                        
             ○ ●  ●                                                                                                                          
-attention   [34m░[0m[34m░[0m[34m░[0m[34m░[0m [34m░[0m[34m░[0m  4 B  flat                                                                                                              
-router      [34m░[0m[34m░[0m·· ··  4 B  flat                                                                                                              
-shared exp  [34m░[0m[34m░[0m·· ··  4 B  flat                                                                                                              
-routed exp  [34m░[0m[34m░[0m·· ··  8 B  flat                                                                                                              
-norms       ···· [34m░[0m[34m░[0m  ·                                                                                                                      
+attention   [32m░[0m[32m░[0m[32m░[0m[32m░[0m [32m░[0m[32m░[0m  4 B  flat                                                                                                              
+router      [32m░[0m[32m░[0m·· ··  4 B  flat                                                                                                              
+shared exp  [32m░[0m[32m░[0m·· ··  4 B  flat                                                                                                              
+routed exp  [32m░[0m[32m░[0m·· ··  8 B  flat                                                                                                              
+norms       ···· [32m░[0m[32m░[0m  ·                                                                                                                      
 4 B  <64K ▒ <4M ▓ <256M █  8 B  ○ linear  ● full  per-layer totals differ by 400.0%                                                         
 excludes ple 40 B · excludes hyper 32 B · other 4 B not in the grid                                                                         
 Memory  weights ≥ 152 B (0.0 GB)                                                                                                            
@@ -37,4 +37,4 @@ Memory  weights ≥ 152 B (0.0 GB)
                                                                                                                                             
                                                                                                                                             
                                                                                                                                             
-[1;30m IDENTITY [0m[97m /model [0m[37m ↑↓ scroll · ←→ tabs · ? keys [0m                        [37m safetensors·mlx [0m[97m 6.07 KiB [0m[1;97m q4 g32 [0m[1;30m ✓ structure 6/9 [0m[37m – headers-only [0m
+[1;30m IDENTITY [0m[97m /model [0m[37m ↑↓ scroll · ←→ tabs · ? keys [0m                        [37m safetensors·mlx [0m[97m 6.07 KiB [0m[1;97m q4 g32 [0m[1;97m ✓ structure 6/9 [0m[37m – headers-only [0m

@@ -1,5 +1,5 @@
-[1;97;45m model-inspector [0m  [94m 1 Identity [0m [1;97;45m 2 Config [0m [94m 3 Layers [0m [94m 4 Scan ✗1 [0m                                           ? keys   : commands   m mouse on
-[94m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[1;92mmodel-inspector[0m  [37m 1 Identity [0m [1;30;102m 2 Config [0m [37m 3 Layers [0m [37m 4 Scan ✗1 [0m                                             ? keys   : commands   m mouse on
+[92m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
    KEY FIELDS   6 groups · ⏎ jumps to the tree               CONFIG.JSON  tree · 5,238 nodes                                         r raw  
   TEXT                                                       config.json                                                                    
   model_type      qwen4_exp                                  ▾ config.json {7}                                                              

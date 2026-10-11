@@ -18,6 +18,16 @@ type Token struct {
 	LightHex string
 	ANSI256  string
 	ANSI     string // empty means "no fill" in 16-colour mode
+
+	// ANSI256Light replaces ANSI256 in the light theme when set.
+	ANSI256Light string
+}
+
+func (t Token) ansi256Light() string {
+	if t.ANSI256Light != "" {
+		return t.ANSI256Light
+	}
+	return t.ANSI256
 }
 
 // Color is the lipgloss adaptive colour for this token.
@@ -38,7 +48,7 @@ func (t Token) Color() lipgloss.TerminalColor {
 		},
 		Light: lipgloss.CompleteColor{
 			TrueColor: light,
-			ANSI256:   t.ANSI256,
+			ANSI256:   t.ansi256Light(),
 			ANSI:      ansi,
 		},
 	}
@@ -52,55 +62,94 @@ func (t Token) Hex() string {
 	return t.DarkHex
 }
 
-// Surfaces, text, and fills. Names match the v2 token tables.
+// The 17-role palette. Green marks focus only; pass is quiet; only warn and
+// fail carry status colour; magnitude uses the ramp.
 var (
-	SurfaceCard = Token{DarkHex: "#1A1C29", LightHex: "#F1F2F7", ANSI256: "234", ANSI: ""}
-	SurfaceSeg  = Token{DarkHex: "#2D3142", LightHex: "#E1E3EE", ANSI256: "236", ANSI: "0"}
-	SurfaceSeg2 = Token{DarkHex: "#3A3F55", LightHex: "#D3D6E4", ANSI256: "238", ANSI: "8"}
-	SurfaceBar  = Token{DarkHex: "#151722", LightHex: "#ECEDF3", ANSI256: "234", ANSI: ""}
-	SurfaceSel  = Token{DarkHex: "#33295E", LightHex: "#E4DEFF", ANSI256: "237", ANSI: ""}
-	BorderModal = Token{DarkHex: "#A594FF", LightHex: "#5B47D6", ANSI256: "141", ANSI: "13"}
-	RuleTab     = Token{DarkHex: "#6B48F0", LightHex: "#6B48F0", ANSI256: "62", ANSI: "5"}
-	RuleDim     = Token{DarkHex: "#3D4259", LightHex: "#B8BCCC", ANSI256: "238", ANSI: "8"}
+	Surface   = Token{DarkHex: "#14161A", LightHex: "#F2F4EF", ANSI256: "233", ANSI: ""}
+	Selection = Token{DarkHex: "#1F2620", LightHex: "#E2EDD6", ANSI256: "235", ANSI: "0"}
+	Line      = Token{DarkHex: "#4A505C", LightHex: "#B9C0B2", ANSI256: "239", ANSI: "8"}
+	Text1     = Token{DarkHex: "#E8EAED", LightHex: "#15181C", ANSI256: "254", ANSI: "15"}
+	Text2     = Token{DarkHex: "#A7ADB7", LightHex: "#4A5260", ANSI256: "248", ANSI: "7"}
+	Text3     = Token{DarkHex: "#838B99", LightHex: "#626A76", ANSI256: "245", ANSI256Light: "242", ANSI: "8"}
+	AccentTok = Token{DarkHex: "#8FD14F", LightHex: "#3C7711", ANSI256: "113", ANSI: "10"}
+	WarnTok   = Token{DarkHex: "#E8AA43", LightHex: "#8A5A00", ANSI256: "179", ANSI: "3"}
+	WarnBG    = Token{DarkHex: "#3A2E17", LightHex: "#F6E8CC", ANSI256: "58", ANSI: ""}
+	FailTok   = Token{DarkHex: "#F0625F", LightHex: "#B4232A", ANSI256: "203", ANSI: "1"}
+	FailBG    = Token{DarkHex: "#3D1F22", LightHex: "#F8DCDC", ANSI256: "52", ANSI: ""}
+	Ramp1     = Token{DarkHex: "#1C2616", LightHex: "#E6F2D8", ANSI256: "234", ANSI: ""}
+	Ramp2     = Token{DarkHex: "#2C4120", LightHex: "#C6E2A4", ANSI256: "22", ANSI: "2"}
+	Ramp3     = Token{DarkHex: "#46682A", LightHex: "#93C463", ANSI256: "64", ANSI: "2"}
+	Ramp4     = Token{DarkHex: "#6E9F3C", LightHex: "#5E9A2C", ANSI256: "70", ANSI: "10"}
+	Ramp5     = Token{DarkHex: "#A8DC6E", LightHex: "#3F7D12", ANSI256: "149", ANSI: "10"}
+)
 
-	TextPrimary   = Token{DarkHex: "#ECEEF5", LightHex: "#1B1E2B", ANSI256: "255", ANSI: "15"}
-	TextSecondary = Token{DarkHex: "#B8BDD0", LightHex: "#454B63", ANSI256: "250", ANSI: "7"}
-	TextMuted     = Token{DarkHex: "#9AA0B8", LightHex: "#5F6580", ANSI256: "247", ANSI: "8"}
-	TextLink      = Token{DarkHex: "#5BD68A", LightHex: "#1F7A44", ANSI256: "78", ANSI: "10"}
+// Legacy names, kept so call sites do not change.
+var (
+	SurfaceCard = Surface
+	SurfaceBar  = Surface
+	SurfaceSeg  = Surface
+	SurfaceSeg2 = Line
+	SurfaceSel  = Selection
+	BorderModal = AccentTok
+	RuleTab     = AccentTok
+	RuleDim     = Line
+
+	TextPrimary   = Text1
+	TextSecondary = Text2
+	TextMuted     = Text3
+	TextLink      = Text2
 	TextOnFill    = Token{DarkHex: "#FFFFFF", LightHex: "#FFFFFF", ANSI256: "231", ANSI: "15"}
 	TextInk       = Token{DarkHex: "#0E0F16", LightHex: "#0E0F16", ANSI256: "233", ANSI: "0"}
-	Accent        = Token{DarkHex: "#A594FF", LightHex: "#5B47D6", ANSI256: "141", ANSI: "13"}
-	Data          = Token{DarkHex: "#5FD7D7", LightHex: "#00727A", ANSI256: "80", ANSI: "14"}
-	OK            = Token{DarkHex: "#5BD68A", LightHex: "#1F7A44", ANSI256: "78", ANSI: "10"}
-	Warn          = Token{DarkHex: "#F5B94A", LightHex: "#8A5A00", ANSI256: "215", ANSI: "11"}
-	Fail          = Token{DarkHex: "#FF6B6B", LightHex: "#C0272D", ANSI256: "203", ANSI: "9"}
-	Host          = Token{DarkHex: "#4FC1E9", LightHex: "#0B6E99", ANSI256: "74", ANSI: "12"}
+	Accent        = AccentTok
+	Data          = Ramp4
+	OK            = Text3
+	Warn          = WarnTok
+	Fail          = FailTok
+	Host          = Text2
 
-	FillViolet = Token{DarkHex: "#6B48F0", LightHex: "#6B48F0", ANSI256: "62", ANSI: "5"}
-	FillPink   = Token{DarkHex: "#F25D94", LightHex: "#F25D94", ANSI256: "204", ANSI: "13"}
-	FillOK     = Token{DarkHex: "#04B575", LightHex: "#04B575", ANSI256: "36", ANSI: "2"}
-	FillWarn   = Token{DarkHex: "#F5B94A", LightHex: "#F5B94A", ANSI256: "215", ANSI: "3"}
-	FillFail   = Token{DarkHex: "#E5484D", LightHex: "#E5484D", ANSI256: "167", ANSI: "1"}
-	FillHost   = Token{DarkHex: "#22B8CF", LightHex: "#22B8CF", ANSI256: "38", ANSI: "6"}
-	FillInfo   = Token{DarkHex: "#89B4FA", LightHex: "#89B4FA", ANSI256: "111", ANSI: "4"}
+	FillViolet = AccentTok
+	FillPink   = Line
+	FillOK     = Line
+	FillWarn   = WarnTok
+	FillFail   = FailTok
+	FillHost   = Line
+	FillInfo   = Line
 
-	DTypeQ    = Token{DarkHex: "#A594FF", LightHex: "#A594FF", ANSI256: "141", ANSI: "13"}
-	DTypeBF16 = Token{DarkHex: "#F5B94A", LightHex: "#F5B94A", ANSI256: "215", ANSI: "11"}
-	DTypeF32  = Token{DarkHex: "#FF9E64", LightHex: "#FF9E64", ANSI256: "209", ANSI: "3"}
-	DTypeInt  = Token{DarkHex: "#8A90A6", LightHex: "#8A90A6", ANSI256: "245", ANSI: "8"}
+	DTypeQ    = Text2
+	DTypeBF16 = Text2
+	DTypeF32  = Text2
+	DTypeInt  = Text3
 
-	// JSON tree colours. Light values are darker so they stay readable on
-	// both the card and the selection fill.
-	JSONKey    = Token{DarkHex: "#89B4FA", LightHex: "#1B4F9C", ANSI256: "111", ANSI: "12"}
-	JSONString = Token{DarkHex: "#A6E3A1", LightHex: "#0B5C32", ANSI256: "150", ANSI: "10"}
-	JSONNumber = Token{DarkHex: "#FAB387", LightHex: "#7A3E00", ANSI256: "216", ANSI: "11"}
-	JSONBool   = Token{DarkHex: "#CBA6F7", LightHex: "#5B3A9E", ANSI256: "183", ANSI: "13"}
-	JSONNull   = Token{DarkHex: "#9AA0B8", LightHex: "#454B63", ANSI256: "247", ANSI: "8"}
+	JSONKey    = Text1
+	JSONString = Text2
+	JSONNumber = Ramp5
+	JSONBool   = Ramp5
+	JSONNull   = Text3
 
 	TermBG = "#11131A"
 	InkHex = "#0E0F16"
 	White  = "#FFFFFF"
 )
+
+var paletteTokens = []Token{
+	Surface, Selection, Line, Text1, Text2, Text3, AccentTok, WarnTok, WarnBG, FailTok, FailBG,
+	Ramp1, Ramp2, Ramp3, Ramp4, Ramp5, TextOnFill, TextInk,
+}
+
+// ansi256Of maps a palette hex to its authored ANSI-256 index. Hex strings
+// that bypass tokens would otherwise be quantized by termenv, which drifts
+// neutrals toward lavender.
+func ansi256Of(hex string) (string, bool) {
+	for _, t := range paletteTokens {
+		if strings.EqualFold(hex, t.DarkHex) {
+			return t.ANSI256, true
+		}
+		if strings.EqualFold(hex, t.LightHex) {
+			return t.ansi256Light(), true
+		}
+	}
+	return "", false
+}
 
 // FillKind selects a pill fill.
 type FillKind int
@@ -117,25 +166,30 @@ const (
 )
 
 // FillColors returns the background token and the text token that sits on it.
+// Text is white or ink, whichever contrasts more with the active theme's fill.
 func FillColors(k FillKind) (bg, fg Token) {
 	switch k {
 	case FillKindViolet:
-		return FillViolet, TextOnFill
+		bg = FillViolet
 	case FillKindPink:
-		return FillPink, TextInk
+		bg = FillPink
 	case FillKindOK:
-		return FillOK, TextInk
+		bg = FillOK
 	case FillKindWarn:
-		return FillWarn, TextInk
+		bg = FillWarn
 	case FillKindFail:
-		return FillFail, TextInk
+		bg = FillFail
 	case FillKindHost:
-		return FillHost, TextInk
+		bg = FillHost
 	case FillKindInfo:
-		return FillInfo, TextInk
+		bg = FillInfo
 	default:
 		return SurfaceSeg, TextSecondary
 	}
+	if OnFill(bg.Hex()) == White {
+		return bg, TextOnFill
+	}
+	return bg, TextInk
 }
 
 const litCap = 256

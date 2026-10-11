@@ -90,9 +90,6 @@ func TestWidgetsRender(t *testing.T) {
 		t.Run(p.name, func(t *testing.T) {
 			p.set(t)
 			Configure()
-			if g := GradText(txt("model-inspector"), GradBrand, true); g == "" {
-				t.Fatal("empty grad")
-			}
 			if Title(txt("STORAGE"), txt("on disk"), 40) == "" {
 				t.Fatal("empty title")
 			}
@@ -102,7 +99,7 @@ func TestWidgetsRender(t *testing.T) {
 			if Button(txt("c"), txt("later"), true, false) == "" {
 				t.Fatal("empty disabled button")
 			}
-			if _, over := Meter(1.4, 12, GradBrand); !over {
+			if _, over := Meter(1.4, 12, GradMeter); !over {
 				t.Fatal("meter overflow")
 			}
 			if s, over := Meter(0.25, 8, GradQ); s == "" || over {
@@ -115,13 +112,13 @@ func TestWidgetsRender(t *testing.T) {
 			if len(rows) != 2 || legend == "" {
 				t.Fatalf("stacked %d %q", len(rows), legend)
 			}
-			tile := Tile(TileSpec{Label: sanitize.From("SIZE"), Value: sanitize.From("1 GiB"), Sub: sanitize.From("2 files"), Edge: "#6B48F0"}, 16, 3)
+			tile := Tile(TileSpec{Label: sanitize.From("SIZE"), Value: sanitize.From("1 GiB"), Sub: sanitize.From("2 files"), Edge: "#4A505C"}, 16, 3)
 			if len(tile) < 3 {
 				t.Fatalf("tile %d", len(tile))
 			}
 			band := TileRow([]TileSpec{
-				{Label: sanitize.From("A"), Value: sanitize.From("1"), Sub: sanitize.From("a"), Edge: "#6B48F0"},
-				{Label: sanitize.From("B"), Value: sanitize.From("2"), Sub: sanitize.From("b"), Edge: "#A594FF"},
+				{Label: sanitize.From("A"), Value: sanitize.From("1"), Sub: sanitize.From("a"), Edge: "#4A505C"},
+				{Label: sanitize.From("B"), Value: sanitize.From("2"), Sub: sanitize.From("b"), Edge: "#8FD14F"},
 			}, 40, 3)
 			if len(band) == 0 {
 				t.Fatal("tile row")
