@@ -196,6 +196,22 @@ func renderGolden(t *testing.T, m *model.Model, w, h int, profile string, keys [
 // are zeroed so a slow machine does not change "<1 ms".
 func renderPrepared(t *testing.T, m *model.Model, res scan.Result, w, h int, profile string, keys []string, opts ...Options) string {
 	t.Helper()
+	for i := range res.Checks {
+		res.Checks[i].Duration = 0
+	}
+	return renderUI(t, w, h, profile, keys, func() Model {
+		ui := New(m, res)
+		for _, o := range opts {
+			ui.apply(o)
+		}
+		return ui
+	})
+}
+
+// renderUI sets the colour profile, builds the model, sizes it, sends keys
+// and returns the frame.
+func renderUI(t *testing.T, w, h int, profile string, keys []string, build func() Model) string {
+	t.Helper()
 	prevNC, hadNC := os.LookupEnv("NO_COLOR")
 	t.Cleanup(func() {
 		if hadNC {
@@ -232,14 +248,7 @@ func renderPrepared(t *testing.T, m *model.Model, res scan.Result, w, h int, pro
 		lipgloss.SetColorProfile(termenv.TrueColor)
 	}
 	lipgloss.SetHasDarkBackground(true)
-	for i := range res.Checks {
-		res.Checks[i].Duration = 0
-	}
-	ui := New(m, res)
-	for _, o := range opts {
-		ui.apply(o)
-	}
-	var x tea.Model = ui
+	var x tea.Model = build()
 	x, _ = x.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	for _, k := range keys {
 		x, _ = x.Update(keyMsg(k))

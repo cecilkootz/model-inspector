@@ -1,0 +1,30 @@
+model-inspector · org/tiny-qwen                                         ✗ load failed · headers-only
+╭[1] Model ──────────────────────╮╭▶[0] Load failed ────────────────────────────────────── [FAIL] ─╮
+│   ✗ Walk snapshot              ││ ✗ could not inspect                                            │
+│   ○ Index                      ││                                                                │
+│   ○ Shard headers              ││ open                                                           │
+│   ○ Offsets & layout           ││ /models/hub/models--org--tiny-qwen/snapshots/0123456789ab/conf │
+│   ○ Checks                     ││ ig.json: permission denied                                     │
+│                                ││                                                                │
+│                                ││ q quit (exit 3)                                                │
+│                                ││                                                                │
+│                                ││                                                                │
+│                                ││                                                                │
+│                                ││                                                                │
+╰────────────────────────────────╯│                                                                │
+╭[2] Checks ─────────────────────╮│                                                                │
+│ not loaded                     ││                                                                │
+│                                ││                                                                │
+│                                ││                                                                │
+╰────────────────────────────────╯│                                                                │
+╭[3] Layers ─────────────────────╮│                                                                │
+│ not loaded                     ││                                                                │
+│                                ││                                                                │
+│                                ││                                                                │
+╰────────────────────────────────╯│                                                                │
+╭[4] Config ─────────────────────╮│                                                                │
+│ not loaded                     ││                                                                │
+│                                ││                                                                │
+│                                ││                                                                │
+╰────────────────────────────────╯╰────────────────────────────────────────────────────────────────╯
+q quit                                                                                              

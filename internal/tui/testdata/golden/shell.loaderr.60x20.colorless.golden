@@ -1,0 +1,20 @@
+model-inspector · org/tiny-qwen ✗ load failed · headers-only
+╭▶[0] Load failed ──────────────────────────────── [FAIL] ─╮
+│ ✗ could not inspect                                      │
+│                                                          │
+│ open                                                     │
+│ /models/hub/models--org--tiny-qwen/snapshots/0123456789a │
+│ b/config.json: permission denied                         │
+│                                                          │
+│ q quit (exit 3)                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+q quit                                                      

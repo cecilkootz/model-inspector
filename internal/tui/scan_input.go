@@ -179,6 +179,11 @@ func (t Model) onScanLoaded(msg scanLoadedMsg) (tea.Model, tea.Cmd) {
 	}
 	t.m = msg.m
 	t.scan = msg.res
+	if t.sh != nil {
+		// A detail pane opened over the loading stack is not the user's pick
+		// of a loaded panel.
+		t.sh.inDetail = false
+	}
 	if t.m != nil {
 		d := derive(t.m)
 		t.derived = &d

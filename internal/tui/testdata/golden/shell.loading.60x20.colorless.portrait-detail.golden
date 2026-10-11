@@ -1,0 +1,20 @@
+model-inspector · org/tiny-qwen · reading head… headers-only
+╭▶[0] Loading ─────────────────────────────────────────────╮
+│ Reading safetensors headers only; no weights are loaded. │
+│                                                          │
+│ Offsets & layout   14 of 22 shards · 2,361 ranges        │
+│ ████████████████████████████████████████▊                │
+│                                                          │
+│ /models/hub/models…org--tiny-qwen/snapshots/0123456789ab │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+q cancel · esc back · ? keys                                
