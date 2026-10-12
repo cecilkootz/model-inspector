@@ -42,8 +42,8 @@ func TestConfigDerived(t *testing.T) {
 	if !strings.Contains(rows["per token"].derived, "11 of 512 active (2.1%)") || !rows["per token"].meterOn {
 		t.Fatalf("experts %+v", rows["per token"])
 	}
-	if !strings.Contains(rows["effective"].value, "5.0") || !strings.Contains(rows["effective"].value, "2×16 / 32") {
-		t.Fatalf("bits %q", rows["effective"].value)
+	if !strings.Contains(rows["effective"].value, "5.0") || rows["effective"].derived != "= 4 + 2×16 / 32" || !rows["effective"].meterOn {
+		t.Fatalf("bits %+v", rows["effective"])
 	}
 	if !strings.Contains(rows["full-attn every"].derived, "agrees") {
 		t.Fatalf("agree %q", rows["full-attn every"].derived)

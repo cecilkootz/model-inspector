@@ -24,7 +24,7 @@ model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params            ✓ 
 ╰────────────────────────────────╯│ ! ple.ple_embedding.ngram_heads_vocab_sizes is 16 B, 10.5% of  │
 ╭[4] Config ────────── 32 nodes ─╮│   weights                                                      │
 │   model_type           qwen3_5 ││ +2 more                                                        │
-│   layers              2 layers ││                                                                │
-│   context              128 tok ││                                                                │
+│   layers  2 layers = 1 linear… ││                                                                │
+│   context  128 tok = 128 nati… ││                                                                │
 ╰────────────────────────────────╯╰────────────────────────────────────────────────────────────────╯
 ↑↓ move · ⏎ detail · ? keys · / filter · 1-4 panels · tab next panel         org/tiny-qwen · 0123456

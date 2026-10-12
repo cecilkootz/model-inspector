@@ -324,6 +324,38 @@ func TestListRowColorless(t *testing.T) {
 	}
 }
 
+// A Note rides after the value, is cut at its end, and never costs the name
+// a cell: with no room it is dropped whole.
+func TestListRowNote(t *testing.T) {
+	useProfile(t, primProfiles[3], false)
+	note := L("= 12:1 GQA and more words")
+	row := func(w int) string {
+		return Strip(ListRow(RowSpec{Name: L("heads q / kv"), Value: L("24 / 2"), Note: note}, w))
+	}
+	for _, c := range []struct {
+		w    int
+		want string
+	}{
+		{60, "  heads q / kv              24 / 2 = 12:1 GQA and more words"},
+		{44, "  heads q / kv  24 / 2 = 12:1 GQA and more \u2026"},
+		{40, "  heads q / kv  24 / 2 = 12:1 GQA and m\u2026"},
+		{30, "  heads q / kv          24 / 2"},
+		{24, "  heads q / kv    24 / 2"},
+	} {
+		if got := row(c.w); got != c.want || Width(got) != c.w {
+			t.Errorf("width %d: %q want %q", c.w, got, c.want)
+		}
+	}
+	for w := 1; w < 80; w++ {
+		if got := row(w); Width(got) != w {
+			t.Fatalf("width %d: row is %d cells: %q", w, Width(got), got)
+		}
+	}
+	if got := Strip(ListRow(RowSpec{Name: L("n"), Note: note}, 40)); !strings.Contains(got, "= 12:1") {
+		t.Errorf("note without a value: %q", got)
+	}
+}
+
 func TestListRowValueKeepsNameAlive(t *testing.T) {
 	useProfile(t, primProfiles[3], false)
 	long := sanitize.From(strings.Repeat("v", 300))

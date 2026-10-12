@@ -1,6 +1,7 @@
 package model
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -234,5 +235,18 @@ func TestSymlinkEscapeIsNotRead(t *testing.T) {
 	}
 	if m.Shards[0].Err == nil {
 		t.Fatal("escaped symlink had no error")
+	}
+}
+
+// Comma(MinInt64) negated into itself and recursed until the stack died; a
+// config field of that value reaches it.
+func TestCommaExtremes(t *testing.T) {
+	for n, want := range map[int64]string{
+		math.MinInt64: "-9,223,372,036,854,775,808", math.MaxInt64: "9,223,372,036,854,775,807",
+		-1: "-1", 0: "0", -1234: "-1,234", 999: "999", 1000: "1,000", -999999: "-999,999",
+	} {
+		if got := Comma(n); got != want {
+			t.Errorf("Comma(%d) = %q, want %q", n, got, want)
+		}
 	}
 }

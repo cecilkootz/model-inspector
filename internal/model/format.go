@@ -24,10 +24,16 @@ func HumanDecimalGB(n int64) string {
 
 // Comma inserts thousands separators into n.
 func Comma(n int64) string {
-	if n < 0 {
-		return "-" + Comma(-n)
-	}
 	s := fmt.Sprintf("%d", n)
+	sign := ""
+	if n < 0 {
+		// -n wraps for MinInt64, which recursed forever.
+		sign, s = "-", s[1:]
+	}
+	return sign + commaDigits(s)
+}
+
+func commaDigits(s string) string {
 	if len(s) <= 3 {
 		return s
 	}

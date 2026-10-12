@@ -1,0 +1,24 @@
+model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 … ✓ checks pass · headers-only
+╭[1] Model ──────────── 5 notes ─╮╭[0] text_config.quantization_config ───── tree ─╮
+│   Overview                     ││  │  ├─ tie_word_embeddings         : false     │
+│   Storage             6.02 KiB ││  │  ├─ num_experts                 : 4         │
+│   Callouts                   5 ││  │  ├─ num_experts_per_tok         : 2         │
+╰────────────────────────────────╯│  │  ├─ moe_intermediate_size       : 8         │
+╭[2] Checks ───────────── 6✓ 3· ─╮│  │  ├─ shared_expert_intermediate_size: 8      │
+│   ✓ 6 passed                   ││  │  ├─ mtp_num_hidden_layers       : 1         │
+│   · 3 not run                  ││  │  ├▸ layer_types                 : ["linear… │
+╰────────────────────────────────╯│ >│  └▸ quantization_config         : {3} bits… │
+╭[3] Layers ───────── 2 decoder ─╮│  └▸ vision_config: {4} depth 1 hidden_size 8 … │
+│     n-gram table (PLE)    36 B ││                                                │
+│   ▸ decoder ×2            32 B ││ VALUE                                          │
+│     hyper_connection      24 B ││ text_config.quantization_config                │
+╰────────────────────────────────╯│ {3} bits 4 group_size 32 quant_method "mlx"    │
+╭▶[4] Config ───────── 32 nodes ─╮│                                                │
+│   experts                    4 ││ DERIVED                                        │
+│   per token       2 + 1 shared ││ effective                                      │
+│   expert ffn  8 dim = shared 8 ││ ≈ 5.0 bits/w = 4 + 2×16 / 32                   │
+│   QUANT                        ││ █████            31.2% of 16-bit               │
+│   scheme        q4 · g32 = mlx ││                                                │
+│ ▶ effective       ≈ 5.0 bits/w ││                                                │
+╰────────────────────────────────╯╰────────────────────────────────────────────────╯
+↑↓ move · ⏎ detail · ? keys · r raw · y copy · / filter      org/tiny-qwen · 0123456

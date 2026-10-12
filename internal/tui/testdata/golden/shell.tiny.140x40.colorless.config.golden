@@ -16,25 +16,25 @@ model-inspector · tiny-qwen · 6.02 KiB · q4 g32 · ~86 params                
 ╭▶[4] Config ───────────────────── 32 nodes ─╮│  │  ├─ tie_word_embeddings         : false                                                 │
 │   TEXT                                     ││  │  ├─ num_experts                 : 4                                                     │
 │ ▶ model_type                       qwen3_5 ││  │  ├─ num_experts_per_tok         : 2                                                     │
-│   layers                          2 layers ││  │  ├─ moe_intermediate_size       : 8                                                     │
+│   layers      2 layers = 1 linear · 1 full ││  │  ├─ moe_intermediate_size       : 8                                                     │
 │   hidden_size                        8 dim ││  │  ├─ shared_expert_intermediate_size: 8                                                  │
 │   vocab_size                         2 tok ││  │  ├─ mtp_num_hidden_layers       : 1                                                     │
-│   context                          128 tok ││  │  ├▸ layer_types                 : ["linear_attention", "full_attention"]                │
+│   context             128 tok = 128 native ││  │  ├▸ layer_types                 : ["linear_attention", "full_attention"]                │
 │   tie_embeddings                     false ││  │  └▸ quantization_config         : {3} bits 4 group_size 32 quant_method "mlx"           │
 │   dtype                           bfloat16 ││  └▸ vision_config: {4} depth 1 hidden_size 8 num_heads 2 patch_size 14                     │
 │   ATTENTION                                ││                                                                                            │
-│   heads q / kv                       2 / 1 ││                                                                                            │
-│   head_dim                           4 dim ││                                                                                            │
+│   heads q / kv                 2 / 1 = MQA ││                                                                                            │
+│   head_dim         4 dim = 8 q · 4 kv wide ││                                                                                            │
 │   MOE                                      ││                                                                                            │
 │   experts                                4 ││                                                                                            │
-│   per token                   2 + 1 shared ││                                                                                            │
-│   expert ffn                         8 dim ││                                                                                            │
+│   per token  2 + 1 shared = 3 of 4 active… ││                                                                                            │
+│   expert ffn              8 dim = shared 8 ││                                                                                            │
 │   QUANT                                    ││                                                                                            │
-│   scheme                          q4 · g32 ││                                                                                            │
-│   effective          ≈ 5.0 bits/w = 4 + 2… ││ VALUE                                                                                      │
+│   scheme                    q4 · g32 = mlx ││                                                                                            │
+│   effective   ≈ 5.0 bits/w = 4 + 2×16 / 32 ││ VALUE                                                                                      │
 │   overrides                      0 modules ││ model_type                                                                                 │
 │   VISION                                   ││ "qwen3_5"                                                                                  │
-│   depth · hidden                     1 · 8 ││                                                                                            │
+│   depth · hidden        1 · 8 = head_dim 4 ││                                                                                            │
 │   heads · patch                  2 · 14 px ││                                                                                            │
 ╰────────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────────────────────────────╯
 ↑↓ move · ⏎ detail · ? keys · r raw · y copy · / filter · 1-4 panels · tab next panel                                org/tiny-qwen · 0123456
