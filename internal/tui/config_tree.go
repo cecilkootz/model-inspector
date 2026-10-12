@@ -555,6 +555,20 @@ func (c *configState) scalarText(id int32) string {
 	}
 }
 
+// shownScalar is scalarText with the out-of-range mark the Key fields list
+// carries. Overflow and underflow both parse without error, so the tree has to
+// check the literal itself. Kept off scalarText: run-length and span scans
+// call that for every element of a large array.
+func (c *configState) shownScalar(id int32) string {
+	s := c.scalarText(id)
+	if n := c.tree.Nodes[id]; n.Kind == jsonx.KindNumber {
+		if _, ok := jsonx.NumberFits(n.Lit); !ok {
+			s += " ! out of range"
+		}
+	}
+	return s
+}
+
 func (c *configState) inlineJSON(id int32, budget int) string {
 	var b strings.Builder
 	b.WriteByte('[')
@@ -564,7 +578,7 @@ func (c *configState) inlineJSON(id int32, budget int) string {
 			b.WriteString(", ")
 		}
 		first = false
-		b.WriteString(c.scalarText(ch))
+		b.WriteString(c.shownScalar(ch))
 		if budget > 0 && b.Len() > budget+8 {
 			b.WriteString(", ")
 			b.WriteString(ui.G().Ellipsis)
@@ -594,7 +608,7 @@ func (c *configState) preview(id int32, budget int) string {
 			if chN.Kind == jsonx.KindObject || chN.Kind == jsonx.KindArray {
 				continue
 			}
-			piece := " " + c.displayKey(ch) + " " + c.scalarText(ch)
+			piece := " " + c.displayKey(ch) + " " + c.shownScalar(ch)
 			if budget > 0 && uniseg.StringWidth(b.String()+piece) > budget {
 				b.WriteString(" ")
 				b.WriteString(gl.Ellipsis)
@@ -627,7 +641,7 @@ func (c *configState) preview(id int32, budget int) string {
 				b.WriteString(gl.Ellipsis)
 				break
 			}
-			b.WriteString(c.scalarText(ch))
+			b.WriteString(c.shownScalar(ch))
 			count++
 			if budget > 0 && b.Len() > budget {
 				b.WriteString(", ")
@@ -642,7 +656,7 @@ func (c *configState) preview(id int32, budget int) string {
 		b.WriteByte(']')
 		return b.String()
 	default:
-		return c.scalarText(id)
+		return c.shownScalar(id)
 	}
 }
 

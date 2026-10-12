@@ -349,3 +349,36 @@ func bootConfig(t testing.TB, m *model.Model, w, h int) Model {
 	}
 	return mm
 }
+
+// The detail pane's tree carries the same out-of-range mark as the Key
+// fields list, on the row and in the VALUE section; a real zero stays clean.
+func TestUnderflowTreeMark(t *testing.T) {
+	m := loadCfg(t, []byte(`{"num_hidden_layers":1e-400,"vocab_size":-1e-400,"hidden_size":0e-400,"rope_theta":1e400,"dtype_bits":16}`))
+	for _, sz := range [][2]int{{140, 40}, {84, 24}} {
+		view := cfgFrame(t, m, sz[0], sz[1], "colorless", "4")
+		rows := map[string]string{}
+		for _, ln := range strings.Split(view, "\n") {
+			det := ln[strings.Index(ln, "│")+len("│"):]
+			for _, k := range []string{"num_hidden_layers", "vocab_size", "hidden_size", "rope_theta", "dtype_bits"} {
+				if strings.Contains(det, "─ "+k) {
+					rows[k] = det
+				}
+			}
+		}
+		for _, k := range []string{"num_hidden_layers", "vocab_size", "rope_theta"} {
+			if !strings.Contains(rows[k], "! out of range") {
+				t.Errorf("%v: tree row %s lacks the mark: %q", sz, k, rows[k])
+			}
+		}
+		for _, k := range []string{"hidden_size", "dtype_bits"} {
+			if rows[k] == "" || strings.Contains(rows[k], "!") {
+				t.Errorf("%v: tree row %s is %q", sz, k, rows[k])
+			}
+		}
+	}
+	// The VALUE section for the selected node says so too.
+	x := press(shellModel(t, m, 140, 40), "4")
+	if det := detailText(screenOf(x), 140); !strings.Contains(det, "VALUE num_hidden_layers 1e-400 ! out of range") {
+		t.Errorf("VALUE section lacks the mark: %s", det)
+	}
+}

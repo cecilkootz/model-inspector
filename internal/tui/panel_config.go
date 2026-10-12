@@ -429,7 +429,7 @@ func (t Model) valueBlock(w, n int) []string {
 	}
 	path = sanitize.From(path).String()
 	nd := c.tree.Nodes[id]
-	val := c.scalarText(id)
+	val := c.shownScalar(id)
 	if nd.Kind == jsonx.KindObject || nd.Kind == jsonx.KindArray {
 		val = c.preview(id, w*3)
 	}
