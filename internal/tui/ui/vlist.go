@@ -121,47 +121,6 @@ func rowLine(text string, width int, selected, focused bool, gl Glyphs) string {
 	return Fit(edge+paintHex(body, fg, bg, selected && focused), width)
 }
 
-// TreeRow draws an indented guide and a label.
-func TreeRow(depth int, last, expanded bool, label Safe, width int) string {
-	gl := G()
-	var b strings.Builder
-	for i := 0; i < depth; i++ {
-		if UTF8() {
-			b.WriteString("│ ")
-		} else {
-			b.WriteString("| ")
-		}
-	}
-	if depth > 0 || last || expanded {
-		switch {
-		case !UTF8() && last:
-			b.WriteString("+- ")
-		case !UTF8():
-			b.WriteString("|- ")
-		case last:
-			b.WriteString("└ ")
-		default:
-			b.WriteString("├ ")
-		}
-	}
-	if expanded {
-		if UTF8() {
-			b.WriteString("▾ ")
-		} else {
-			b.WriteString("- ")
-		}
-	} else if depth >= 0 {
-		if UTF8() {
-			b.WriteString("▸ ")
-		} else {
-			b.WriteString("> ")
-		}
-	}
-	b.WriteString(label.String())
-	_ = gl
-	return Fit(b.String(), width)
-}
-
 func lipglossPaint(ch, ansi string) string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(ansi)).Render(ch)
 }

@@ -61,6 +61,8 @@ func hostileDir(t *testing.T) string {
 	return d
 }
 
+// allViews drives every panel, its detail pane, help, the palette and the
+// filter, and returns each frame.
 func allViews(m *model.Model, w, h int) []string {
 	var x tea.Model = New(m, scan.Run(m))
 	x, _ = x.Update(tea.WindowSizeMsg{Width: w, Height: h})
@@ -75,14 +77,19 @@ func allViews(m *model.Model, w, h int) []string {
 	}
 	key("?")
 	sp(tea.KeyEsc)
+	key(":")
+	sp(tea.KeyEsc)
 	for _, k := range []string{"1", "2", "3", "4"} {
 		key(k)
 		sp(tea.KeyDown)
 		sp(tea.KeyEnter)
-		key("c")
 		sp(tea.KeyPgDown)
 		sp(tea.KeyEnd)
 		sp(tea.KeyEsc)
+		key("/")
+		key("e")
+		sp(tea.KeyEsc)
+		key("]")
 	}
 	sp(tea.KeyTab)
 	sp(tea.KeyShiftTab)
@@ -145,7 +152,7 @@ func TestP3_HostileViews(t *testing.T) {
 			label := fmt.Sprintf("nocolor=%v %dx%d", nc, sz[0], sz[1])
 			checkViews(t, label, vs, nc)
 			// 80×24 is a real screen. With NO_COLOR unset and TrueColor
-			// forced, the tab styles have to emit ESC. The too-small
+			// forced, the styles have to emit ESC. The too-small
 			// screens are plain text.
 			if !nc && sz == [2]int{80, 24} && escs == 0 {
 				t.Errorf("%s: color path produced no ESC", label)

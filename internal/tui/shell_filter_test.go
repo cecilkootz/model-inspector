@@ -608,7 +608,7 @@ func TestShellFilterGolden(t *testing.T) {
 			name := "shell.filter." + c.name + ".140x40." + p
 			t.Run(name, func(t *testing.T) {
 				res := scan.Run(c.m)
-				view := renderPrepared(t, c.m, res, 140, 40, p, c.keys, Options{Layout: LayoutPanels})
+				view := renderPrepared(t, c.m, res, 140, 40, p, c.keys)
 				assertFrame(t, view, 140, 40)
 				if p == "colorless" && strings.Contains(view, "\x1b") {
 					t.Fatal("colorless frame contains ESC")

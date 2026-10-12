@@ -54,9 +54,10 @@ func TestQA5_TUI(t *testing.T) {
 		m := loadDir(cfg, fixture.File{Name: "model.safetensors", Data: shard})
 		_ = m.HostCapable()
 		_ = m.Outliers()
-		view := renderIdentity(m, 160)
-		if bad := qa5Bad(view); len(bad) > 0 {
-			t.Fatalf("hostile runes %U", bad)
+		for i, view := range qaViews(t, m) {
+			if bad := qa5Bad(view); len(bad) > 0 {
+				t.Fatalf("view %d: hostile runes %U", i, bad)
+			}
 		}
 		if incomplete(m) != m.Partial {
 			t.Fatalf("incomplete %v partial %v", incomplete(m), m.Partial)
@@ -114,11 +115,10 @@ func TestQA5_TUI(t *testing.T) {
 		if res.Overall != scan.StatusFail {
 			t.Fatalf("overall %s", res.Overall)
 		}
-		view := renderIdentity(m, 160)
-		if !strings.Contains(view, "incomplete") {
-			t.Fatalf("identity omitted incomplete:\n%s", view)
+		if ov := strings.Join(modelDetails(t, m, 140, 40)["Overview"], "\n"); !strings.Contains(ov, "incomplete") {
+			t.Fatalf("overview omitted incomplete:\n%s", ov)
 		}
-		hdr := Model{m: m, scan: res}.headerLine(160)
+		hdr := Model{m: m, scan: res}.shellHeader(160)
 		if !strings.Contains(hdr, "(incomplete)") {
 			t.Fatalf("header %q", hdr)
 		}
@@ -131,11 +131,13 @@ func TestQA5_TUI(t *testing.T) {
 			ht = append(ht, fixture.Tensor{Name: hs + ".shard_" + string(rune('0'+i)) + ".weight", DType: "BF16", Shape: []int64{8192, 64}})
 		}
 		m := loadDir(cfg, fixture.File{Name: "model.safetensors", Data: must(fixture.WriteShard("", append(ht, other)))})
-		view := renderIdentity(m, 160)
 		res := scan.Run(m)
-		hdr := Model{m: m, scan: res}.headerLine(160)
-		if bad := qa5Bad(view + hdr); len(bad) > 0 {
-			t.Fatalf("raw hostile runes %U\n%s", bad, view)
+		hdr := Model{m: m, scan: res}.shellHeader(160)
+		views := append(qaViews(t, m), hdr)
+		for i, view := range views {
+			if bad := qa5Bad(view); len(bad) > 0 {
+				t.Fatalf("view %d: raw hostile runes %U\n%s", i, bad, view)
+			}
 		}
 	})
 
@@ -157,11 +159,14 @@ func TestQA5_PartialOmitsGPUFloor(t *testing.T) {
 			Role: model.RolePlain, Group: "ngram", Kind: model.KindEmbeddings,
 		}},
 	}
-	view := renderIdentity(m, 160)
-	if strings.Contains(view, "on the GPU/accelerator") {
-		t.Fatalf("partial identity still claims a GPU lower bound:\n%s", view)
+	all := ""
+	for _, lines := range modelDetails(t, m, 140, 40) {
+		all += strings.Join(lines, "\n") + "\n"
 	}
-	if !strings.Contains(view, "incomplete") {
-		t.Fatalf("partial identity omitted incomplete:\n%s", view)
+	if strings.Contains(all, "on the GPU/accelerator") {
+		t.Fatalf("partial model still claims a GPU lower bound:\n%s", all)
+	}
+	if !strings.Contains(all, "incomplete") {
+		t.Fatalf("partial model omitted incomplete:\n%s", all)
 	}
 }

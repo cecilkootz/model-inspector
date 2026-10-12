@@ -172,17 +172,15 @@ func (l *loadPhases) fraction() float64 {
 }
 
 func (t Model) shellTooSmall() bool {
-	return t.layout == LayoutPanels && t.ready && (t.width < shellMinW || t.height < shellMinH)
+	return t.ready && (t.width < shellMinW || t.height < shellMinH)
 }
 
 // shellLoad is true while the panels layout draws the loading frame or the
 // load-error card in place of the loaded shell.
 func (t Model) shellLoad() bool {
-	return t.layout == LayoutPanels && t.ready && t.m == nil && t.sh != nil && t.scn != nil &&
+	return t.ready && t.m == nil && t.sh != nil && t.scn != nil &&
 		(t.scn.loading || t.scn.loadErr != "") && !t.shellTooSmall()
 }
-
-func (t Model) shellFrame() bool { return t.shellOn() || t.shellLoad() }
 
 func centerLine(s string, width int) string {
 	pad := max(0, (width-ui.Width(s))/2)

@@ -56,7 +56,7 @@ func TestHostileScanDetailsDoNotPanic(t *testing.T) {
 	res.Checks[0].Details = []string{hostile, "\xff\xfe tail"}
 	ui := New(m, res)
 	sized, _ := ui.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
-	on, _ := sized.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'4'}})
+	on, _ := sized.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
 	view := on.View()
 	if r, bad := rawBad(view); bad {
 		t.Fatalf("raw %s", r)
@@ -66,9 +66,8 @@ func TestHostileScanDetailsDoNotPanic(t *testing.T) {
 	if !strings.Contains(view, "<U+009B>") {
 		t.Fatalf("hostile detail was dropped:\n%s", view)
 	}
-	plain := clipScan(hostile)
-	if len([]rune(plain)) > scanClip {
-		t.Fatalf("clip %d", len([]rune(plain)))
+	if got := clipScan(hostile); len([]rune(got)) > 256 {
+		t.Fatalf("clip %d", len([]rune(got)))
 	}
 }
 

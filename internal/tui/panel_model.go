@@ -241,14 +241,6 @@ func blankIf(lines []string) []string {
 	return lines
 }
 
-func quiet(s string, w int) []string {
-	var out []string
-	for _, ln := range wrapHard(s, w) {
-		out = append(out, paint(ln, ui.TextMuted, false))
-	}
-	return out
-}
-
 func body(s string, w int) []string {
 	var out []string
 	for _, ln := range wrapHard(s, w) {

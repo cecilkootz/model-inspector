@@ -76,35 +76,6 @@ func truncWidth(s string, width int) string {
 	return b.String() + ell
 }
 
-// middleTrunc keeps the tail of s, which is where tensor name suffixes live.
-func middleTrunc(s string, width int) string {
-	if width <= 0 {
-		return ""
-	}
-	if lipgloss.Width(s) <= width {
-		return s
-	}
-	ell := g.ellipsis
-	if ell == "" {
-		ell = "..."
-	}
-	ew := lipgloss.Width(ell)
-	if width <= ew {
-		return truncRunes(s, width)
-	}
-	budget := width - ew
-	runes := []rune(s)
-	lo := 0
-	for lo < len(runes) {
-		tail := string(runes[lo:])
-		if lipgloss.Width(tail) <= budget {
-			break
-		}
-		lo++
-	}
-	return ell + string(runes[lo:])
-}
-
 func truncRunes(s string, width int) string {
 	var b strings.Builder
 	for _, r := range s {
@@ -136,13 +107,6 @@ func clipLines(s string, n, width int) string {
 
 func stripANSI(s string) string { return ansi.Strip(s) }
 
-func padLabel(label string, n int) string {
-	if lipgloss.Width(label) >= n {
-		return truncWidth(label, n)
-	}
-	pad := n - lipgloss.Width(label)
-	if pad < 0 {
-		pad = 0
-	}
-	return label + strings.Repeat(" ", pad)
+func clampInt(v, low, high int) int {
+	return min(max(v, low), high)
 }

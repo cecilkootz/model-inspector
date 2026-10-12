@@ -13,14 +13,11 @@ import (
 
 // derived is everything View needs that used to be recomputed per frame.
 type derived struct {
-	mem           model.MemoryEstimate
-	storage       []model.StorageClass
-	callouts      []model.Callout
-	notableName   string
-	notableParams int64
-	notableNgram  bool
-	heat          ui.HeatGrid
-	modelType     string
+	mem       model.MemoryEstimate
+	storage   []model.StorageClass
+	callouts  []model.Callout
+	heat      ui.HeatGrid
+	modelType string
 }
 
 func derive(m *model.Model) derived {
@@ -37,7 +34,6 @@ func derive(m *model.Model) derived {
 		callouts: m.Outliers(),
 		heat:     buildHeat(m),
 	}
-	d.notableName, d.notableParams, d.notableNgram = m.NotableParams()
 	for _, kv := range m.KeyConfig() {
 		if kv.Key == "model_type" {
 			s := strings.TrimSpace(fmt.Sprint(kv.Value))

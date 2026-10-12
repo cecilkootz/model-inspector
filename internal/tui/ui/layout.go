@@ -7,20 +7,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// Breakpoint is XS, S, M, or L.
-func Breakpoint(w, h int) string {
-	if w < 60 || h < 16 {
-		return "XS"
-	}
-	if w >= 100 && h >= 30 {
-		if w >= 140 && h >= 36 {
-			return "L"
-		}
-		return "M"
-	}
-	return "S"
-}
-
 // Rect is an inclusive-origin cell rectangle.
 type Rect struct {
 	X, Y, W, H int
@@ -61,59 +47,6 @@ func (z *Zones) Reset() {
 	if z != nil {
 		z.items = z.items[:0]
 	}
-}
-
-// Rects is the chrome and pane geometry for one frame.
-type Rects struct {
-	Break     string
-	Body      Rect
-	Primary   Rect
-	Secondary Rect
-	Split     bool
-	Gutter    int
-}
-
-// Layout computes pane rectangles. ratio is the primary share in percent.
-// zoom gives the focused pane the whole body. The 2-cell gutter is not in either pane.
-func Layout(w, h, ratio int, zoom, focusSecondary bool) Rects {
-	br := Breakpoint(w, h)
-	bodyH := h - 3
-	if bodyH < 1 {
-		bodyH = 1
-	}
-	body := Rect{X: 0, Y: 2, W: w, H: bodyH}
-	out := Rects{Break: br, Body: body, Primary: body}
-	if br != "M" && br != "L" || zoom {
-		return out
-	}
-	if ratio < 30 {
-		ratio = 30
-	}
-	if ratio > 70 {
-		ratio = 70
-	}
-	gutter := 2
-	inner := w - gutter
-	if inner < 2 {
-		return out
-	}
-	pw := inner * ratio / 100
-	if pw < 1 {
-		pw = 1
-	}
-	if pw > inner-1 {
-		pw = inner - 1
-	}
-	out.Split = true
-	out.Gutter = gutter
-	out.Primary = Rect{X: 0, Y: 2, W: pw, H: bodyH}
-	out.Secondary = Rect{X: pw + gutter, Y: 2, W: w - pw - gutter, H: bodyH}
-	if focusSecondary && zoom {
-		out.Primary = body
-		out.Secondary = Rect{}
-		out.Split = false
-	}
-	return out
 }
 
 // Width is the display width of s.
@@ -190,27 +123,6 @@ func Fit(s string, width int) string {
 		}
 		return cut
 	}
-}
-
-// Frame makes s exactly width by height lines.
-func Frame(s string, width, height int) string {
-	if width < 1 {
-		width = 1
-	}
-	if height < 1 {
-		height = 1
-	}
-	lines := strings.Split(s, "\n")
-	for len(lines) < height {
-		lines = append(lines, "")
-	}
-	if len(lines) > height {
-		lines = lines[:height]
-	}
-	for i, ln := range lines {
-		lines[i] = Fit(ln, width)
-	}
-	return strings.Join(lines, "\n")
 }
 
 // PadLabel pads or cuts label to n cells.

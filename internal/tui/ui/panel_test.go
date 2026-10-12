@@ -124,15 +124,16 @@ var primTitles = []sanitize.Text{
 func counterOf(s string) Safe { return Chrome(s) }
 
 func TestPrimitivesExactWidth(t *testing.T) {
-	counters := []Safe{{}, counterOf(ink("6✓ 1! 2·", TextMuted, false)), counterOf("99+ problems found today")}
-	body := []string{
-		"plain",
-		ListRow(RowSpec{Glyph: L(G().Pass), Name: sanitize.Program("row"), Value: sanitize.Program("12 ms")}, 30),
-		strings.Repeat("x", 200),
-		"",
-		"日本語日本語日本語",
-	}
 	eachProfile(t, func(t *testing.T) {
+		// Built per profile: ink and ListRow paint with the profile in force.
+		counters := []Safe{{}, counterOf(ink("6✓ 1! 2·", TextMuted, false)), counterOf("99+ problems found today")}
+		body := []string{
+			"plain",
+			ListRow(RowSpec{Glyph: L(G().Pass), Name: sanitize.Program("row"), Value: sanitize.Program("12 ms")}, 30),
+			strings.Repeat("x", 200),
+			"",
+			"日本語日本語日本語",
+		}
 		for w := -3; w <= 120; w++ {
 			for _, h := range []int{-1, 0, 1, 2, 8} {
 				for ti, title := range primTitles {

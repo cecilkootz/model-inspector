@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 
 	"github.com/cecilkootz/model-inspector/internal/tui/ui"
 )
@@ -92,8 +91,4 @@ func utf8Locale() bool {
 	}
 	u := strings.ToUpper(loc)
 	return strings.Contains(u, "UTF-8") || strings.Contains(u, "UTF8")
-}
-
-func colorOff() bool {
-	return noColor || os.Getenv("NO_COLOR") != "" || lipgloss.ColorProfile() == termenv.Ascii
 }

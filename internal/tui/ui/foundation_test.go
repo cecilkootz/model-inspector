@@ -2,13 +2,10 @@ package ui
 
 import (
 	"math"
-	"os"
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/lucasb-eyer/go-colorful"
-	"github.com/muesli/termenv"
 
 	"github.com/cecilkootz/model-inspector/internal/sanitize"
 )
@@ -106,58 +103,20 @@ func TestHeatBucketsAndDomain(t *testing.T) {
 	}
 }
 
-func TestSegmentsDropOrder(t *testing.T) {
-	t.Setenv("NO_COLOR", "1")
-	lipgloss.SetColorProfile(termenv.Ascii)
-	txt := func(s string) Safe { return S(sanitize.From(s)) }
-	left := []StatusSeg{
-		{Text: txt("IDENTITY"), Pri: 1, Keep: true},
-		{Text: txt("a-very-long-model-name-here"), Pri: 3, Min: 16, Shrink: true},
-		{Text: txt("hints that take a lot of room and should drop first"), Pri: 5},
-	}
-	right := []StatusSeg{
-		{Text: txt("safetensors"), Pri: 4},
-		{Text: txt("1.00 GiB"), Pri: 2},
-		{Text: txt("q4"), Pri: 2},
-		{Text: txt("PASS"), Pri: 1, Keep: true},
-		{Text: txt("headers-only"), Pri: 1, Keep: true},
-	}
-	for _, w := range []int{60, 80, 100, 140} {
-		s := Strip(Segments(append([]StatusSeg(nil), left...), append([]StatusSeg(nil), right...), w))
-		if !strings.Contains(s, "IDENTITY") || !strings.Contains(s, "PASS") {
-			t.Errorf("width %d dropped a keep segment: %q", w, s)
-		}
-	}
-	narrow := Strip(Segments(append([]StatusSeg(nil), left...), append([]StatusSeg(nil), right...), 36))
-	if strings.Contains(narrow, "hints that") {
-		t.Fatalf("hint survived a narrow bar: %q", narrow)
-	}
-	if !strings.Contains(narrow, "IDENTITY") {
-		t.Fatalf("MODE dropped: %q", narrow)
-	}
-}
-
 func TestKeymapNoConflicts(t *testing.T) {
 	want := map[string]bool{"left": true, "right": true, "h": true, "l": true}
-	if len(TreeDummy.Shadows) != len(want) {
-		t.Fatalf("shadows %v", TreeDummy.Shadows)
-	}
-	for _, s := range TreeDummy.Shadows {
-		if !want[s] {
-			t.Fatalf("unexpected shadow %q", s)
-		}
-	}
-	if !TreeDummy.Tree {
-		t.Fatal("dummy tree context is not a tree")
-	}
 	for _, ctx := range Contexts {
 		if d := DuplicateKeys(ctx); len(d) != 0 {
 			t.Errorf("%s conflicts: %v", ctx.Name, d)
 		}
-	}
-	t.Setenv("LC_ALL", "C.UTF-8")
-	if !strings.Contains(HintLine(true), "fold") || !strings.Contains(HintLine(false), "tabs") {
-		t.Fatalf("hints %q %q", HintLine(true), HintLine(false))
+		if !ctx.Tree && len(ctx.Shadows) > 0 {
+			t.Errorf("%s shadows keys but is not a tree context", ctx.Name)
+		}
+		for _, sh := range ctx.Shadows {
+			if !want[sh] {
+				t.Errorf("%s shadows %q", ctx.Name, sh)
+			}
+		}
 	}
 	if got := L("<commit>").String(); got != "<commit>" {
 		t.Fatalf("L sanitized a program literal: %q", got)
@@ -193,75 +152,20 @@ func TestASCIIGlyphs(t *testing.T) {
 	if !asciiGlyphs().ASCII() {
 		t.Fatal("ASCII glyph set contains a byte >= 0x80")
 	}
-	if utfGlyphs().Est != "‡" || asciiGlyphs().Est != "(est)" {
-		t.Fatalf("est glyphs %q %q", utfGlyphs().Est, asciiGlyphs().Est)
-	}
-	t.Setenv("LC_ALL", "C")
-	t.Setenv("NO_COLOR", "1")
-	if Est() != "(est)" {
-		t.Fatalf("Est() = %q", Est())
-	}
 }
 
-func TestKVSharedColumn(t *testing.T) {
-	t.Setenv("NO_COLOR", "1")
-	lipgloss.SetColorProfile(termenv.Ascii)
-	rows := []KVRow{
-		{Label: L("model_type"), Value: L("qwen")},
-		{Label: L("text_config.hidden_size"), Value: L("8")},
-	}
-	lines := strings.Split(KV(rows, 80), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("%q", lines)
-	}
-	iq := strings.Index(lines[0], "qwen")
-	i8 := strings.Index(lines[1], "8")
-	if iq < 0 || iq != i8 {
-		t.Fatalf("columns %d %d\n%q\n%q", iq, i8, lines[0], lines[1])
-	}
-	if !strings.Contains(lines[0][:iq], "  ") {
-		t.Fatalf("gap missing: %q", lines[0])
-	}
-}
-
-func TestZoneGutter(t *testing.T) {
-	r := Layout(140, 40, 42, false, false)
-	if !r.Split || r.Gutter != 2 {
-		t.Fatalf("%+v", r)
-	}
-	if r.Secondary.X != r.Primary.X+r.Primary.W+r.Gutter {
-		t.Fatalf("gutter not excluded: %+v", r)
-	}
+func TestZonesTopMostWins(t *testing.T) {
 	var z Zones
-	z.Add("pane:primary", r.Primary)
-	z.Add("pane:secondary", r.Secondary)
-	if _, ok := z.Hit(r.Primary.W, 2); ok {
-		t.Fatal("gutter cell hit a pane")
+	z.Add("panel", Rect{X: 0, Y: 1, W: 40, H: 10})
+	z.Add("detail", Rect{X: 40, Y: 1, W: 40, H: 10})
+	if _, ok := z.Hit(80, 2); ok {
+		t.Fatal("cell past the last zone hit")
 	}
-	if hit, ok := z.Hit(r.Secondary.X, 2); !ok || hit.ID != "pane:secondary" {
-		t.Fatalf("secondary hit %+v %v", hit, ok)
+	if hit, ok := z.Hit(40, 2); !ok || hit.ID != "detail" {
+		t.Fatalf("detail hit %+v %v", hit, ok)
 	}
 	z.Add("modal", Rect{X: 10, Y: 2, W: 20, H: 5})
 	if hit, ok := z.Hit(12, 3); !ok || hit.ID != "modal" {
 		t.Fatalf("top-most hit %+v", hit)
 	}
-}
-
-func TestBreakpointBands(t *testing.T) {
-	if Breakpoint(59, 15) != "XS" && Breakpoint(59, 15) != "S" {
-		// XS is below 60 or below 16. Either name is fine if too-small is separate.
-	}
-	if Breakpoint(80, 24) != "S" {
-		t.Fatalf("80x24 %s", Breakpoint(80, 24))
-	}
-	if Breakpoint(100, 30) != "M" {
-		t.Fatalf("100x30 %s", Breakpoint(100, 30))
-	}
-	if Breakpoint(140, 32) != "M" {
-		t.Fatalf("140x32 %s", Breakpoint(140, 32))
-	}
-	if Breakpoint(140, 40) != "L" {
-		t.Fatalf("140x40 %s", Breakpoint(140, 40))
-	}
-	_ = os.Getenv("TERM")
 }
