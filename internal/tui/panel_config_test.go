@@ -34,7 +34,7 @@ func detailText(screen []string, w int) string {
 
 func cfgFrame(t *testing.T, m *model.Model, w, h int, profile string, keys ...string) string {
 	t.Helper()
-	view := renderPrepared(t, m, scan.Run(m), w, h, profile, keys, Options{Layout: LayoutPanels})
+	view := renderPrepared(t, m, scan.Run(m), w, h, profile, keys)
 	assertFrame(t, view, w, h)
 	return view
 }

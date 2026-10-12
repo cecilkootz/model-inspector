@@ -16,12 +16,6 @@ import (
 	"github.com/cecilkootz/model-inspector/internal/tui/ui"
 )
 
-// Layout names for Options.Layout and --layout.
-const (
-	LayoutTabs   = "tabs"
-	LayoutPanels = "panels"
-)
-
 const (
 	shellMinW      = 40 // narrower or shorter than shellMinH shows only "terminal too small"
 	shellMinH      = 12
@@ -77,10 +71,10 @@ func (t *Model) shellFocus(n int) {
 	}
 }
 
-// shellOn is true when the panels layout is drawing a loaded model.
+// shellOn is true when the panels are drawing a loaded model.
 // shellLoad covers loading and a load error; shellTooSmall the rest.
 func (t Model) shellOn() bool {
-	return t.layout == LayoutPanels && t.ready && t.m != nil && t.sh != nil &&
+	return t.ready && t.m != nil && t.sh != nil &&
 		t.width >= shellMinW && t.height >= shellMinH &&
 		(t.scn == nil || t.scn.loadErr == "")
 }
@@ -139,7 +133,7 @@ func (t Model) renderShell() string {
 	}
 
 	body := t.joinColumns(side, detail, bodyH)
-	overlay := t.help || t.palette.open || t.disclosure
+	overlay := t.help || t.palette.open
 	if overlay {
 		body = clipLines(t.overlay(body), bodyH, W)
 	}
@@ -454,8 +448,7 @@ func (t Model) shellCommands() []ui.Match {
 	return out
 }
 
-// runShellCommand handles the shell-only palette ids. Help, mouse and quit
-// share the tab layout's handlers.
+// runShellCommand handles the palette's panel ids; runCommand takes the rest.
 func (t *Model) runShellCommand(id string) bool {
 	switch id {
 	case "sh:1", "sh:2", "sh:3", "sh:4":
@@ -522,11 +515,11 @@ func (t *Model) shellMove(p sidePanel, d int) {
 func (t *Model) shellCopy() {
 	switch t.sh.side {
 	case 2:
-		t.copyScan(false)
+		t.copyScan()
 	case 3:
 		(&layersPanel{t}).copySelection()
 	case 4:
-		t.copyConfig(false)
+		t.copyConfig()
 	default:
 		t.notice = "nothing to copy"
 	}
@@ -563,7 +556,6 @@ func (t Model) updateShellKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		t.help = true
 	case ":", "ctrl+k":
 		t.palette = palState{open: true}
-		t.inputFocused = true
 	case "m":
 		return t.toggleMouse()
 	case "1", "2", "3", "4":
@@ -631,7 +623,7 @@ func (t Model) updateShellKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (t Model) shellClick(id string, double bool) Model {
 	sh := t.sh
-	if t.help || t.palette.open || t.disclosure {
+	if t.help || t.palette.open {
 		return t
 	}
 	(&t).filterStopEditing()

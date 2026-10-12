@@ -134,7 +134,11 @@ func TestIdxOnlyNoOOM(t *testing.T) {
 	}
 }
 
+// The Layers cursor highlight is part of the cached frame: moving the
+// cursor must redraw it, with colour on.
 func TestLayersCursorCache(t *testing.T) {
+	m := loadFiles(t, mustFiles(t, fixture.TinyQwenMLXQuant))
+	var x tea.Model = shellModel(t, m, 100, 30)
 	t.Setenv("MODEL_INSPECTOR_MOTION", "0")
 	t.Setenv("NO_COLOR", "")
 	t.Setenv("LC_ALL", "C.UTF-8")
@@ -145,37 +149,18 @@ func TestLayersCursorCache(t *testing.T) {
 		SetNoColor(false)
 		lipgloss.SetColorProfile(termenv.Ascii)
 	})
-	m := loadFiles(t, mustFiles(t, fixture.TinyQwenMLXQuant))
-	ui := New(m, scan.Run(m))
-	var x tea.Model = ui
-	x, _ = x.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	x = press(x, "3")
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	before := x.View()
-	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown})
-	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown})
+	x = press(x, "down", "down")
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	after := x.View()
+	cur := x.(Model)
+	if p := cur.sidePanels()[2]; p.cursor() == 0 {
+		t.Fatal("cursor did not move")
+	}
 	if before == after {
-		got := x.(Model)
-		t.Fatalf("layers highlight did not move after Down, Down (cursor %d groups %d esc %v)", got.lay.row, len(got.m.Groups), strings.Contains(after, "\x1b"))
-	}
-	got := x.(Model)
-	if got.lay == nil || got.lay.row == 0 {
-		t.Fatalf("cursor %d", got.lay.row)
-	}
-	beforeEnter := got.currentLayer()
-	wasOpen := got.lay.isOpen(beforeEnter.path)
-	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	got = x.(Model)
-	if (beforeEnter.kind == rowGroup || beforeEnter.kind == rowSub) && got.lay.isOpen(beforeEnter.path) == wasOpen {
-		t.Fatalf("enter did not toggle %s", beforeEnter.path)
-	}
-	tensorBefore := x.View()
-	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown})
-	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown})
-	if x.View() == tensorBefore {
-		t.Fatal("tensor highlight did not move after Down, Down")
+		t.Fatalf("layers highlight did not move after Down, Down (esc %v)", strings.Contains(after, "\x1b"))
 	}
 }
 
@@ -319,13 +304,14 @@ func syntheticLayers(n int) *model.Model {
 	return m
 }
 
-func TestHeroOmitsDuplicateDir(t *testing.T) {
+func TestModelPanelOmitsDuplicateDir(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("LC_ALL", "C.UTF-8")
 	m := &model.Model{Dir: "/models/demo", Format: "safetensors"}
-	view := renderIdentity(m, 160)
-	if strings.Count(view, "/models/demo") != 1 {
-		t.Fatalf("dir count %d\n%s", strings.Count(view, "/models/demo"), view)
+	det := modelDetails(t, m, 140, 40)
+	all := strings.Join(det["Overview"], "\n")
+	if strings.Count(all, "/models/demo") > 1 {
+		t.Fatalf("dir count %d\n%s", strings.Count(all, "/models/demo"), all)
 	}
 }
 
@@ -366,7 +352,6 @@ func FuzzUpdate(f *testing.F) {
 		}
 		mi := int(data[0]) % len(fzModels)
 		var x tea.Model = New(fzModels[mi], fzRes[mi])
-		base := time.Unix(0, 0)
 		i := 1
 		next := func() int {
 			if i >= len(data) {
@@ -379,7 +364,7 @@ func FuzzUpdate(f *testing.F) {
 		steps := 0
 		for i < len(data) && steps < 200 {
 			steps++
-			switch next() % 8 {
+			switch next() % 7 {
 			case 0:
 				w, h := next()*3-20, next()*2-10
 				x, _ = x.Update(tea.WindowSizeMsg{Width: w, Height: h})
@@ -396,14 +381,12 @@ func FuzzUpdate(f *testing.F) {
 				x, _ = x.Update(tea.MouseMsg{X: int(int8(next())) * (next()%40 + 1), Y: int(int8(next())) * (next()%20 + 1),
 					Button: tea.MouseButton(next() % 12), Action: tea.MouseAction(next() % 3)})
 			case 5:
-				x, _ = x.Update(tickMsg(base.Add(time.Duration(next()) * time.Millisecond)))
-			case 6:
 				if next()%2 == 0 {
 					x, _ = x.Update(tea.FocusMsg{})
 				} else {
 					x, _ = x.Update(tea.BlurMsg{})
 				}
-			case 7:
+			case 6:
 				x, _ = x.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{rune(next())}})
 			}
 			v := x.View()

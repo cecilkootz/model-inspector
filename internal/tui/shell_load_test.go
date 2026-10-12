@@ -34,7 +34,7 @@ var midLoad = []model.Progress{walkDone(), indexDone(), headersDone(), layoutMid
 // loadingModel is a model that is still loading dir, fed synthetic progress.
 func loadingModel(dir string, prog ...model.Progress) Model {
 	n := NewLoading(dir, false, false, "org/tiny-qwen", "")
-	n.apply(Options{Layout: LayoutPanels, Now: func() time.Time { return time.Unix(100, 0) }})
+	n.apply(Options{Now: func() time.Time { return time.Unix(100, 0) }})
 	var x tea.Model = n
 	for _, p := range prog {
 		x, _ = x.Update(scanProgMsg{p: p})
@@ -303,7 +303,6 @@ func TestShellLoadErrorCard(t *testing.T) {
 	}
 	for _, sz := range [][2]int{{140, 40}, {100, 30}, {80, 24}, {60, 20}, {40, 12}} {
 		n := NewLoading(loadTestDir, false, false, "", "")
-		n.apply(Options{Layout: LayoutPanels})
 		var x tea.Model = n
 		x, _ = x.Update(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
 		x, _ = x.Update(scanProgMsg{p: walkDone()})
@@ -337,7 +336,6 @@ func TestShellLoadingHostileNames(t *testing.T) {
 	hostile := "/m/\x1b]0;pwn\x07/\u202e/evil\u009b/" + strings.Repeat("d", 300)
 	for _, sz := range [][2]int{{140, 40}, {60, 20}} {
 		n := NewLoading(hostile, false, false, "org/\x1b[2Jrepo\u202e", "")
-		n.apply(Options{Layout: LayoutPanels})
 		var x tea.Model = n
 		x, _ = x.Update(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
 		x = press(x, "enter")
@@ -553,11 +551,6 @@ func TestShellTooSmall(t *testing.T) {
 	if v := stripView(l.View()); !strings.Contains(v, "terminal too small (30x10)") {
 		t.Fatalf("loading at 30x10:\n%s", v)
 	}
-	// The tab layout keeps its own 60x16 floor.
-	d, _ := New(m, scan.Run(m)).Update(tea.WindowSizeMsg{Width: 50, Height: 20})
-	if v := stripView(d.View()); !strings.Contains(v, "needs at least 60") {
-		t.Fatalf("tab layout floor changed:\n%s", v)
-	}
 }
 
 func TestShellPortraitRowsHitWhereDrawn(t *testing.T) {
@@ -632,7 +625,6 @@ func TestShellLoadGoldens(t *testing.T) {
 	loading := func() Model { return loadingModel(loadTestDir, midLoad...) }
 	failed := func() Model {
 		n := NewLoading(loadTestDir, false, false, "org/tiny-qwen", "")
-		n.apply(Options{Layout: LayoutPanels})
 		x, _ := n.Update(runScanLoad(n)())
 		return x.(Model)
 	}
@@ -700,7 +692,7 @@ func TestShellPortraitGoldens(t *testing.T) {
 	)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			view := renderPrepared(t, c.m, scan.Run(c.m), c.w, c.h, c.profile, c.keys, Options{Layout: LayoutPanels})
+			view := renderPrepared(t, c.m, scan.Run(c.m), c.w, c.h, c.profile, c.keys)
 			assertFrame(t, view, c.w, c.h)
 			if c.profile == "colorless" && strings.Contains(view, "\x1b") {
 				t.Fatal("colorless frame contains ESC")
@@ -715,7 +707,7 @@ func TestShellPortraitProfiles(t *testing.T) {
 	m.RepoID = "org/code-exec"
 	for _, p := range []string{"truecolor", "ansi256", "ansi16", "colorless", "ascii"} {
 		for _, keys := range [][]string{nil, {"2"}, {"3", "enter"}, {"4"}, {"?"}} {
-			view := renderPrepared(t, m, scan.Run(m), 60, 20, p, keys, Options{Layout: LayoutPanels})
+			view := renderPrepared(t, m, scan.Run(m), 60, 20, p, keys)
 			assertFrame(t, view, 60, 20)
 			if p == "ascii" {
 				for i := 0; i < len(view); i++ {

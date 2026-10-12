@@ -48,7 +48,6 @@ func (t *Model) sidePanels() [4]sidePanel {
 func (t Model) paneView(w, h int) Model {
 	c := t
 	c.width, c.height = w, h+3
-	c.zoom, c.focusSecondary = false, false
 	return c
 }
 

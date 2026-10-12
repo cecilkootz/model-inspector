@@ -54,7 +54,6 @@ Flags:
   --no-color        disable color (same as NO_COLOR)
   --no-mouse        start the TUI with the mouse off (ignored by --json and non-TTY)
   --no-clipboard    do not emit OSC 52 clipboard sequences (also MODEL_INSPECTOR_NO_OSC52=1)
-  --layout <name>   TUI layout: tabs (default) or panels (experimental; ignored by --json and non-TTY)
   --hub-dir <dir>   HF hub cache (default: $HF_HUB_CACHE, $HF_HOME/hub, ~/.cache/huggingface/hub)
   --version         print the version and commit
   -h, --help        print this help
@@ -78,7 +77,6 @@ type options struct {
 	noColor     bool
 	noMouse     bool
 	noClipboard bool
-	layout      string
 	version     bool
 	hubDir      string
 	target      string
@@ -125,8 +123,8 @@ func run(args []string) int {
 			return resolveExit(err)
 		}
 		var runOpt []tui.Options
-		if opts.noMouse || opts.noClipboard || opts.layout != "" {
-			opt := tui.Options{NoClipboard: opts.noClipboard, Layout: opts.layout}
+		if opts.noMouse || opts.noClipboard {
+			opt := tui.Options{NoClipboard: opts.noClipboard}
 			if opts.noMouse {
 				off := false
 				opt.Mouse = &off
@@ -179,7 +177,7 @@ var errHelp = errors.New("help")
 func parseArgs(args []string) (options, error) {
 	o := options{hubDir: hfcache.DefaultHubDir(), mode: hfcache.TargetAuto}
 	var pos []string
-	var path, repo, layout string
+	var path, repo string
 	var pathSet, repoSet bool
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -194,15 +192,6 @@ func parseArgs(args []string) (options, error) {
 			o.noMouse = true
 		case a == "--no-clipboard":
 			o.noClipboard = true
-		case a == "--layout" || a == "-layout":
-			v, next, err := takeValue(args, i, "--layout")
-			if err != nil {
-				return o, err
-			}
-			i = next
-			layout = v
-		case strings.HasPrefix(a, "--layout="):
-			layout = strings.TrimPrefix(a, "--layout=")
 		case a == "--version" || a == "-version":
 			o.version = true
 		case a == "-h" || a == "--help" || a == "help":
@@ -243,13 +232,6 @@ func parseArgs(args []string) (options, error) {
 		default:
 			pos = append(pos, a)
 		}
-	}
-	switch layout {
-	case "":
-	case tui.LayoutTabs, tui.LayoutPanels:
-		o.layout = layout
-	default:
-		return o, fmt.Errorf("--layout must be %s or %s", tui.LayoutTabs, tui.LayoutPanels)
 	}
 	if pathSet && path == "" {
 		return o, errors.New("--path needs a value")

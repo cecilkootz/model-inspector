@@ -26,7 +26,7 @@ func shellModel(tb testing.TB, m *model.Model, w, h int) tea.Model {
 		res.Checks[i].Duration = 0
 	}
 	n := New(m, res)
-	n.apply(Options{Layout: LayoutPanels, Now: func() time.Time { return time.Unix(100, 0) }})
+	n.apply(Options{Now: func() time.Time { return time.Unix(100, 0) }})
 	x, _ := n.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	return x
 }
@@ -494,7 +494,7 @@ func TestShellMouse(t *testing.T) {
 }
 
 // Below 84 columns the panels stack (portrait); below 40x12 only the
-// too-small line shows. The tab layout is not a fallback any more.
+// too-small line shows.
 func TestShellSizeBoundaries(t *testing.T) {
 	m := shellFixtures(t)["tiny"]
 	for _, c := range []struct {
@@ -515,14 +515,6 @@ func TestShellSizeBoundaries(t *testing.T) {
 		if c.on && !strings.Contains(v, "[1] Model") {
 			t.Errorf("%dx%d did not draw the shell:\n%s", c.w, c.h, v)
 		}
-		if strings.Contains(v, "1 Identity") {
-			t.Errorf("%dx%d fell back to the tab layout", c.w, c.h)
-		}
-	}
-	// The default layout is the tab shell.
-	d, _ := New(m, scan.Run(m)).Update(tea.WindowSizeMsg{Width: 140, Height: 40})
-	if d.(Model).shellOn() || strings.Contains(stripView(d.View()), "[1] Model") {
-		t.Fatal("default layout is not tabs")
 	}
 }
 
@@ -540,7 +532,6 @@ func TestShellLoadingThenShell(t *testing.T) {
 	}
 	for _, sz := range [][2]int{{120, 30}, {80, 24}} {
 		n := NewLoading(dir, false, false, "org/tiny", "")
-		n.apply(Options{Layout: LayoutPanels})
 		x, _ := n.Update(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
 		if !x.(Model).shellLoad() || x.(Model).shellOn() {
 			t.Fatal("not the loading frame")
@@ -550,9 +541,6 @@ func TestShellLoadingThenShell(t *testing.T) {
 			if !strings.Contains(v, want) {
 				t.Fatalf("%v loading frame lacks %q:\n%s", sz, want, v)
 			}
-		}
-		if strings.Contains(v, "1 Identity") {
-			t.Fatalf("%v loading drew the tab layout:\n%s", sz, v)
 		}
 		assertFrame(t, x.View(), sz[0], sz[1])
 		x, _ = x.Update(runScanLoad(n)())
@@ -570,7 +558,6 @@ func TestShellLoadingThenShell(t *testing.T) {
 	t.Cleanup(func() { loadModel = prev })
 	loadModel = func(string, chan<- model.Progress) (*model.Model, error) { return nil, errors.New("nope") }
 	bad := NewLoading(dir, false, false, "", "")
-	bad.apply(Options{Layout: LayoutPanels})
 	y, _ := bad.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	y, _ = y.Update(runScanLoad(bad)())
 	v := stripView(y.View())
@@ -637,7 +624,7 @@ func TestShellProfiles(t *testing.T) {
 	m.RepoID = "org/code-exec"
 	for _, p := range []string{"truecolor", "ansi256", "ansi16", "colorless", "ascii"} {
 		for _, keys := range [][]string{nil, {"2"}, {"3", "0"}, {"4"}, {"?"}} {
-			view := renderPrepared(t, m, scan.Run(m), 100, 30, p, keys, Options{Layout: LayoutPanels})
+			view := renderPrepared(t, m, scan.Run(m), 100, 30, p, keys)
 			assertFrame(t, view, 100, 30)
 			if p == "ascii" {
 				for i := 0; i < len(view); i++ {
@@ -702,7 +689,7 @@ func TestShellGolden(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			res := scan.Run(c.m)
-			view := renderPrepared(t, c.m, res, c.w, c.h, c.profile, c.keys, Options{Layout: LayoutPanels})
+			view := renderPrepared(t, c.m, res, c.w, c.h, c.profile, c.keys)
 			assertFrame(t, view, c.w, c.h)
 			if !strings.Contains(view, "[1]") || !strings.Contains(view, "[0]") {
 				t.Fatal("not the shell")

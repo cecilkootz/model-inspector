@@ -9,7 +9,7 @@ import (
 )
 
 func FuzzScanUpdate(f *testing.F) {
-	f.Add([]byte("4j eEi][cyY \x1b"))
+	f.Add([]byte("2j eEi][cyY \x1b"))
 	f.Add([]byte("\x1b\x9b\u202e\u2066"))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		m := loadTiny(t)
@@ -20,7 +20,7 @@ func FuzzScanUpdate(f *testing.F) {
 		}
 		var x tea.Model = New(m, res)
 		x, _ = x.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-		x, _ = x.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'4'}})
+		x, _ = x.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
 		steps := 0
 		for i := 0; i < len(data) && steps < 40; i++ {
 			steps++

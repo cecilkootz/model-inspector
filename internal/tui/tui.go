@@ -8,9 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/cecilkootz/model-inspector/internal/model"
 	"github.com/cecilkootz/model-inspector/internal/scan"
@@ -32,59 +30,31 @@ func restoreTerminal() {
 	_, _ = io.WriteString(termOut, termRestore)
 }
 
-type tab int
-
-const (
-	tabIdentity tab = iota
-	tabConfig
-	tabLayers
-	tabScan
-	numTabs
-)
-
-var tabNames = [numTabs]string{"1 Identity", "2 Config", "3 Layers", "4 Scan"}
-
 // Model is the root Bubble Tea model.
 type Model struct {
 	m      *model.Model
 	scan   scan.Result
-	active tab
 	width  int
 	height int
 	ready  bool
 
-	help         bool
-	notice       string
-	inputFocused bool
-	scanCursor   int
-	scanScroll   int
-	scanOpen     map[string]bool
-
-	identityVP viewport.Model
-	configVP   viewport.Model
-
-	mouse          bool
-	noClipboard    bool
-	motion         bool
-	motionFrame    int
-	blurred        bool
-	focusSecondary bool
-	ratio          int
-	zoom           bool
-	drill          bool
-	disclosure     bool
-	palette        palState
-	derived        *derived
-	cache          *frameCache
-	zones          *ui.Zones
-	now            func() time.Time
-	lastClickID    string
-	lastClickAt    time.Time
-	cfg            *configState
-	lay            *layersState
-	scn            *scanView
-	layout         string
-	sh             *shellState
+	help        bool
+	notice      string
+	scanCursor  int
+	mouse       bool
+	noClipboard bool
+	motion      bool
+	palette     palState
+	derived     *derived
+	cache       *frameCache
+	zones       *ui.Zones
+	now         func() time.Time
+	lastClickID string
+	lastClickAt time.Time
+	cfg         *configState
+	lay         *layersState
+	scn         *scanView
+	sh          *shellState
 }
 
 type frameCache struct {
@@ -100,13 +70,11 @@ type palState struct {
 
 // Options configures a TUI session. A nil Mouse keeps the default
 // (on, unless MODEL_INSPECTOR_MOUSE=0). NoClipboard turns OSC 52 off
-// for the session; MODEL_INSPECTOR_NO_OSC52=1 does the same. Layout is
-// LayoutTabs (the default) or LayoutPanels.
+// for the session; MODEL_INSPECTOR_NO_OSC52=1 does the same.
 type Options struct {
 	Mouse       *bool
 	Motion      *bool
 	NoClipboard bool
-	Layout      string
 	Now         func() time.Time
 }
 
@@ -122,7 +90,7 @@ func Run(m *model.Model, res scan.Result, opt ...Options) (err error) {
 	if len(opt) > 0 {
 		t.apply(opt[0])
 	}
-	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
+	opts := []tea.ProgramOption{tea.WithAltScreen()}
 	if t.mouse {
 		opts = append(opts, tea.WithMouseCellMotion())
 	}
@@ -137,53 +105,22 @@ func Run(m *model.Model, res scan.Result, opt ...Options) (err error) {
 func New(m *model.Model, res scan.Result) Model {
 	configure()
 	d := derive(m)
-	motion := motionDefault()
-	frame := 6
-	if motion {
-		frame = 0
-	}
-	t := Model{
-		m: m, scan: res, width: 100, height: 30, scanOpen: map[string]bool{},
-		mouse: mouseDefault(), noClipboard: osc52EnvOff(), motion: motion, motionFrame: frame,
-		ratio: 55, derived: &d, cache: &frameCache{}, zones: &ui.Zones{},
+	return Model{
+		m: m, scan: res, width: 100, height: 30,
+		mouse: mouseDefault(), noClipboard: osc52EnvOff(), motion: motionDefault(),
+		derived: &d, cache: &frameCache{}, zones: &ui.Zones{},
 		now: time.Now, cfg: newConfigState(), lay: newLayersState(),
-		scn: &scanView{}, sh: newShellState(), layout: LayoutTabs,
+		scn: &scanView{}, sh: newShellState(),
 	}
-	t.identityVP = viewport.New(t.width, t.bodyHeight())
-	t.configVP = viewport.New(t.width, t.bodyHeight())
-	t.identityVP.SetContent(renderIdentity(m, t.width))
-	return t
 }
 
 func (t Model) Init() tea.Cmd {
-	var cmds []tea.Cmd
-	if t.motion && t.motionFrame < 6 {
-		cmds = append(cmds, tick())
-	}
-	if c := t.loadCmds(); c != nil {
-		cmds = append(cmds, c)
-	}
-	return tea.Batch(cmds...)
+	return t.loadCmds()
 }
 
-func (t Model) bodyHeight() int {
-	if t.shellFrame() {
-		return t.shellBodyHeight()
-	}
-	if h := t.height - 3; h > 1 {
-		return h
-	}
-	return 1
-}
+func (t Model) bodyHeight() int { return t.shellBodyHeight() }
 
 func (t *Model) resize() {
-	h := t.bodyHeight()
-	for _, vp := range []*viewport.Model{&t.identityVP, &t.configVP} {
-		vp.Width, vp.Height = t.width, h
-	}
-	if t.active == tabIdentity && !t.shellOn() {
-		t.identityVP.SetContent(t.identityBody())
-	}
 	if t.cache != nil {
 		t.cache.key = ""
 	}
@@ -194,7 +131,6 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		t.width, t.height, t.ready = msg.Width, msg.Height, true
 		t.resize()
-		t.ensureScanVisible()
 		return t, t.kickConfig()
 	case configParsedMsg:
 		return t.onConfigParsed(msg)
@@ -204,15 +140,8 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.touchConfig()
 		}
 		return t, nil
-	case scanArmMsg:
-		if t.scn != nil && t.scn.loading && t.m == nil {
-			t.scn.armed = true
-			t.touchScan()
-		}
-		return t, nil
 	case scanProgMsg:
 		if t.scn != nil && t.scn.loading {
-			t.scn.prog = msg.p
 			t.scn.phases.note(msg.p)
 			t.scn.spin++
 			t.touchScan()
@@ -225,22 +154,6 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, nil
 	case tea.MouseMsg:
 		return t.updateMouse(msg)
-	case tea.FocusMsg:
-		t.blurred = false
-		return t, nil
-	case tea.BlurMsg:
-		t.blurred = true
-		return t, nil
-	case tickMsg:
-		if !t.motion || t.blurred || t.motionFrame >= 6 {
-			return t, nil
-		}
-		t.motionFrame++
-		t.resize()
-		if t.motionFrame < 6 {
-			return t, tick()
-		}
-		return t, nil
 	case tea.KeyMsg:
 		if t.notice != "" && msg.String() != "ctrl+c" {
 			t.notice = ""
@@ -248,234 +161,21 @@ func (t Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return t, tea.Quit
 		}
-		if t.configSearching() {
-			return t.updateConfigSearch(msg)
-		}
-		if t.layersSearching() {
-			return t.updateLayersSearch(msg)
-		}
-		if t.layersJumping() {
-			return t.updateLayersJump(msg)
-		}
 		if t.palette.open {
 			return t.updatePalette(msg)
 		}
-		if t.inputFocused {
-			if msg.String() == "esc" {
-				t.inputFocused = false
-			}
-			// q and other keys do not quit or change tabs while a text input is focused.
-			return t, nil
-		}
-		if t.disclosure {
-			return t.updateDisclosure(msg)
-		}
-		if t.shellTooSmall() || (t.layout != LayoutPanels && t.ready && (t.width < 60 || t.height < 16)) {
-			if msg.String() == "q" {
-				return t, tea.Quit
-			}
-			return t, nil
-		}
-		if t.shellLoad() {
+		switch {
+		case t.shellLoad():
 			return t.updateLoadKey(msg)
-		}
-		if t.shellOn() {
+		case t.shellOn():
 			return t.updateShellKey(msg)
 		}
-		switch msg.String() {
-		case "q":
-			if t.help {
-				t.help = false
-				return t, nil
-			}
+		// Too small to draw, or not sized yet: only quitting works.
+		if msg.String() == "q" {
 			return t, tea.Quit
-		case "?":
-			t.help = !t.help
-			return t, nil
-		case ":", "ctrl+k":
-			t.palette.open = true
-			t.palette.query = ""
-			t.palette.cursor = 0
-			t.inputFocused = true
-			return t, nil
-		case "m":
-			return t.toggleMouse()
-		case "esc":
-			if t.help {
-				t.help = false
-				return t, nil
-			}
-			if t.active == tabConfig && t.configCloseTop() {
-				t.touchConfig()
-				return t, nil
-			}
-			if t.active == tabLayers && t.layersCloseTop() {
-				return t, nil
-			}
-			if t.active == tabLayers && t.layersTreeOn() {
-				return t.updateLayersKey(msg)
-			}
-			if t.active == tabLayers && t.focusSecondary {
-				t.focusSecondary = false
-				t.touchLayers()
-				return t, nil
-			}
-			if t.zoom {
-				t.zoom = false
-				return t, nil
-			}
-			if t.drill {
-				t.drill = false
-				return t, nil
-			}
-			if t.active == tabScan && t.scn != nil && (t.scn.drill || t.scn.code) {
-				return t.updateScan(msg)
-			}
-			return t, nil
-		case "backspace":
-			if t.drill {
-				t.drill = false
-				return t, nil
-			}
-			if t.active == tabLayers && t.layersTreeOn() {
-				return t.updateLayersKey(msg)
-			}
-			return t, nil
-		case "w":
-			if ui.Breakpoint(t.width, t.height) == "M" || ui.Breakpoint(t.width, t.height) == "L" {
-				t.focusSecondary = !t.focusSecondary
-				t.resize()
-			}
-			return t, nil
-		case "<", ">":
-			if t.active == tabConfig {
-				if t.cfg != nil && (ui.Breakpoint(t.width, t.height) == "M" || ui.Breakpoint(t.width, t.height) == "L") {
-					d := -5
-					if msg.String() == ">" {
-						d = 5
-					}
-					if !t.cfg.ratioSet {
-						t.cfg.ratio = t.configRatio()
-						t.cfg.ratioSet = true
-					}
-					t.cfg.ratio += d
-					if t.cfg.ratio < 30 {
-						t.cfg.ratio = 30
-					}
-					if t.cfg.ratio > 70 {
-						t.cfg.ratio = 70
-					}
-					t.touchConfig()
-				}
-				return t, nil
-			}
-			if t.active == tabLayers {
-				if t.lay != nil && (ui.Breakpoint(t.width, t.height) == "M" || ui.Breakpoint(t.width, t.height) == "L") {
-					d := -5
-					if msg.String() == ">" {
-						d = 5
-					}
-					if !t.lay.ratioSet {
-						t.lay.ratio = t.layersRatio()
-						t.lay.ratioSet = true
-					}
-					t.lay.ratio += d
-					if t.lay.ratio < 30 {
-						t.lay.ratio = 30
-					}
-					if t.lay.ratio > 70 {
-						t.lay.ratio = 70
-					}
-					t.touchLayers()
-				}
-				return t, nil
-			}
-			if br := ui.Breakpoint(t.width, t.height); br == "M" || br == "L" {
-				d := -5
-				if msg.String() == ">" {
-					d = 5
-				}
-				t.ratio += d
-				if t.ratio < 30 {
-					t.ratio = 30
-				}
-				if t.ratio > 70 {
-					t.ratio = 70
-				}
-				t.resize()
-			}
-			return t, nil
-		case "z":
-			if br := ui.Breakpoint(t.width, t.height); br == "M" || br == "L" {
-				t.zoom = !t.zoom
-				t.resize()
-			}
-			return t, nil
-		case "tab":
-			t.active = (t.active + 1) % numTabs
-			return t, nil
-		case "shift+tab":
-			t.active = (t.active + numTabs - 1) % numTabs
-			return t, nil
-		case "right", "l":
-			if t.active == tabConfig && t.treePane() {
-				return t.updateConfigKey(msg)
-			}
-			if t.layersTreeOn() {
-				return t.updateLayersKey(msg)
-			}
-			t.active = (t.active + 1) % numTabs
-			return t, nil
-		case "left", "h":
-			if t.active == tabConfig && t.treePane() {
-				return t.updateConfigKey(msg)
-			}
-			if t.layersTreeOn() {
-				return t.updateLayersKey(msg)
-			}
-			t.active = (t.active + numTabs - 1) % numTabs
-			return t, nil
-		case "1", "2", "3", "4":
-			t.active = tab(msg.String()[0] - '1')
-			return t, nil
-		case "enter":
-			if t.active == tabConfig && !t.help {
-				return t.updateConfigKey(msg)
-			}
-			if t.active == tabLayers && !t.help {
-				return t.updateLayersKey(msg)
-			}
-			if !t.help && t.active == tabIdentity && ui.Breakpoint(t.width, t.height) == "S" {
-				t.drill = true
-				t.resize()
-				return t, nil
-			}
-		}
-		if t.help {
-			return t, nil
-		}
-		if t.active == tabConfig {
-			return t.updateConfigKey(msg)
-		}
-		if t.active == tabScan {
-			return t.updateScan(msg)
-		}
-		if t.active == tabLayers {
-			return t.updateLayersKey(msg)
 		}
 	}
-
-	if t.help {
-		return t, nil
-	}
-	var cmd tea.Cmd
-	switch t.active {
-	case tabIdentity:
-		t.identityVP, cmd = t.identityVP.Update(msg)
-	case tabConfig, tabLayers:
-		return t, nil
-	}
-	return t, cmd
+	return t, nil
 }
 
 func (t Model) View() string {
@@ -487,12 +187,9 @@ func (t Model) View() string {
 	}()
 	configure()
 	if !t.ready {
-		return fitLine("model-inspector   1 Identity   2 Config   3 Layers   4 Scan", 80)
+		return fitLine("model-inspector", 80)
 	}
-	key := t.frameKey()
-	if t.shellFrame() {
-		key += t.sh.framePart()
-	}
+	key := t.frameKey() + t.sh.framePart()
 	if t.cache != nil && t.cache.key == key && t.cache.frame != "" {
 		return t.cache.frame
 	}
@@ -511,15 +208,4 @@ func configUnreadable(m *model.Model) bool {
 		}
 	}
 	return false
-}
-
-func cutBlock(s string, width int) string {
-	lines := strings.Split(s, "\n")
-	for i, ln := range lines {
-		if strings.Contains(ln, "\x1b") && lipgloss.Width(ln) > width {
-			ln = stripANSI(ln)
-		}
-		lines[i] = truncWidth(ln, width)
-	}
-	return strings.Join(lines, "\n")
 }

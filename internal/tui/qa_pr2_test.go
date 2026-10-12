@@ -1,17 +1,15 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/cecilkootz/model-inspector/internal/fixture"
 	"github.com/cecilkootz/model-inspector/internal/model"
 	"github.com/cecilkootz/model-inspector/internal/sanitize"
-	"github.com/cecilkootz/model-inspector/internal/scan"
 )
 
 func TestQA_HostileNamesView(t *testing.T) {
@@ -45,20 +43,6 @@ func TestQA_HostileNamesView(t *testing.T) {
 			t.Errorf("missing %s", want)
 		}
 	}
-	// Enter on a code card opens the code list, and the next enter opens the
-	// disclosure card, so the last frame is that card. The scan screen itself
-	// still carries the disclaimer.
-	var scanFrame string
-	for _, v := range vs {
-		if strings.Contains(v, "Not a malware or behavior scan") && strings.Contains(v, "CHECKS") {
-			scanFrame = v
-			break
-		}
-	}
-	if scanFrame == "" {
-		t.Fatalf("scan tab missing the disclaimer:\n%s", vs[len(vs)-1])
-	}
-
 	d2 := t.TempDir()
 	cfg := `{"model_type":"\u009b\u202e","architectures":["\u001b]0;x\u0007"],"text_config":{"hidden_size":"\u2066"},"layer_types":["\u202e\u001b"]}`
 	if err := os.WriteFile(filepath.Join(d2, "config.json"), []byte(cfg), 0o644); err != nil {
@@ -94,26 +78,25 @@ func TestQA_BidiBeyondOverride(t *testing.T) {
 	}
 }
 
+// qaViews shows every row of every panel, with and without the detail pane
+// focused, at a size that fits the longest names.
 func qaViews(t *testing.T, m *model.Model) []string {
 	t.Helper()
-	ui := New(m, scan.Run(m))
-	var x tea.Model = ui
-	x, _ = x.Update(tea.WindowSizeMsg{Width: 250, Height: 80})
+	x := shellModel(t, m, 250, 80)
 	vs := []string{x.View()}
-	for _, k := range []string{"2", "3", "4"} {
-		x, _ = x.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
+	for n := 1; n <= 4; n++ {
+		x = press(x, fmt.Sprint(n))
 		vs = append(vs, x.View())
-		if k == "3" {
-			x, _ = x.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		x = press(x, "0")
+		vs = append(vs, x.View())
+		x = press(x, "esc")
+		cur := x.(Model)
+		rows := len(cur.sidePanels()[n-1].rows(shellSideWidth(250) - 4))
+		for i := 0; i < min(rows, 40); i++ {
 			vs = append(vs, x.View())
-			x, _ = x.Update(tea.KeyMsg{Type: tea.KeyEsc})
-		}
-		if k == "4" {
-			for i := 0; i < len(scan.Run(m).Checks); i++ {
-				x, _ = x.Update(tea.KeyMsg{Type: tea.KeyEnter})
-				vs = append(vs, x.View())
-				x, _ = x.Update(tea.KeyMsg{Type: tea.KeyDown})
-			}
+			x = press(x, "0")
+			vs = append(vs, x.View())
+			x = press(x, "esc", "down")
 		}
 	}
 	return vs

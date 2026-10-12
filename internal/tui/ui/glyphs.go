@@ -12,7 +12,6 @@ type Glyphs struct {
 	Bar                    [4]string
 	Eighth                 [8]string
 	TL, TR, BL, BR, H, V   string
-	Est                    string
 	Arrow                  string
 }
 
@@ -20,7 +19,7 @@ type Glyphs struct {
 func (g Glyphs) ASCII() bool {
 	for _, s := range []string{
 		g.Pass, g.Fail, g.NR, g.Warn, g.Size, g.Host, g.Selected, g.Ellipsis,
-		g.Rule, g.RuleOn, g.Edge, g.Sep, g.Dot, g.Linear, g.Full, g.Est, g.Arrow,
+		g.Rule, g.RuleOn, g.Edge, g.Sep, g.Dot, g.Linear, g.Full, g.Arrow,
 		g.TL, g.TR, g.BL, g.BR, g.H, g.V,
 	} {
 		for i := 0; i < len(s); i++ {
@@ -57,7 +56,7 @@ func utfGlyphs() Glyphs {
 		Bar:    [4]string{"█", "▓", "▒", "░"},
 		Eighth: [8]string{" ", "▏", "▎", "▍", "▌", "▋", "▊", "█"},
 		TL:     "╭", TR: "╮", BL: "╰", BR: "╯", H: "─", V: "│",
-		Est: "‡", Arrow: "›",
+		Arrow: "›",
 	}
 }
 
@@ -72,7 +71,7 @@ func asciiGlyphs() Glyphs {
 		Bar:    [4]string{"#", "=", "+", "."},
 		Eighth: [8]string{" ", ".", ".", ":", ":", "#", "#", "@"},
 		TL:     "+", TR: "+", BL: "+", BR: "+", H: "-", V: "|",
-		Est: "(est)", Arrow: ">",
+		Arrow: ">",
 	}
 }
 

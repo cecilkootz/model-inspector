@@ -24,126 +24,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestGolden(t *testing.T) {
-	tiny := loadFiles(t, mustFiles(t, fixture.TinyQwenMLXQuant))
-	ngram := loadFiles(t, mustNgram(t))
-	code := loadFiles(t, mustCode(t))
-	shape := loadFiles(t, mustShape(t))
-
-	type spec struct {
-		name    string
-		m       *model.Model
-		w, h    int
-		profile string
-		keys    []string
-		want    []string
-	}
-	var cases []spec
-	sizes := [][2]int{{60, 16}, {80, 24}, {100, 30}, {140, 40}}
-	profiles := []string{"truecolor", "ansi256", "ansi16", "colorless", "ascii"}
-	overlays := []struct {
-		name string
-		keys []string
-	}{
-		{"none", nil},
-		{"help", []string{"?"}},
-		{"palette", []string{":", "l", "a", "y"}},
-		{"disclosure", []string{"4", "c"}},
-	}
-	for _, sz := range sizes {
-		for _, p := range profiles {
-			for _, o := range overlays {
-				cases = append(cases, spec{
-					name: "tiny",
-					m:    tiny,
-					w:    sz[0], h: sz[1],
-					profile: p,
-					keys:    o.keys,
-				})
-				cases[len(cases)-1].name = "tiny." + itoa(sz[0]) + "x" + itoa(sz[1]) + "." + p + "." + o.name
-			}
-		}
-	}
-	for _, sz := range [][2]int{{80, 24}, {140, 40}} {
-		for _, p := range []string{"truecolor", "colorless"} {
-			cases = append(cases, spec{
-				name: "ngram." + itoa(sz[0]) + "x" + itoa(sz[1]) + "." + p,
-				m:    ngram, w: sz[0], h: sz[1], profile: p,
-				want: []string{"n-gram embedding table", "HOST"},
-			})
-		}
-	}
-	for _, sz := range [][2]int{{80, 24}, {140, 40}} {
-		for _, p := range []string{"truecolor", "ansi16", "colorless"} {
-			want := []string{"+18%", "qwen3_next"}
-			if sz[1] >= 36 {
-				want = append(want, "flat")
-			}
-			cases = append(cases, spec{
-				name: "qwen." + itoa(sz[0]) + "x" + itoa(sz[1]) + "." + p,
-				m:    shape, w: sz[0], h: sz[1], profile: p,
-				want: want,
-			})
-		}
-	}
-	cases = append(cases,
-		spec{name: "layers.80x24.truecolor.down2", m: tiny, w: 80, h: 24, profile: "truecolor", keys: []string{"3", "j", "j"}, want: []string{"3 Layers"}},
-		spec{name: "layers.80x24.colorless.down2", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"3", "j", "j"}, want: []string{"3 Layers", ">▾ decoder"}},
-		spec{name: "layers.80x24.colorless.down5", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"3", "j", "j", "j", "j", "j"}, want: []string{"3 Layers", ">▸ norms"}},
-		spec{name: "code.80x24.colorless", m: code, w: 80, h: 24, profile: "colorless", want: []string{"!"}},
-		spec{name: "toosmall.59x15.colorless", m: tiny, w: 59, h: 15, profile: "colorless", want: []string{"needs at least 60×16", "59×15"}},
-		spec{name: "config.80x24.colorless", m: tiny, w: 80, h: 24, profile: "colorless", keys: []string{"2"}, want: []string{"model_type", "KEY FIELDS"}},
-	)
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			view := renderGolden(t, c.m, c.w, c.h, c.profile, c.keys)
-			assertFrame(t, view, c.w, c.h)
-			for _, w := range c.want {
-				if !strings.Contains(view, w) {
-					t.Errorf("missing %q", w)
-				}
-			}
-			if c.profile == "colorless" || c.profile == "ascii" {
-				if strings.Contains(view, "\x1b") {
-					t.Error("colorless view contains ESC")
-				}
-			}
-			if c.profile == "ascii" {
-				for i := 0; i < len(view); i++ {
-					if view[i] >= 0x80 {
-						a, b := i-24, i+24
-						if a < 0 {
-							a = 0
-						}
-						if b > len(view) {
-							b = len(view)
-						}
-						t.Fatalf("ascii chrome byte %#x at %d: %q", view[i], i, view[a:b])
-					}
-				}
-			}
-			path := filepath.Join("testdata", "golden", c.name+".golden")
-			if *updateGolden {
-				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(path, []byte(view), 0o644); err != nil {
-					t.Fatal(err)
-				}
-				return
-			}
-			got, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatalf("read golden: %v (go test -update)", err)
-			}
-			if string(got) != view {
-				t.Errorf("golden mismatch\n%s", firstDiff(string(got), view))
-			}
-		})
-	}
-}
-
 func TestUILLiterals(t *testing.T) {
 	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
@@ -174,22 +54,15 @@ func TestUILLiterals(t *testing.T) {
 
 func TestQwenShapeHeat(t *testing.T) {
 	m := loadFiles(t, mustShape(t))
-	t.Setenv("LC_ALL", "C.UTF-8")
-	t.Setenv("NO_COLOR", "1")
-	view := renderIdentity(m, 160)
-	for _, w := range []string{"+18%", "flat", "qwen3_next"} {
+	view := stripView(renderPrepared(t, m, scan.Run(m), 140, 40, "colorless", []string{"3"}))
+	for _, w := range []string{"+18%", "flat"} {
 		if !strings.Contains(view, w) {
 			t.Errorf("missing %q\n%s", w, view)
 		}
 	}
 	if strings.Contains(view, "mlx-community") {
-		t.Fatal("identity hard-coded the mockup repo")
+		t.Fatal("the screen hard-codes the mockup repo")
 	}
-}
-
-func renderGolden(t *testing.T, m *model.Model, w, h int, profile string, keys []string) string {
-	t.Helper()
-	return renderPrepared(t, m, scan.Run(m), w, h, profile, keys)
 }
 
 // renderPrepared draws a frame from an already-built scan result. Durations
@@ -354,15 +227,6 @@ func loadFiles(t *testing.T, files []fixture.File) *model.Model {
 func mustFiles(t *testing.T, fn func() ([]fixture.File, int64, error)) []fixture.File {
 	t.Helper()
 	files, _, err := fn()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return files
-}
-
-func mustNgram(t *testing.T) []fixture.File {
-	t.Helper()
-	files, err := fixture.NgramTable()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -81,18 +81,16 @@ func TestVerdictAgreesWithTextAndJSON(t *testing.T) {
 				}
 			}
 			ui := New(c.m, res)
-			ui.width = 140
 			if ui.scan.Overall != scan.Status(doc.Scan.Overall) || ui.scan.Strict != doc.Scan.Strict {
 				t.Fatalf("tui %+v", ui.scan.Overall)
 			}
-			title, _ := verdictTitle(c.m, ui.scan)
-			if c.m.Partial && !strings.Contains(title, "INSPECTION INCOMPLETE") {
-				t.Fatalf("band %q", title)
+			verdict := ui.shellVerdict().Text.String()
+			want := map[scan.Status]string{scan.StatusPass: "checks pass", scan.StatusWarn: "warn", scan.StatusFail: "fail"}[c.want]
+			if c.m.Partial {
+				want = "incomplete"
 			}
-			if c.name == "strict" {
-				if !strings.Contains(title, "FAILS UNDER --strict") {
-					t.Fatalf("band %q", title)
-				}
+			if !strings.Contains(verdict, want) {
+				t.Fatalf("header verdict %q, want %q", verdict, want)
 			}
 		})
 	}

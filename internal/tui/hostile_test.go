@@ -6,11 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/cecilkootz/model-inspector/internal/fixture"
 	"github.com/cecilkootz/model-inspector/internal/model"
-	"github.com/cecilkootz/model-inspector/internal/scan"
 )
 
 func TestViewHasNoFileDerivedControls(t *testing.T) {
@@ -33,17 +30,7 @@ func TestViewHasNoFileDerivedControls(t *testing.T) {
 		t.Fatalf("hostile files did not parse: tensors=%d config=%v warnings=%v", len(m.Tensors), m.Config != nil, m.Warnings)
 	}
 	m.Revision = "rev\x1b[2J"
-	ui := New(m, scan.Run(m))
-	var x tea.Model = ui
-	x, _ = x.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
-	views := []string{x.View()}
-	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
-	views = append(views, x.View())
-	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
-	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	views = append(views, x.View())
-	x, _ = x.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
-	views = append(views, x.View())
+	views := qaViews(t, m)
 
 	for i, view := range views {
 		for _, r := range view {

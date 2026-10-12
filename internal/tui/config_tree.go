@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/rivo/uniseg"
 
@@ -15,10 +14,9 @@ import (
 )
 
 const (
-	pageSize     = 100
-	pageAllMax   = 5000
-	visibleMax   = 100_000
-	expandArrMax = 1000
+	pageSize   = 100
+	pageAllMax = 5000
+	visibleMax = 100_000
 )
 
 func (c *configState) ensureRows() {
@@ -400,299 +398,6 @@ func (t Model) configCollapse() {
 	}
 }
 
-func (t Model) configParent() {
-	c := t.cfg
-	if c.tree == nil {
-		return
-	}
-	c.ensureRows()
-	id := c.cursor
-	if id < 0 || int(id) >= len(c.tree.Nodes) {
-		return
-	}
-	p := c.tree.Nodes[id].Parent
-	if p < 0 {
-		return
-	}
-	c.cursor = p
-	c.row = c.indexOfCursor()
-	t.clampTree()
-	t.touchConfig()
-}
-
-func (t *Model) configExpandAll() {
-	c := t.cfg
-	if c.tree == nil {
-		return
-	}
-	if c.expanded == nil {
-		c.expanded = map[string]bool{}
-	}
-	for i := range c.tree.Nodes {
-		n := c.tree.Nodes[i]
-		if n.Kind != jsonx.KindObject && n.Kind != jsonx.KindArray {
-			continue
-		}
-		if n.Kind == jsonx.KindArray && n.Len > expandArrMax {
-			c.expanded[c.path(int32(i))] = false
-			continue
-		}
-		c.expanded[c.path(int32(i))] = true
-	}
-	c.temp = map[string]bool{}
-	c.dirty = true
-	c.rebuild()
-	if len(c.rows) >= visibleMax {
-		t.notice = "expanded to 100,000 rows; large arrays left closed"
-	}
-	t.touchConfig()
-}
-
-func (t Model) configCollapseAll() {
-	c := t.cfg
-	c.expanded = map[string]bool{}
-	c.temp = map[string]bool{}
-	c.page = map[string]pageWin{}
-	c.dirty = true
-	c.cursor = 0
-	c.row = 0
-	c.scroll = 0
-	c.rebuild()
-	t.touchConfig()
-}
-
-func (t *Model) configFold(dir int) {
-	c := t.cfg
-	if c.tree == nil {
-		return
-	}
-	c.ensureRows()
-	deep := 0
-	for i := range c.tree.Nodes {
-		n := c.tree.Nodes[i]
-		if n.Kind != jsonx.KindObject && n.Kind != jsonx.KindArray {
-			continue
-		}
-		if c.isOpen(int32(i)) && int(n.Depth) > deep {
-			deep = int(n.Depth)
-		}
-	}
-	level := deep
-	if dir > 0 {
-		level = deep + 1
-		for i := range c.tree.Nodes {
-			n := c.tree.Nodes[i]
-			if int(n.Depth) != level {
-				continue
-			}
-			if n.Kind != jsonx.KindObject && n.Kind != jsonx.KindArray {
-				continue
-			}
-			if n.Kind == jsonx.KindArray && n.Len > expandArrMax {
-				continue
-			}
-			c.setOpen(int32(i), true, true)
-		}
-	} else if deep > 0 {
-		for i := range c.tree.Nodes {
-			n := c.tree.Nodes[i]
-			if int(n.Depth) != deep {
-				continue
-			}
-			if n.Kind != jsonx.KindObject && n.Kind != jsonx.KindArray {
-				continue
-			}
-			c.setOpen(int32(i), false, true)
-		}
-		level = deep - 1
-	}
-	c.dirty = true
-	c.rebuild()
-	t.notice = fmt.Sprintf("level %d", level)
-	t.touchConfig()
-}
-
-func (t Model) showMore(row crow, all bool) {
-	c := t.cfg
-	p := c.path(row.id)
-	w := c.page[p]
-	if row.lead {
-		w.start -= pageSize
-		if w.start < 0 {
-			w.start = 0
-		}
-		if w.n <= 0 {
-			w.n = pageSize
-		}
-	} else if all {
-		w.all = true
-		w.start = 0
-	} else {
-		if w.n <= 0 {
-			w.n = pageSize
-		}
-		w.n += pageSize
-		if w.n > pageAllMax {
-			w.n = pageAllMax
-		}
-	}
-	c.page[p] = w
-	c.dirty = true
-	c.rebuild()
-	t.touchConfig()
-}
-
-func (t Model) runSearch() {
-	c := t.cfg
-	if c.raw {
-		t.runRawSearch()
-		return
-	}
-	c.matches = c.matches[:0]
-	c.matchSet = map[int32]bool{}
-	c.temp = map[string]bool{}
-	c.matchIdx = 0
-	q := strings.TrimSpace(c.query)
-	if q == "" || c.tree == nil {
-		c.dirty = true
-		c.rebuild()
-		return
-	}
-	mode, sub := queryMode(q)
-	if sub == "" {
-		c.dirty = true
-		c.rebuild()
-		return
-	}
-	sub = strings.ToLower(sub)
-	for i := range c.tree.Nodes {
-		n := &c.tree.Nodes[i]
-		ok := false
-		if mode != 2 && n.Key != "" && hasFold(n.Key, sub) {
-			ok = true
-		}
-		if !ok && mode != 1 && n.Kind != jsonx.KindObject && n.Kind != jsonx.KindArray && hasFold(n.Lit, sub) {
-			ok = true
-		}
-		if ok {
-			id := int32(i)
-			c.matches = append(c.matches, id)
-			c.matchSet[id] = true
-		}
-	}
-	seen := map[int32]bool{}
-	for _, id := range c.matches {
-		for p := c.tree.Nodes[id].Parent; p >= 0; p = c.tree.Nodes[p].Parent {
-			if seen[p] {
-				break
-			}
-			seen[p] = true
-			path := c.path(p)
-			if _, perm := c.expanded[path]; perm && c.expanded[path] {
-				continue
-			}
-			if c.temp == nil {
-				c.temp = map[string]bool{}
-			}
-			c.temp[path] = true
-		}
-	}
-	c.dirty = true
-	c.rebuild()
-	if len(c.matches) > 0 {
-		t.reveal(c.matches[0])
-		c.cursor = c.matches[0]
-		c.ensureRows()
-		c.row = c.indexOfCursor()
-		t.clampTree()
-	}
-}
-
-func queryMode(q string) (mode int, sub string) {
-	if len(q) >= 2 {
-		p := strings.ToLower(q[:2])
-		if p == "k:" {
-			return 1, strings.TrimSpace(q[2:])
-		}
-		if p == "v:" {
-			return 2, strings.TrimSpace(q[2:])
-		}
-	}
-	return 0, q
-}
-
-func hasFold(s, sub string) bool {
-	if sub == "" || len(sub) > len(s) {
-		return false
-	}
-	for i := 0; i+len(sub) <= len(s); {
-		if foldEq(s[i:i+len(sub)], sub) {
-			return true
-		}
-		_, w := utf8.DecodeRuneInString(s[i:])
-		if w < 1 {
-			w = 1
-		}
-		i += w
-	}
-	return false
-}
-
-func foldEq(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		ca, cb := a[i], b[i]
-		if ca >= 'A' && ca <= 'Z' {
-			ca += 'a' - 'A'
-		}
-		if cb >= 'A' && cb <= 'Z' {
-			cb += 'a' - 'A'
-		}
-		if ca != cb {
-			return false
-		}
-	}
-	return true
-}
-
-func (t *Model) nextMatch(dir int) {
-	c := t.cfg
-	if c.tree == nil {
-		return
-	}
-	if len(c.matches) == 0 {
-		if c.query != "" {
-			t.runSearch()
-		}
-		if len(c.matches) == 0 {
-			return
-		}
-	}
-	n := len(c.matches)
-	c.matchIdx += dir
-	wrapped := false
-	if c.matchIdx >= n {
-		c.matchIdx = 0
-		wrapped = n > 1 || dir > 0
-	}
-	if c.matchIdx < 0 {
-		c.matchIdx = n - 1
-		wrapped = true
-	}
-	if wrapped {
-		t.notice = "wrapped"
-	}
-	id := c.matches[c.matchIdx]
-	t.reveal(id)
-	c.cursor = id
-	c.ensureRows()
-	c.row = c.indexOfCursor()
-	t.clampTree()
-	t.touchConfig()
-}
-
 func (t Model) reveal(id int32) {
 	c := t.cfg
 	if c.tree == nil || id < 0 || int(id) >= len(c.tree.Nodes) {
@@ -745,7 +450,6 @@ func (t Model) jumpField(i int) {
 	if f.jump < 0 || t.cfg.tree == nil {
 		return
 	}
-	t.cfg.fromField = f.label
 	t.reveal(f.jump)
 	t.cfg.cursor = f.jump
 	t.cfg.ensureRows()
@@ -757,12 +461,6 @@ func (t Model) jumpField(i int) {
 	t.cfg.scroll = t.cfg.row - h/2
 	if t.cfg.scroll < 0 {
 		t.cfg.scroll = 0
-	}
-	br := t.configBreak()
-	if br == "S" || br == "XS" {
-		t.cfg.drill = true
-	} else {
-		t.focusSecondary = true
 	}
 	if t.motion {
 		t.cfg.flash = 2
@@ -1176,56 +874,4 @@ func (t *Model) clampRaw() {
 	if c.rawScroll < 0 {
 		c.rawScroll = 0
 	}
-}
-
-func (t Model) runRawSearch() {
-	c := t.cfg
-	t.ensureRaw()
-	c.rawHits = c.rawHits[:0]
-	sub := strings.ToLower(strings.TrimSpace(c.query))
-	if sub == "" {
-		return
-	}
-	for i, line := range c.rawLines {
-		if hasFold(line.String(), sub) {
-			c.rawHits = append(c.rawHits, i)
-		}
-	}
-	if len(c.rawHits) > 0 {
-		c.rawLine = c.rawHits[0]
-		t.clampRaw()
-	}
-}
-
-func (t *Model) nextRawMatch(dir int) {
-	c := t.cfg
-	if len(c.rawHits) == 0 && c.query != "" {
-		t.runRawSearch()
-	}
-	if len(c.rawHits) == 0 {
-		return
-	}
-	pos := 0
-	for i, h := range c.rawHits {
-		if h >= c.rawLine {
-			pos = i
-			break
-		}
-	}
-	prev := pos
-	pos += dir
-	if pos >= len(c.rawHits) {
-		pos = 0
-		t.notice = "wrapped"
-	}
-	if pos < 0 {
-		pos = len(c.rawHits) - 1
-		t.notice = "wrapped"
-	}
-	if pos == prev && dir != 0 && len(c.rawHits) == 1 {
-		t.notice = "wrapped"
-	}
-	c.rawLine = c.rawHits[pos]
-	t.clampRaw()
-	t.touchConfig()
 }

@@ -382,15 +382,15 @@ func (p *layersPanel) scrollDetail(d int) {
 
 func (p *layersPanel) foldDetail(key string) { p.foldSide(key) }
 
-// copySelection copies the selected group's key, like the tab layout's path copy.
+// copySelection copies the selected group's key.
 func (p *layersPanel) copySelection() {
 	e, ok := p.selected()
 	g := p.group(e)
 	if !ok || g == nil {
-		p.t.copyLayerPayload("", "")
+		p.t.copyLayerPayload("")
 		return
 	}
-	p.t.copyLayerPayload(g.Key, "path")
+	p.t.copyLayerPayload(g.Key)
 }
 
 // Detail
@@ -445,11 +445,6 @@ func (p *layersPanel) totalsLine(e sideEntry, w int) string {
 	}
 	if label := p.t.layerDType(g).String(); label != "" && label != ui.Dash() {
 		spans = append(spans, ui.Span{Text: p.t.layerDType(g), Tone: ui.ToneBody})
-	}
-	if e.layer {
-		if short := p.t.attnShort(g); short != "" {
-			spans = append(spans, ui.Span{Text: p.t.lay.once(short), Tone: ui.ToneBody})
-		}
 	}
 	return fitSpans(spans, w)
 }

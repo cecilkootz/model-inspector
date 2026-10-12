@@ -21,7 +21,7 @@ func checksShell(t *testing.T, m *model.Model, strict bool, w, h int) Model {
 		res.Checks[i].Duration = 0
 	}
 	n := New(m, res)
-	n.apply(Options{Layout: LayoutPanels, Now: func() time.Time { return time.Unix(100, 0) }})
+	n.apply(Options{Now: func() time.Time { return time.Unix(100, 0) }})
 	x, _ := n.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	return press(x, "2").(Model)
 }
@@ -175,7 +175,7 @@ func TestChecksHostileFrames(t *testing.T) {
 	res := scan.Run(m)
 	for _, p := range []string{"colorless", "truecolor", "ascii"} {
 		for _, sz := range [][2]int{{84, 24}, {140, 40}} {
-			view := renderPrepared(t, m, res, sz[0], sz[1], p, []string{"2", "]"}, Options{Layout: LayoutPanels})
+			view := renderPrepared(t, m, res, sz[0], sz[1], p, []string{"2", "]"})
 			assertFrame(t, view, sz[0], sz[1])
 			if raw, bad := rawBad(view); bad {
 				t.Fatalf("%s %v: raw %s", p, sz, raw)
