@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -28,6 +29,7 @@ type fieldLine struct {
 	jump    int32
 	meter   float64
 	meterOn bool
+	meterBy string // what the meter measures, e.g. "active"
 }
 
 func (t Model) fieldLines() []fieldLine {
@@ -358,7 +360,10 @@ func (t Model) contextDerived(n int64) string {
 	if !ok {
 		return "= " + base + " native"
 	}
-	scaled := int64(float64(n) * factor)
+	scaled, ok := scaleInt(n, factor)
+	if !ok {
+		return "= " + base + " native"
+	}
 	dest := magLabel(scaled)
 	if dest == "" {
 		dest = model.Comma(scaled)
@@ -468,7 +473,7 @@ func (t Model) attentionFields() []fieldLine {
 		val, bad := p.showNum(true)
 		row := fieldLine{kind: fieldRow, label: "rope_theta", value: val, jump: p.id, bad: bad}
 		if part := t.pick("", "partial_rotary_factor"); part.ok {
-			row.derived = "partial " + part.text
+			row.derived = "= partial rotary " + part.lit
 		}
 		rows = append(rows, row)
 	}
@@ -492,11 +497,50 @@ func gqaText(q, kv int64) string {
 }
 
 func widthText(head, q, kv int64) string {
+	qw, ok1 := mulInt(head, q)
+	kw, ok2 := mulInt(head, kv)
+	if head <= 0 || q <= 0 || kv <= 0 || !ok1 || !ok2 {
+		return ""
+	}
 	sep := " · "
 	if !ui.UTF8() {
 		sep = " . "
 	}
-	return fmt.Sprintf("= %s q%s%s kv wide", model.Comma(head*q), sep, model.Comma(head*kv))
+	return fmt.Sprintf("= %s q%s%s kv wide", model.Comma(qw), sep, model.Comma(kw))
+}
+
+// mulInt and addInt refuse to wrap: a derivation built from a hostile number
+// is dropped rather than shown wrong.
+func mulInt(a, b int64) (int64, bool) {
+	if a == 0 || b == 0 {
+		return 0, true
+	}
+	c := a * b
+	if c/b != a || (a == -1 && b == math.MinInt64) || (b == -1 && a == math.MinInt64) {
+		return 0, false
+	}
+	return c, true
+}
+
+func addInt(a, b int64) (int64, bool) {
+	c := a + b
+	if (c > a) != (b > 0) {
+		return 0, false
+	}
+	return c, true
+}
+
+// scaleInt is n×factor for a positive finite factor whose product stays in
+// int64 range.
+func scaleInt(n int64, factor float64) (int64, bool) {
+	if n <= 0 || !(factor > 0) || math.IsInf(factor, 0) {
+		return 0, false
+	}
+	v := float64(n) * factor
+	if !(v < math.MaxInt64) {
+		return 0, false
+	}
+	return int64(v), true
 }
 
 func divSign() string {
@@ -561,13 +605,14 @@ func (t Model) moeFields() []fieldLine {
 		if sharedN > 0 {
 			row.value = fmt.Sprintf("%s + %d shared", val, sharedN)
 		}
-		if !bad && per.isInt && exp.ok && exp.isInt && exp.num > 0 {
-			active := per.num + int64(sharedN)
+		active, sum := addInt(per.num, int64(sharedN))
+		if !bad && per.isInt && per.num >= 0 && sharedN >= 0 && sum && exp.ok && exp.isInt && exp.num > 0 {
 			pct := float64(active) / float64(exp.num) * 100
 			if sharedN > 0 {
 				row.derived = fmt.Sprintf("= %d of %d active (%.1f%%)", active, exp.num, pct)
 				row.meterOn = true
 				row.meter = float64(active) / float64(exp.num)
+				row.meterBy = "active"
 			} else if !sharedExplicit {
 				row.derived = fmt.Sprintf("= %d of %d (%.1f%%)", per.num, exp.num, float64(per.num)/float64(exp.num)*100)
 			}
@@ -578,7 +623,7 @@ func (t Model) moeFields() []fieldLine {
 		val, bad := ffn.showNum(true)
 		row := fieldLine{kind: fieldRow, label: "expert ffn", value: val, unit: "dim", jump: ffn.id, bad: bad}
 		if sh := t.pick("", "shared_expert_intermediate_size"); sh.ok && sh.isInt {
-			row.derived = "shared " + model.Comma(sh.num)
+			row.derived = "= shared " + model.Comma(sh.num)
 		}
 		rows = append(rows, row)
 	}
@@ -610,7 +655,7 @@ func (t Model) quantFields() []fieldLine {
 		mode = "affine"
 	}
 	derived := mode
-	if t.m.Format != "" && strings.Contains(strings.ToLower(t.m.Format), "mlx") {
+	if t.m.Format != "" && strings.Contains(strings.ToLower(t.m.Format), "mlx") && !strings.EqualFold(mode, "mlx") {
 		derived += sep + "mlx"
 	}
 	jump := int32(-1)
@@ -622,10 +667,17 @@ func (t Model) quantFields() []fieldLine {
 		}
 	}
 	rows := []fieldLine{{
-		kind: fieldRow, label: "scheme", value: scheme, derived: derived, jump: jump,
+		kind: fieldRow, label: "scheme", value: scheme, derived: "= " + derived, jump: jump,
 	}}
-	if eff, ok := effectiveBits(q.Bits, q.GroupSize, mode); ok {
-		rows = append(rows, fieldLine{kind: fieldRow, label: "effective", value: eff, unit: "bits/w", jump: jump})
+	if v, expr, ok := effectiveBits(q.Bits, q.GroupSize, mode); ok {
+		approx := "≈"
+		if !ui.UTF8() {
+			approx = "~"
+		}
+		rows = append(rows, fieldLine{
+			kind: fieldRow, label: "effective", value: fmt.Sprintf("%s %.1f", approx, v), unit: "bits/w",
+			derived: "= " + expr, jump: jump, meterOn: true, meter: v / 16, meterBy: "of 16-bit",
+		})
 	}
 	rows = append(rows, fieldLine{
 		kind: fieldRow, label: "overrides", value: fmt.Sprintf("%d modules", q.NumOverrides), jump: jump,
@@ -633,25 +685,17 @@ func (t Model) quantFields() []fieldLine {
 	return rows
 }
 
-func effectiveBits(bits, group int, mode string) (string, bool) {
+// effectiveBits is bits per weight with the per-group scale and bias folded
+// in, and the sum that produced it.
+func effectiveBits(bits, group int, mode string) (float64, string, bool) {
 	if bits <= 0 || group <= 0 {
-		return "", false
+		return 0, "", false
 	}
 	times := ui.Times()
-	approx := "≈"
-	if !ui.UTF8() {
-		approx = "~"
-	}
-	var v float64
-	var expr string
 	if strings.Contains(strings.ToLower(mode), "sym") {
-		v = float64(bits) + 16.0/float64(group)
-		expr = fmt.Sprintf("%d + 16 / %d", bits, group)
-	} else {
-		v = float64(bits) + 2*16.0/float64(group)
-		expr = fmt.Sprintf("%d + 2%s16 / %d", bits, times, group)
+		return float64(bits) + 16.0/float64(group), fmt.Sprintf("%d + 16 / %d", bits, group), true
 	}
-	return fmt.Sprintf("%s %.1f bits/w = %s", approx, v, expr), true
+	return float64(bits) + 2*16.0/float64(group), fmt.Sprintf("%d + 2%s16 / %d", bits, times, group), true
 }
 
 func (t Model) visionFields() []fieldLine {
@@ -728,8 +772,12 @@ func (t Model) mtpFields() []fieldLine {
 	if t.m != nil {
 		var bytes int64
 		for _, g := range t.m.Groups {
-			if g != nil && g.Kind == model.KindMTP {
-				bytes += g.Bytes
+			if g != nil && g.Kind == model.KindMTP && g.Bytes > 0 {
+				sum, ok := addInt(bytes, g.Bytes)
+				if !ok {
+					sum = math.MaxInt64
+				}
+				bytes = sum
 			}
 		}
 		if bytes > 0 {

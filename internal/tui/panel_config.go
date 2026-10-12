@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -57,8 +58,32 @@ func (p *configPanel) row(f fieldLine, width int, selected bool) string {
 		value += " " + f.unit
 	}
 	return ui.ListRow(ui.RowSpec{
-		Name: sanitize.From(f.label), Value: sanitize.Program(value), Selected: selected,
+		Name: sanitize.From(f.label), Value: sanitize.Program(value), Note: derivedNote(f), Selected: selected,
 	}, width)
+}
+
+// derivedMax bounds derived text before it is wrapped or elided; it can carry
+// a config string such as a rope type.
+const derivedMax = 256
+
+// derivedNote is the field's derivation as list-row text. A flagged field has
+// no trustworthy derivation to show.
+func derivedNote(f fieldLine) sanitize.Text {
+	if f.bad || f.derived == "" {
+		return sanitize.Text{}
+	}
+	return sanitize.From(clipRunes(f.derived, derivedMax))
+}
+
+func clipRunes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	r := []rune(s)
+	if len(r) > n {
+		r = r[:n]
+	}
+	return string(r)
 }
 
 func (p *configPanel) rows(width int) []string {
@@ -445,7 +470,13 @@ func (t Model) treeDetail(w, h int) []string {
 	case h >= 9:
 		valueN = 4
 	}
-	rowN := max(1, h-len(head)-valueN)
+	// The tree keeps at least treeMin rows; the derivation takes what is left.
+	const treeMin = 6
+	var derived []string
+	if room := h - len(head) - valueN - treeMin; room >= 4 {
+		derived = t.derivedBlock(w, min(room, 9))
+	}
+	rowN := max(1, h-len(head)-valueN-len(derived))
 	c.viewH = rowN
 	c.innerW = max(8, w)
 	out := append(head, t.treeRows(w, rowN, t.sh != nil && t.sh.inDetail, 0, 0, w)...)
@@ -455,5 +486,55 @@ func (t Model) treeDetail(w, h int) []string {
 	if valueN > 0 {
 		out = append(out, t.valueBlock(w, valueN)...)
 	}
+	return append(out, derived...)
+}
+
+// derivedBlock is the DERIVED section for the selected key field, at most n
+// rows including a leading blank. It is empty when the field has no
+// derivation or the tree cursor has left the field's node.
+func (t Model) derivedBlock(w, n int) []string {
+	c := t.cfg
+	lines := t.fieldLines()
+	if c.fieldCur < 0 || c.fieldCur >= len(lines) || n < 4 {
+		return nil
+	}
+	f := lines[c.fieldCur]
+	if f.kind != fieldRow || f.bad || f.derived == "" || (f.jump >= 0 && f.jump != c.cursor) {
+		return nil
+	}
+	text := sanitize.From(f.value).String()
+	if f.unit != "" {
+		text += " " + f.unit
+	}
+	text += " " + sanitize.From(clipRunes(f.derived, derivedMax)).String()
+	tone := ui.TextPrimary
+	if strings.HasPrefix(f.derived, "!") {
+		tone = ui.Warn
+	}
+	out := []string{"", ui.SectionLabel(ui.L("DERIVED"), w), ui.PaintToken(clipCells(sanitize.From(f.label).String(), w), ui.TextSecondary, nil, false)}
+	room := n - len(out)
+	meter := f.meterOn && room > 1
+	if meter {
+		room--
+	}
+	body := paras(w, text)
+	if len(body) > room {
+		body = body[:room]
+		body[room-1] = clipCells(body[room-1]+" "+ui.G().Ellipsis, w)
+	}
+	for _, ln := range body {
+		out = append(out, ui.PaintToken(ln, tone, nil, false))
+	}
+	if meter {
+		out = append(out, meterLine(f.meter, f.meterBy, w))
+	}
 	return out
+}
+
+// meterLine is a bar on the green ramp and the percentage it shows.
+func meterLine(frac float64, by string, w int) string {
+	label := fmt.Sprintf("%.1f%% %s", frac*100, by)
+	bar := min(16, max(1, w-ui.Width(label)-1))
+	m, _ := ui.Meter(frac, bar, ui.GradMeter)
+	return ui.Trunc(m+" "+ui.PaintToken(label, ui.TextMuted, nil, false), w, "")
 }

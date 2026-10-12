@@ -687,6 +687,7 @@ func TestShellPortraitGoldens(t *testing.T) {
 	}
 	cases = append(cases,
 		spec{"shell.portrait.tiny.80x24.colorless.layers", tiny, 80, 24, "colorless", []string{"3"}},
+		spec{"shell.portrait.tiny.80x24.colorless.config-derived", tiny, 80, 24, "colorless", append([]string{"4"}, append(repeatKey("down", 10), "enter")...)},
 		spec{"shell.toosmall.30x10.colorless", tiny, 30, 10, "colorless", nil},
 		spec{"shell.toosmall.30x10.truecolor", tiny, 30, 10, "truecolor", nil},
 	)

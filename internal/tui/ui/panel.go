@@ -260,13 +260,19 @@ type RowSpec struct {
 	Tone     Tone          // glyph tone
 	Name     sanitize.Text
 	Value    sanitize.Text
-	Indent   int // cells before the glyph, for tree rows
+	Note     sanitize.Text // trails Value in the same tone; only when it fits beside the whole name
+	Indent   int           // cells before the glyph, for tree rows
 	Selected bool
 }
 
+// noteMin is the narrowest elided Note worth showing; less is a stub.
+const noteMin = 8
+
 // ListRow draws `glyph name … value` in exactly width cells. The name is
 // elided before the value is; the value is capped at half the row so a long
-// one cannot erase the name. Selection fills the whole row with the selection
+// one cannot erase the name. A Note never costs the name any cells: it is
+// end-elided into the room left beside the whole name, and dropped when that
+// is under noteMin. Selection fills the whole row with the selection
 // token. Colorless and ANSI-16 output cannot show a fill, so every row there
 // reserves a two-cell gutter that holds the selection glyph.
 func ListRow(r RowSpec, width int) string {
@@ -307,6 +313,19 @@ func ListRow(r RowSpec, width int) string {
 	value := r.Value.String()
 	if vmax := width / 2; Width(value) > vmax {
 		value = elide(value, vmax, gl.Ellipsis)
+	}
+	if note := r.Note.String(); note != "" {
+		sep := 0
+		if value != "" {
+			sep = 1
+		}
+		if room := width - used - Width(r.Name.String()) - 2 - Width(value) - sep; room >= noteMin {
+			note = elide(note, room, gl.Ellipsis)
+			if value != "" {
+				value += " "
+			}
+			value += note
+		}
 	}
 	nameRoom := width - used
 	vw := Width(value)

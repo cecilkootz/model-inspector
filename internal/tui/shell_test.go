@@ -682,7 +682,13 @@ func TestShellGolden(t *testing.T) {
 			spec{"shell.code.84x24.colorless.model-" + sec, code, 84, 24, "colorless", keys},
 		)
 	}
+	// Config rows with a derivation selected: per token has the meter.
+	perTok := append([]string{"4"}, repeatKey("down", 10)...)
 	cases = append(cases,
+		spec{"shell.tiny.140x40.colorless.config-derived", tiny, 140, 40, "colorless", perTok},
+		spec{"shell.tiny.140x40.truecolor.config-derived", tiny, 140, 40, "truecolor", perTok},
+		spec{"shell.tiny.100x30.colorless.config-derived", tiny, 100, 30, "colorless", append([]string{"4"}, repeatKey("down", 7)...)},
+		spec{"shell.tiny.84x24.colorless.config-derived", tiny, 84, 24, "colorless", append([]string{"4"}, repeatKey("down", 13)...)},
 		spec{"shell.code.84x24.colorless.model", code, 84, 24, "colorless", nil},
 		spec{"shell.tiny.140x40.truecolor.model-storage", tiny, 140, 40, "truecolor", []string{"down"}},
 	)
