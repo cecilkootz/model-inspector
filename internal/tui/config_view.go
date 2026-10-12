@@ -161,7 +161,7 @@ func (t Model) treePlain(row crow, width int) string {
 	} else if container {
 		b.WriteString(c.preview(row.id, width))
 	} else {
-		b.WriteString(c.scalarText(row.id))
+		b.WriteString(c.shownScalar(row.id))
 		if n.Kind == jsonx.KindNumber {
 			if h := magHint(n.Lit); h != "" {
 				b.WriteString(" ")
