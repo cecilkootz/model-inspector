@@ -188,8 +188,9 @@ func centerLine(s string, width int) string {
 }
 
 func (t Model) renderTooSmall() string {
-	W, H := t.width, t.height
-	msg := ui.PaintToken(fmt.Sprintf("terminal too small (%dx%d)", W, H), ui.TextSecondary, nil, false)
+	msg := ui.PaintToken(fmt.Sprintf("terminal too small (%dx%d)", t.width, t.height), ui.TextSecondary, nil, false)
+	// A resize can report zero or negative cells; draw a one-cell frame.
+	W, H := max(1, t.width), max(1, t.height)
 	quit := ui.PaintToken("q", ui.TextPrimary, nil, false) + ui.PaintToken(" quit", ui.TextMuted, nil, false)
 	rows := make([]string, H)
 	mid := (H - 1) / 2

@@ -789,3 +789,19 @@ func TestShellLoadAndPortraitBudgets(t *testing.T) {
 		t.Errorf("portrait Resize %s", d)
 	}
 }
+
+// FuzzUpdate found a panic in the too-small notice for a zero or negative
+// terminal size (testdata/fuzz/FuzzUpdate/285acbaf8430bedf).
+func TestShellTooSmallNonPositiveSize(t *testing.T) {
+	m := shellFixtures(t)["tiny"]
+	for _, sz := range [][2]int{{0, 0}, {-8, -4}, {20, -4}, {-20, 7}, {30, 0}} {
+		x := shellModel(t, m, sz[0], sz[1])
+		view := x.View()
+		if want := max(1, sz[1]); strings.Count(view, "\n")+1 != want {
+			t.Errorf("%v: %d lines, want %d", sz, strings.Count(view, "\n")+1, want)
+		}
+		if _, cmd := x.Update(keyMsg("q")); cmd == nil {
+			t.Errorf("%v: q did not quit", sz)
+		}
+	}
+}
